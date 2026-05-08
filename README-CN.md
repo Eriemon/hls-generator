@@ -11,6 +11,7 @@
 <p align="center">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-1f6feb"></a>
   <a href="pyproject.toml"><img alt="Python" src="https://img.shields.io/badge/python-3.10%2B-2f81f7"></a>
+  <img alt="Version" src="https://img.shields.io/badge/version-v0.1.1-7c3aed">
   <a href="SKILL.md"><img alt="Agent Skill" src="https://img.shields.io/badge/agent-skill-16a34a"></a>
   <a href="references/vitis-hls-official-patterns.md"><img alt="Target" src="https://img.shields.io/badge/target-Vitis%20HLS-f59e0b"></a>
 </p>
@@ -40,18 +41,46 @@ HLS Generator 用来把 AI 编程代理变成更可靠的 HLS 工程助手。它
 ## Skill 架构
 
 ```mermaid
-flowchart LR
-    intent["已确认的硬件意图"] --> skill["SKILL.md<br/>Agent 工作流"]
-    skill --> refs["references<br/>工具与策略上下文"]
-    refs --> runtime["runtime/hls_generator<br/>确定性流水线"]
-    runtime --> artifacts["HLS 产物<br/>C/C++ · testbench · cfg"]
-    artifacts --> evidence["验证证据<br/>静态检查 · Vitis 报告"]
+%%{init: {"theme": "base", "themeVariables": {"background": "#0b1220", "primaryColor": "#102033", "primaryTextColor": "#e6edf3", "primaryBorderColor": "#38bdf8", "lineColor": "#60a5fa", "secondaryColor": "#132a3e", "tertiaryColor": "#0f172a", "fontFamily": "Inter, Segoe UI, Arial"}}}%%
+flowchart TB
+    intent["<b>已确认硬件意图</b><br/>接口 · 吞吐 · 验证目标"]
+
+    subgraph skill["Agent Skill 层"]
+      direction LR
+      trigger["触发元数据<br/><code>agents/openai.yaml</code>"]
+      guide["执行契约<br/><code>SKILL.md</code>"]
+      refs["渐进式上下文<br/><code>references/</code>"]
+    end
+
+    subgraph runtime["确定性 Runtime"]
+      direction LR
+      scaffold["规格脚手架"]
+      prompt["Prompt 渲染"]
+      extract["产物抽取"]
+      validate["验证门禁"]
+    end
+
+    artifacts["<b>Vitis HLS 产物集</b><br/>C/C++ · 头文件 · testbench · cfg · 报告"]
+    evidence["<b>证据包</b><br/>静态发现 · Vitis 报告 · workflow traces"]
+
+    intent --> trigger --> guide --> refs --> scaffold
+    scaffold --> prompt --> extract --> validate --> artifacts --> evidence
+
+    classDef anchor fill:#0f766e,stroke:#5eead4,color:#ffffff,stroke-width:2px;
+    classDef layer fill:#111827,stroke:#334155,color:#e5e7eb;
+    classDef node fill:#102033,stroke:#38bdf8,color:#e6edf3;
+    classDef output fill:#3b2f11,stroke:#f59e0b,color:#fff7ed,stroke-width:2px;
+    class intent,evidence anchor;
+    class trigger,guide,refs,scaffold,prompt,extract,validate node;
+    class artifacts output;
 ```
 
 ## 工作流
 
 ```mermaid
+%%{init: {"theme": "base", "themeVariables": {"background": "#0b1220", "actorBkg": "#102033", "actorBorder": "#38bdf8", "actorTextColor": "#e6edf3", "signalColor": "#93c5fd", "signalTextColor": "#dbeafe", "noteBkgColor": "#132a3e", "noteTextColor": "#e6edf3", "fontFamily": "Inter, Segoe UI, Arial"}}}%%
 sequenceDiagram
+    autonumber
     participant User as 用户
     participant Agent
     participant Skill as Agent Skill
@@ -59,13 +88,15 @@ sequenceDiagram
     participant Toolchain as Vitis HLS
 
     User->>Agent: 描述 kernel 意图
-    Agent->>Skill: 加载 HLS 工作流
-    Skill->>Agent: 要求确认接口与验证契约
-    Agent->>Runtime: scaffold、prompt 或运行 workflow
-    Runtime->>Runtime: 规划、向量、Python oracle、HLS 文件
-    Runtime->>Toolchain: 可选外部验证
-    Toolchain-->>Runtime: 工具可用时返回报告
-    Runtime-->>Agent: 产物与验证证据
+    Skill-->>Agent: 加载 HLS 规则和边界
+    Agent->>User: 确认接口、流水线和验证契约
+    Agent->>Runtime: 生成 spec 并渲染分阶段 prompt
+    Runtime->>Runtime: 构建 plan、vectors、Python oracle 和 HLS 文件
+    opt 请求外部工具就绪验证
+      Runtime->>Toolchain: 运行 Vitis HLS 验证
+      Toolchain-->>Runtime: 返回报告和诊断
+    end
+    Runtime-->>Agent: 产物、trace 与验证证据
 ```
 
 ## 仓库结构
@@ -130,7 +161,7 @@ from integration.hls_adapter import (
 ```bibtex
 @software{hls_generator_skill,
   title        = {HLS Generator: An Agent Skill for Vitis HLS Workflows},
-  author       = {{HLS Generator Authors}},
+  author       = {Jiyuan Liu},
   year         = {2026},
   license      = {Apache-2.0},
   contact      = {erie@seu.edu.cn}

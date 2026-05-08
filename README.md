@@ -11,6 +11,7 @@
 <p align="center">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-1f6feb"></a>
   <a href="pyproject.toml"><img alt="Python" src="https://img.shields.io/badge/python-3.10%2B-2f81f7"></a>
+  <img alt="Version" src="https://img.shields.io/badge/version-v0.1.1-7c3aed">
   <a href="SKILL.md"><img alt="Agent Skill" src="https://img.shields.io/badge/agent-skill-16a34a"></a>
   <a href="references/vitis-hls-official-patterns.md"><img alt="Target" src="https://img.shields.io/badge/target-Vitis%20HLS-f59e0b"></a>
 </p>
@@ -40,18 +41,46 @@ Use it when an agent needs to work on:
 ## Skill Architecture
 
 ```mermaid
-flowchart LR
-    intent["Confirmed hardware intent"] --> skill["SKILL.md<br/>agent workflow"]
-    skill --> refs["references<br/>tool and policy context"]
-    refs --> runtime["runtime/hls_generator<br/>deterministic pipeline"]
-    runtime --> artifacts["HLS artifacts<br/>C/C++ · testbench · cfg"]
-    artifacts --> evidence["validation evidence<br/>static checks · Vitis reports"]
+%%{init: {"theme": "base", "themeVariables": {"background": "#0b1220", "primaryColor": "#102033", "primaryTextColor": "#e6edf3", "primaryBorderColor": "#38bdf8", "lineColor": "#60a5fa", "secondaryColor": "#132a3e", "tertiaryColor": "#0f172a", "fontFamily": "Inter, Segoe UI, Arial"}}}%%
+flowchart TB
+    intent["<b>Confirmed Intent</b><br/>interfaces · throughput · verification target"]
+
+    subgraph skill["Agent Skill Layer"]
+      direction LR
+      trigger["Trigger Metadata<br/><code>agents/openai.yaml</code>"]
+      guide["Operating Contract<br/><code>SKILL.md</code>"]
+      refs["Progressive Context<br/><code>references/</code>"]
+    end
+
+    subgraph runtime["Deterministic Runtime"]
+      direction LR
+      scaffold["Spec Scaffold"]
+      prompt["Prompt Renderer"]
+      extract["Artifact Extractor"]
+      validate["Validation Gate"]
+    end
+
+    artifacts["<b>Vitis HLS Artifact Set</b><br/>C/C++ · headers · testbench · cfg · reports"]
+    evidence["<b>Evidence Package</b><br/>static findings · Vitis reports · workflow traces"]
+
+    intent --> trigger --> guide --> refs --> scaffold
+    scaffold --> prompt --> extract --> validate --> artifacts --> evidence
+
+    classDef anchor fill:#0f766e,stroke:#5eead4,color:#ffffff,stroke-width:2px;
+    classDef layer fill:#111827,stroke:#334155,color:#e5e7eb;
+    classDef node fill:#102033,stroke:#38bdf8,color:#e6edf3;
+    classDef output fill:#3b2f11,stroke:#f59e0b,color:#fff7ed,stroke-width:2px;
+    class intent,evidence anchor;
+    class trigger,guide,refs,scaffold,prompt,extract,validate node;
+    class artifacts output;
 ```
 
 ## Workflow
 
 ```mermaid
+%%{init: {"theme": "base", "themeVariables": {"background": "#0b1220", "actorBkg": "#102033", "actorBorder": "#38bdf8", "actorTextColor": "#e6edf3", "signalColor": "#93c5fd", "signalTextColor": "#dbeafe", "noteBkgColor": "#132a3e", "noteTextColor": "#e6edf3", "fontFamily": "Inter, Segoe UI, Arial"}}}%%
 sequenceDiagram
+    autonumber
     participant User
     participant Agent
     participant Skill as Agent Skill
@@ -59,13 +88,15 @@ sequenceDiagram
     participant Toolchain as Vitis HLS
 
     User->>Agent: Describe kernel intent
-    Agent->>Skill: Load HLS workflow
-    Skill->>Agent: Require confirmed contract
-    Agent->>Runtime: Scaffold, prompt, or run workflow
-    Runtime->>Runtime: Plan, vectors, Python oracle, HLS files
-    Runtime->>Toolchain: Optional external validation
-    Toolchain-->>Runtime: Reports when available
-    Runtime-->>Agent: Artifacts and validation evidence
+    Skill-->>Agent: Load HLS rules and boundaries
+    Agent->>User: Confirm interface, pipeline, and validation contract
+    Agent->>Runtime: Scaffold spec and render staged prompts
+    Runtime->>Runtime: Build plan, vectors, Python oracle, and HLS files
+    opt External readiness requested
+      Runtime->>Toolchain: Run Vitis HLS validation
+      Toolchain-->>Runtime: Reports and diagnostics
+    end
+    Runtime-->>Agent: Artifacts, trace, and validation evidence
 ```
 
 ## Repository Map
@@ -132,7 +163,7 @@ If this skill helps your research, teaching, or engineering workflow, please cit
 ```bibtex
 @software{hls_generator_skill,
   title        = {HLS Generator: An Agent Skill for Vitis HLS Workflows},
-  author       = {{HLS Generator Authors}},
+  author       = {Jiyuan Liu},
   year         = {2026},
   license      = {Apache-2.0},
   contact      = {erie@seu.edu.cn}
