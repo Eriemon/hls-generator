@@ -23,7 +23,8 @@ if str(SKILL_ROOT) not in sys.path:
     sys.path.insert(0, str(SKILL_ROOT))
 
 from integration.hls_adapter import run_hls_workflow  # noqa: E402
-from runtime.hls_generator.config import remote_validation_config, skill_config_path, skill_root  # noqa: E402
+from runtime.hls_generator.config import remote_validation_config, skill_config_path, skill_dependencies_config, skill_root  # noqa: E402
+from runtime.hls_generator.skill_dependencies import SkillDependencyError, require_skill_dependencies  # noqa: E402
 from runtime.hls_generator.user_config import get_vitis_selection, set_vitis_selection, user_config_path  # noqa: E402
 from runtime.hls_generator.validation import READINESS_LEVELS  # noqa: E402
 
@@ -56,6 +57,8 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         result = run_acceptance(args)
+    except SkillDependencyError as exc:
+        result = exc.report
     except (OSError, RemoteAcceptanceError, ValueError) as exc:
         result = {"status": FAILED_STATUS, "error": str(exc)}
 
@@ -74,6 +77,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def run_acceptance(args: argparse.Namespace) -> dict[str, Any]:
+    require_skill_dependencies(skill_dependencies_config())
     config = remote_validation_config()
     timeout = int(args.timeout or config["default_timeout_s"])
     helper = ErieHelper(config, timeout)

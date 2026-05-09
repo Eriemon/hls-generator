@@ -20,6 +20,10 @@ SKILL_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = SKILL_ROOT
 PACKAGE_NAME = "erie-hls-generator"
 SEMVER_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
+if str(SKILL_ROOT) not in sys.path:
+    sys.path.insert(0, str(SKILL_ROOT))
+
+from runtime.hls_generator.config import skill_dependencies_config  # noqa: E402
 
 EXCLUDED_DIR_NAMES = {
     ".git",
@@ -47,10 +51,10 @@ EXCLUDED_GLOBS = (
     "solution*",
 )
 VALIDATION_COMMANDS = [
-    r"python .\smoke\run_smoke.py",
-    r"python -m compileall .\runtime\hls_generator",
-    r"python <skill-creator>/scripts/quick_validate.py .",
-    r"python .\scripts\confidence_loop.py --skip-remote --json-out reports\confidence-loop\latest-local.json",
+    r"python .\erie-hls-generator\smoke\run_smoke.py",
+    r"python -m compileall .\erie-hls-generator\runtime\hls_generator",
+    r"python <skill-creator>\scripts\quick_validate.py .\erie-hls-generator",
+    r"python .\erie-hls-generator\scripts\confidence_loop.py --skip-remote --json-out reports\confidence-loop\latest-local.json",
 ]
 
 
@@ -60,7 +64,7 @@ class ReleaseError(RuntimeError):
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Prepare a versioned erie-hls-generator release directory and zip.")
-    parser.add_argument("--version", required=True, help="Explicit SemVer release version, for example 0.1.1.")
+    parser.add_argument("--version", required=True, help="Explicit SemVer release version, for example 0.1.2.")
     parser.add_argument("--dist-root", type=Path, default=REPO_ROOT / "dist", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     try:
@@ -82,6 +86,7 @@ def prepare_release(version: str, dist_root: Path) -> dict[str, object]:
         raise ReleaseError(f"runtime/hls_generator/__init__.py version {source_version!r} does not match release version {version!r}.")
     if cli_version != version:
         raise ReleaseError(f"hls-gen --version reported {cli_version!r}, expected {version!r}.")
+    dependency_summary = _validate_skill_dependency_manifest()
 
     dist_root = _resolve_dist_root(dist_root)
     release_dir = dist_root / f"{PACKAGE_NAME}-v{version}"
@@ -99,6 +104,7 @@ def prepare_release(version: str, dist_root: Path) -> dict[str, object]:
         "included_files": included_files,
         "excluded_paths": sorted(EXCLUDED_DIR_NAMES | set(EXCLUDED_GLOBS) | EXCLUDED_FILE_SUFFIXES),
         "validation_commands": VALIDATION_COMMANDS,
+        "skill_dependencies": dependency_summary,
     }
     manifest_path = release_dir / "RELEASE_MANIFEST.json"
     manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -112,6 +118,24 @@ def prepare_release(version: str, dist_root: Path) -> dict[str, object]:
         "file_count": len(included_files) + 1,
         "checksum_count": len(checksum_entries),
         "source_commit": manifest["source_commit"],
+        "skill_dependency_count": dependency_summary["count"],
+    }
+
+
+def _validate_skill_dependency_manifest() -> dict[str, object]:
+    try:
+        dependencies = skill_dependencies_config()
+    except ValueError as exc:
+        raise ReleaseError(f"Invalid skill dependency configuration: {exc}") from exc
+    if not dependencies:
+        raise ReleaseError("Release requires at least one configured skill dependency.")
+    non_blocking = [item["id"] for item in dependencies if not item["blocking"]]
+    if non_blocking:
+        raise ReleaseError(f"All configured skill dependencies must be blocking: {', '.join(non_blocking)}")
+    return {
+        "count": len(dependencies),
+        "ids": [item["id"] for item in dependencies],
+        "blocking_policy": "all",
     }
 
 
@@ -173,10 +197,10 @@ def _copy_skill_tree(release_dir: Path) -> list[str]:
     included: list[str] = []
     for src in sorted(_iter_release_files(SKILL_ROOT), key=lambda item: item.as_posix().lower()):
         rel_repo = src.relative_to(REPO_ROOT)
-        dst = release_dir / rel_repo
+        dst = release_dir / PACKAGE_NAME / rel_repo
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dst)
-        included.append(rel_repo.as_posix())
+        included.append((Path(PACKAGE_NAME) / rel_repo).as_posix())
     return included
 
 

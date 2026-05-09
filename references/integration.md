@@ -43,6 +43,12 @@ example spec directory, Vitis command templates, and tool timeouts are loaded
 from `runtime/hls_generator/runtime_config.json`. See
 `references/configuration.md` before changing those values.
 
+The facade checks configured skill dependencies before rendering prompts,
+running workflows, or validating artifacts. If dependencies are missing or
+invalid, it raises `SkillDependencyError` with an install-request payload. Hosts
+must ask the user before running `python -m runtime.hls_generator deps install
+--all`; after installation, ask the user to restart Codex.
+
 Remote SSH confidence checks must use `scripts/remote_vitis_acceptance.py`,
 which delegates all SSH discovery, checks, exec, and request execution to the
 configured `erie-remote-ssh` helper. Keep real server details in the erie

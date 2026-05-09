@@ -7,9 +7,10 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from runtime.hls_generator.config import generated_roots, protected_files, protected_roots, skill_config_path, skill_root
+from runtime.hls_generator.config import generated_roots, protected_files, protected_roots, skill_config_path, skill_dependencies_config, skill_root
 from runtime.hls_generator.prompt import render_prompt
 from runtime.hls_generator.requirements import apply_requirement_defaults, build_codegen_plan, build_requirements_payload, validate_requirement_confirmation
+from runtime.hls_generator.skill_dependencies import require_skill_dependencies
 from runtime.hls_generator.spec import normalize_spec, read_spec, write_spec
 from runtime.hls_generator.user_config import resolve_comment_language
 from runtime.hls_generator.validation import validate_generated
@@ -61,6 +62,7 @@ def run_hls_workflow(
     hls_profile: str | Path | dict[str, Any] | None = None,
     model_timeout_s: int | None = None,
 ) -> dict[str, Any]:
+    require_skill_dependencies(skill_dependencies_config())
     _reject_non_hls_target(target)
     defaults = load_default_workflow_config()
     overrides = _load_optional_json(workflow_config) or {}
@@ -149,6 +151,7 @@ def render_hls_prompt(
     hls_profile: str | Path | dict[str, Any] | None = None,
     decision: str | Path | dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    require_skill_dependencies(skill_dependencies_config())
     _reject_non_hls_target(target)
     resolved_spec = _prepare_facade_spec(
         spec,
@@ -196,6 +199,7 @@ def validate_hls_artifacts(
     reference_contract: str | Path | dict[str, Any] | None = None,
     report_json: str | Path | None = None,
 ) -> dict[str, Any]:
+    require_skill_dependencies(skill_dependencies_config())
     _reject_non_hls_target(target)
     resolved_spec = _prepare_facade_spec(
         spec,

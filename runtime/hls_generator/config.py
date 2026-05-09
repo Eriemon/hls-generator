@@ -10,6 +10,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from .skill_dependencies import check_skill_dependencies, validate_skill_dependency_config
+
 CONFIG_ENV_VAR = "HLS_GENERATOR_RUNTIME_CONFIG"
 _DEFAULT_CONFIG_NAME = "runtime_config.json"
 
@@ -65,6 +67,7 @@ def validate_runtime_config() -> None:
     for stage in ("compile", "execute", "implement", "cosim"):
         vitis_tool_timeout(stage)
     remote_validation_config()
+    skill_dependencies_config()
 
 
 def skill_config_path(key: str) -> Path:
@@ -174,8 +177,8 @@ def remote_validation_config() -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise ValueError("Runtime config remote_validation must be a JSON object.")
     config = deepcopy(raw)
-    config["erie_skill_dir"] = str(_expand_remote_value(_remote_required(config, "erie_skill_dir")))
-    config["erie_settings_path"] = str(_expand_remote_value(_remote_required(config, "erie_settings_path"), {"erie_skill_dir": config["erie_skill_dir"]}))
+    config["erie_skill_dir"] = str(_resolve_erie_remote_skill_dir(config))
+    config["erie_settings_path"] = str(_resolve_erie_settings_path(config))
     config["local_run_root"] = _remote_local_run_root(str(_remote_required(config, "local_run_root")))
     config["remote_tmp_dir"] = _remote_top_level_name(str(_remote_required(config, "remote_tmp_dir")), "remote_tmp_dir")
     config["default_timeout_s"] = _remote_positive_int(config.get("default_timeout_s"), "default_timeout_s")
@@ -197,6 +200,41 @@ def remote_validation_config() -> dict[str, Any]:
         if not settings_script or not expected_tool:
             raise ValueError(f"Remote Vitis profile {name!r} requires settings_script and expected_tool.")
     return config
+
+
+def skill_dependencies_config() -> list[dict[str, Any]]:
+    return validate_skill_dependency_config(runtime_config().get("skill_dependencies", []))
+
+
+def _resolve_erie_remote_skill_dir(config: dict[str, Any]) -> Path:
+    configured = _expand_remote_value(_remote_required(config, "erie_skill_dir"))
+    settings_template = _remote_required(config, "erie_settings_path")
+    configured_settings = _expand_remote_value(settings_template, {"erie_skill_dir": str(configured)})
+    if os.environ.get("HLS_GENERATOR_SKILLS_DIRS") is not None or os.environ.get("CODEX_HOME"):
+        discovered = _discover_erie_remote_skill_dir()
+        if discovered is not None:
+            return discovered
+    if (configured / "scripts" / "remote_ssh.py").exists() and configured_settings.exists():
+        return configured
+    discovered = _discover_erie_remote_skill_dir()
+    if discovered is not None:
+        return discovered
+    return configured
+
+
+def _discover_erie_remote_skill_dir() -> Path | None:
+    for dependency in skill_dependencies_config():
+        if dependency["id"] != "remote-ssh":
+            continue
+        report = check_skill_dependencies([dependency])
+        item = report["dependencies"][0] if report["dependencies"] else {}
+        if item.get("status") == "ok" and item.get("installed"):
+            return Path(item["installed"][0]["path"]).resolve()
+    return None
+
+
+def _resolve_erie_settings_path(config: dict[str, Any]) -> Path:
+    return _expand_remote_value(_remote_required(config, "erie_settings_path"), {"erie_skill_dir": config["erie_skill_dir"]})
 
 
 def _path_config_value(key: str) -> str:

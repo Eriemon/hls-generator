@@ -16,7 +16,8 @@ if str(SKILL_ROOT) not in sys.path:
     sys.path.insert(0, str(SKILL_ROOT))
 
 from integration.hls_adapter import run_hls_workflow, validate_hls_artifacts  # noqa: E402
-from runtime.hls_generator.config import skill_config_path  # noqa: E402
+from runtime.hls_generator.config import skill_config_path, skill_dependencies_config  # noqa: E402
+from runtime.hls_generator.skill_dependencies import check_skill_dependencies  # noqa: E402
 
 SOURCE_NOTE_PATHS = {
     "references/vitis-hls-2024-2-script-guide.md",
@@ -47,8 +48,13 @@ def main(argv: list[str] | None = None) -> int:
         gates["compileall"] = _run_command([sys.executable, "-m", "compileall", "runtime/hls_generator"], cwd=SKILL_ROOT)
     if not args.skip_quick_validate:
         gates["quick_validate"] = _run_command([sys.executable, str(_quick_validate_path()), str(SKILL_ROOT)], cwd=SKILL_ROOT)
+    gates["skill_dependencies"] = _skill_dependency_gate()
     gates["ref_dependency_scan"] = _ref_dependency_scan()
-    examples_gate, example_specs = _validate_examples(run_root)
+    if gates["skill_dependencies"]["status"] == "passed":
+        examples_gate, example_specs = _validate_examples(run_root)
+    else:
+        example_specs = _example_spec_names()
+        examples_gate = {"status": "skipped", "reason": "blocked_dependency", "results": []}
     gates["example_mock_validation"] = examples_gate
     remote_results: list[dict[str, Any]] = []
     if args.server and not args.skip_remote:
@@ -89,6 +95,19 @@ def _run_command(command: list[str], *, cwd: Path) -> dict[str, Any]:
 
 def _quick_validate_path() -> Path:
     return Path.home() / ".codex" / "skills" / ".system" / "skill-creator" / "scripts" / "quick_validate.py"
+
+
+def _skill_dependency_gate() -> dict[str, Any]:
+    try:
+        dependencies = skill_dependencies_config()
+        report = check_skill_dependencies(dependencies)
+    except ValueError as exc:
+        return {"status": "failed", "error": str(exc)}
+    return {
+        "status": "passed" if report["status"] == "ok" else "failed",
+        "dependency_count": len(dependencies),
+        "report": report,
+    }
 
 
 def _ref_dependency_scan() -> dict[str, Any]:
@@ -145,6 +164,11 @@ def _validate_examples(run_root: Path) -> tuple[dict[str, Any], list[str]]:
         )
     passed = all(item["workflow_status"] == "passed" and item["validation_ok"] for item in results)
     return {"status": "passed" if passed else "failed", "results": results}, [path.name for path in spec_paths]
+
+
+def _example_spec_names() -> list[str]:
+    examples_dir = skill_config_path("examples_dir")
+    return [path.name for path in sorted(examples_dir.glob("*.json"))]
 
 
 def _run_remote(server: str, readiness: str, spec_name: str) -> dict[str, Any]:

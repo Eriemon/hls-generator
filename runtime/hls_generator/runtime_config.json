@@ -83,5 +83,128 @@
         "target_part": "xcu50-fsvh2104-2-e"
       }
     }
-  }
+  },
+  "skill_dependencies": [
+    {
+      "id": "remote-ssh",
+      "level": "required",
+      "purpose": "Remote SSH server discovery, remote links, and remote Vitis HLS validation.",
+      "repo_url": "https://github.com/Eriemon/remote-ssh.git",
+      "ref": "main",
+      "paths": [
+        "."
+      ],
+      "expected_skill_names": [
+        "erie-remote-ssh"
+      ],
+      "destination_names": [
+        "erie-remote-ssh"
+      ],
+      "aliases": [],
+      "adapter": "erie-remote-ssh",
+      "blocking": true,
+      "required_files": [
+        "scripts/remote_ssh.py",
+        "config/defaults.json"
+      ]
+    },
+    {
+      "id": "fpga-agent-skills",
+      "level": "required",
+      "purpose": "Vitis/Vivado FPGA development, synthesis, implementation, analysis, constraints, simulation, debug, and Tcl guidance.",
+      "repo_url": "https://github.com/adeleempurpled290/FPGA-Agent-skills.git",
+      "ref": "main",
+      "paths": [
+        "vitis-hls-synthesis",
+        "vivado-analysis",
+        "vivado-constraints",
+        "vivado-debug",
+        "vivado-impl",
+        "vivado-sim",
+        "vivado-synth",
+        "vivado-tcl"
+      ],
+      "expected_skill_names": [
+        "vitis-hls-synthesis",
+        "vivado-analysis",
+        "vivado-constraints",
+        "vivado-debug",
+        "vivado-impl",
+        "vivado-sim",
+        "vivado-synth",
+        "vivado-tcl"
+      ],
+      "destination_names": [
+        "vitis-hls-synthesis",
+        "vivado-analysis",
+        "vivado-constraints",
+        "vivado-debug",
+        "vivado-impl",
+        "vivado-sim",
+        "vivado-synth",
+        "vivado-tcl"
+      ],
+      "aliases": [],
+      "adapter": "fpga-agent-skills",
+      "blocking": true
+    },
+    {
+      "id": "superpowers",
+      "level": "recommended",
+      "purpose": "Planning, task management, systematic debugging, TDD, and verification workflows.",
+      "repo_url": "https://github.com/obra/superpowers.git",
+      "ref": "main",
+      "paths": [
+        "skills/using-superpowers",
+        "skills/brainstorming",
+        "skills/writing-plans",
+        "skills/executing-plans",
+        "skills/systematic-debugging",
+        "skills/test-driven-development",
+        "skills/verification-before-completion"
+      ],
+      "expected_skill_names": [
+        "using-superpowers",
+        "brainstorming",
+        "writing-plans",
+        "executing-plans",
+        "systematic-debugging",
+        "test-driven-development",
+        "verification-before-completion"
+      ],
+      "destination_names": [
+        "using-superpowers",
+        "brainstorming",
+        "writing-plans",
+        "executing-plans",
+        "systematic-debugging",
+        "test-driven-development",
+        "verification-before-completion"
+      ],
+      "aliases": [],
+      "adapter": "superpowers",
+      "blocking": true
+    },
+    {
+      "id": "context-engineering",
+      "level": "recommended",
+      "purpose": "Context engineering guidance for agent-system debugging and engineering-task diagnosis.",
+      "repo_url": "https://github.com/muratcankoylan/Agent-Skills-for-Context-Engineering.git",
+      "ref": "main",
+      "paths": [
+        "."
+      ],
+      "expected_skill_names": [
+        "context-engineering"
+      ],
+      "destination_names": [
+        "context-engineering"
+      ],
+      "aliases": [
+        "context-engineering-collection"
+      ],
+      "adapter": "context-engineering",
+      "blocking": true
+    }
+  ]
 }

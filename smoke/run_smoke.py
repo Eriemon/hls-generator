@@ -952,7 +952,7 @@ def _run_release_packaging_checks(base: Path) -> None:
 
     dist_root = base / "release-dist"
     valid = REAL_SUBPROCESS_RUN(
-        [sys.executable, str(script), "--version", "0.1.1", "--dist-root", str(dist_root)],
+        [sys.executable, str(script), "--version", "0.1.2", "--dist-root", str(dist_root)],
         cwd=ROOT.parent,
         capture_output=True,
         text=True,
@@ -964,12 +964,15 @@ def _run_release_packaging_checks(base: Path) -> None:
     release_dir = Path(payload["release_dir"])
     zip_path = Path(payload["zip_path"])
     assert release_dir.exists() and zip_path.exists(), payload
-    assert (release_dir / "SKILL.md").exists()
+    assert (release_dir / "erie-hls-generator" / "SKILL.md").exists()
     assert not (release_dir / "ref").exists()
-    assert not (release_dir / "reports").exists()
+    assert not (release_dir / "erie-hls-generator" / "reports").exists()
     assert not list(release_dir.rglob("__pycache__"))
     assert (release_dir / "RELEASE_MANIFEST.json").exists()
     assert (release_dir / "checksums.sha256").exists()
+    manifest_text = (release_dir / "RELEASE_MANIFEST.json").read_text(encoding="utf-8")
+    assert "C:\\Users" not in manifest_text
+    assert Path.home().name not in manifest_text
 
     directory_files = {path.relative_to(release_dir).as_posix() for path in release_dir.rglob("*") if path.is_file()}
     with zipfile.ZipFile(zip_path) as archive:

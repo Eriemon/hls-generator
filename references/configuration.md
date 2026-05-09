@@ -42,6 +42,45 @@ csim, csynth, and cosim readiness.
 `vitis.timeouts_s` controls per-readiness timeout budgets for compile, execute,
 implement, and cosim validation.
 
+## Skill Dependency Policy
+
+`skill_dependencies` is the declarative list of Codex skills this skill expects
+to be installed before HLS workflows run. Each dependency entry includes:
+
+- `id`: stable dependency id used by `deps install --ids`.
+- `level`: `required` or `recommended`; both levels are blocking for this skill.
+- `purpose`: user-facing reason for the dependency.
+- `repo_url` and `ref`: Git source used by `deps install`.
+- `paths`: repo paths to install. Use `.` for single-skill repository roots.
+- `expected_skill_names`, `destination_names`, and `aliases`: installed skill
+  names accepted by the scanner.
+- `adapter`: dependency family, such as `erie-remote-ssh`, `fpga-agent-skills`,
+  `superpowers`, or `context-engineering`.
+- `blocking`: must remain `true` for all configured dependencies.
+
+The dependency scanner checks `$CODEX_HOME/skills`, `~/.codex/skills`, and
+Codex plugin caches. For tests or controlled hosts, override discovery with
+`HLS_GENERATOR_SKILLS_DIRS` and `HLS_GENERATOR_PLUGIN_CACHE_DIRS` using the
+platform path separator. When `HLS_GENERATOR_SKILLS_DIRS` is set, `deps
+install` also defaults to the first listed skills directory. This lets the
+Superpowers plugin satisfy the Superpowers dependency without copying each skill
+into the normal skills directory.
+
+Use these commands from the skill root:
+
+```powershell
+python -m runtime.hls_generator deps check --json
+python -m runtime.hls_generator deps request --out .\reports\skill_dependency_request.json
+python -m runtime.hls_generator deps install --all
+```
+
+`deps install` does not overwrite existing skill directories. If an installed
+dependency is invalid, repair it manually or remove it before reinstalling. A
+Codex restart is required after installing new skills so trigger metadata is
+loaded. Codex skills do not provide a reliable native post-install hook, so
+first-install enforcement is implemented through release validation and the
+first-trigger dependency check in `SKILL.md`.
+
 ## Remote Validation Policy
 
 `remote_validation` configures remote confidence checks without copying server

@@ -9,15 +9,16 @@ Use this skill for local AMD-Xilinx/Vitis HLS C/C++ kernel generation. The bundl
 
 ## Workflow
 
-1. Start from a confirmed HLS JSON spec or create one with the scaffold command.
-2. Use the facade for local integrations:
+1. On first trigger in a Codex session, run `python -m runtime.hls_generator deps check --json` from this skill directory. If it reports `blocked_dependency`, ask the user whether to install the listed dependencies before continuing; do not degrade or continue past missing required or recommended dependencies.
+2. Start from a confirmed HLS JSON spec or create one with the scaffold command.
+3. Use the facade for local integrations:
    - `run_hls_workflow(...)` for full staged execution or resume.
    - `render_hls_prompt(...)` when a caller owns the model call.
    - `validate_hls_artifacts(...)` before using generated files downstream.
-3. Require a confirmed requirement contract before generation: `pipeline_required`, `streamability`, `interface_family`, `interface_profile`, `confirmed_by_user`, and `confirmation_notes`.
-4. Run the fixed HLS pipeline: `requirements -> codegen_plan -> tests -> python -> hls`.
-5. Keep final hardware-facing artifacts limited to HLS C/C++ headers, sources, C++ testbenches, `.cfg` files, and reports. Python models and vectors are validation intermediates.
-6. Validate with AMD-Xilinx tooling. The validator prefers `vitis-run` and falls back to `vitis_hls`; missing local tools block with a remote-server request so the caller can ask the user to choose an `erie-remote-ssh` server with Vitis available.
+4. Require a confirmed requirement contract before generation: `pipeline_required`, `streamability`, `interface_family`, `interface_profile`, `confirmed_by_user`, and `confirmation_notes`.
+5. Run the fixed HLS pipeline: `requirements -> codegen_plan -> tests -> python -> hls`.
+6. Keep final hardware-facing artifacts limited to HLS C/C++ headers, sources, C++ testbenches, `.cfg` files, and reports. Python models and vectors are validation intermediates.
+7. Validate with AMD-Xilinx tooling. The validator prefers `vitis-run` and falls back to `vitis_hls`; missing local tools block with a remote-server request so the caller can ask the user to choose an `erie-remote-ssh` server with Vitis available.
 
 ## Local Commands
 
@@ -31,6 +32,8 @@ Use the runtime CLI:
 
 ```powershell
 python -m runtime.hls_generator config --path
+python -m runtime.hls_generator deps check --json
+python -m runtime.hls_generator deps request --out .\reports\skill_dependency_request.json
 python -m runtime.hls_generator scaffold --target hls --name vector_scale --out .\reports\hls\spec.json
 python -m runtime.hls_generator prompt --target hls --spec .\reports\hls\spec.json --out .\reports\hls\prompt.md
 python -m runtime.hls_generator validate --target hls --spec .\reports\hls\spec.json --path .\reports\hls\generated --readiness static --no-external
@@ -72,6 +75,7 @@ deleted after a successful run.
 - Do not use local non-HLS hardware tools as validation substitutes.
 - Do not modify files outside this skill directory.
 - Keep path and Vitis-tool policy in `runtime/hls_generator/runtime_config.json`; update `references/configuration.md` when the policy changes.
+- Keep skill dependencies in `runtime/hls_generator/runtime_config.json`; missing required or recommended dependencies are blocking. Install only after the user confirms, then restart Codex so new skill metadata is loaded.
 - Use `erie-remote-ssh` for remote SSH checks; do not copy server-list details into this skill.
 - If local Vitis tools are unavailable, prefer requesting a remote erie server over weakening validation or substituting non-HLS tools. Discover and present erie server choices before connecting.
 - When comment language is `auto`, use the user's `~/.hls-generator/config.json`; if it has no saved language, ask the user to choose English (`en`) or Chinese (`zh`) before generation.
