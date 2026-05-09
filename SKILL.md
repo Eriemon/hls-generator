@@ -1,6 +1,6 @@
 ---
 name: erie-hls-generator
-description: Use when working on HLS development, HLS design, HLS modification, HLS debug, HLS 调试, 高层次综合, Vitis HLS, AMD/Xilinx HLS, C/C++ HLS kernels, pragmas/directives, interfaces, DATAFLOW, array partition/reshape, hls_config.cfg, Tcl flow, csim/cosim, HLS reports, or HLS-generated RTL/Verilog interface, export, cosim, or debug issues.
+description: Use when working on HLS development, HLS design, HLS modification, HLS debug, HLS debugging, Chinese-language HLS requests, high-level synthesis, Vitis HLS, AMD/Xilinx HLS, C/C++ HLS kernels, pragmas/directives, interfaces, DATAFLOW, array partition/reshape, hls_config.cfg, Tcl flow, csim/cosim, HLS reports, or HLS-generated RTL/Verilog interface, export, cosim, or debug issues.
 ---
 
 # Erie HLS Generator

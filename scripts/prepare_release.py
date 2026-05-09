@@ -64,7 +64,7 @@ class ReleaseError(RuntimeError):
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Prepare a versioned erie-hls-generator release directory and zip.")
-    parser.add_argument("--version", required=True, help="Explicit SemVer release version, for example 0.1.2.")
+    parser.add_argument("--version", required=True, help="Explicit SemVer release version, for example 0.1.3.")
     parser.add_argument("--dist-root", type=Path, default=REPO_ROOT / "dist", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     try:
@@ -94,6 +94,7 @@ def prepare_release(version: str, dist_root: Path) -> dict[str, object]:
     _replace_release_outputs(release_dir, zip_path)
 
     included_files = _copy_skill_tree(release_dir)
+    _validate_release_markdown(release_dir)
     manifest = {
         "version": version,
         "tag": f"v{version}",
@@ -202,6 +203,23 @@ def _copy_skill_tree(release_dir: Path) -> list[str]:
         shutil.copy2(src, dst)
         included.append((Path(PACKAGE_NAME) / rel_repo).as_posix())
     return included
+
+
+def _validate_release_markdown(release_dir: Path) -> None:
+    markdown_paths = [release_dir / PACKAGE_NAME / "SKILL.md"]
+    for path in markdown_paths:
+        if not path.exists():
+            raise ReleaseError(f"Release Markdown is missing: {path.relative_to(release_dir).as_posix()}")
+        data = path.read_bytes()
+        rel = path.relative_to(release_dir).as_posix()
+        if data.startswith(b"\xef\xbb\xbf"):
+            raise ReleaseError(f"Release Markdown must not use a UTF-8 BOM: {rel}")
+        try:
+            text = data.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ReleaseError(f"Release Markdown must be UTF-8: {rel}: {exc}") from exc
+        if not text.isascii():
+            raise ReleaseError(f"Release Markdown must be ASCII-only to avoid install metadata mojibake: {rel}")
 
 
 def _iter_release_files(root: Path) -> Iterable[Path]:

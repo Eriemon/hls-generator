@@ -87,14 +87,16 @@ def _run_skill_metadata_checks() -> None:
         "HLS design",
         "HLS modification",
         "HLS debug",
-        "HLS 调试",
-        "高层次综合",
+        "HLS debugging",
+        "Chinese-language HLS requests",
+        "high-level synthesis",
         "Vitis HLS",
         "cosim",
         "HLS-generated RTL/Verilog",
     ]
     for term in required_terms:
         assert term in description, (term, description)
+    assert description.isascii(), description
     for body_term in [
         "HLS-generated RTL/Verilog interface, export, cosim, and debug issues are in scope",
         "Pure handwritten Verilog/SystemVerilog debug is not led by this skill",
@@ -952,7 +954,7 @@ def _run_release_packaging_checks(base: Path) -> None:
 
     dist_root = base / "release-dist"
     valid = REAL_SUBPROCESS_RUN(
-        [sys.executable, str(script), "--version", "0.1.2", "--dist-root", str(dist_root)],
+        [sys.executable, str(script), "--version", "0.1.3", "--dist-root", str(dist_root)],
         cwd=ROOT.parent,
         capture_output=True,
         text=True,
@@ -973,6 +975,7 @@ def _run_release_packaging_checks(base: Path) -> None:
     manifest_text = (release_dir / "RELEASE_MANIFEST.json").read_text(encoding="utf-8")
     assert "C:\\Users" not in manifest_text
     assert Path.home().name not in manifest_text
+    _assert_release_skill_markdown_ascii(release_dir, zip_path)
 
     directory_files = {path.relative_to(release_dir).as_posix() for path in release_dir.rglob("*") if path.is_file()}
     with zipfile.ZipFile(zip_path) as archive:
@@ -982,6 +985,20 @@ def _run_release_packaging_checks(base: Path) -> None:
             if not name.endswith("/")
         }
     assert zipped_files == directory_files, (zipped_files ^ directory_files)
+
+
+def _assert_release_skill_markdown_ascii(release_dir: Path, zip_path: Path) -> None:
+    skill_path = release_dir / "erie-hls-generator" / "SKILL.md"
+    data = skill_path.read_bytes()
+    assert not data.startswith(b"\xef\xbb\xbf"), skill_path
+    text = data.decode("utf-8")
+    assert text.isascii(), skill_path
+    with zipfile.ZipFile(zip_path) as archive:
+        name = f"{zip_path.stem}/erie-hls-generator/SKILL.md"
+        data = archive.read(name)
+        assert not data.startswith(b"\xef\xbb\xbf"), name
+        text = data.decode("utf-8")
+        assert text.isascii(), name
 
 
 def _assert_hls_artifacts(artifact_dir: Path) -> None:

@@ -28,7 +28,7 @@ from .workspace import require_configured_output_path, require_workspace_path
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="hls-gen", description="AMD-Xilinx/Vitis HLS-only generator CLI.")
-    parser.add_argument("--version", action="version", version="hls-gen 0.1.2")
+    parser.add_argument("--version", action="version", version="hls-gen 0.1.3")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     scaffold = subparsers.add_parser("scaffold", help="Create a starter HLS spec.")
