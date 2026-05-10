@@ -19,6 +19,7 @@ Use this skill for local AMD-Xilinx/Vitis HLS C/C++ kernel generation. The bundl
 5. Run the fixed HLS pipeline: `requirements -> codegen_plan -> tests -> python -> hls`.
 6. Keep final hardware-facing artifacts limited to HLS C/C++ headers, sources, C++ testbenches, `.cfg` files, and reports. Python models and vectors are validation intermediates.
 7. Validate with AMD-Xilinx tooling. The validator prefers `vitis-run` and falls back to `vitis_hls`; missing local tools block with a remote-server request so the caller can ask the user to choose an `erie-remote-ssh` server with Vitis available.
+8. For Vitis development, simulation, cosim, and debug guidance, follow `runtime_config.json` skill routing: prefer `vitis-developer` when installed, otherwise fall back to `vitis-hls-synthesis`.
 
 ## Local Commands
 
@@ -76,6 +77,7 @@ deleted after a successful run.
 - Do not modify files outside this skill directory.
 - Keep path and Vitis-tool policy in `runtime/hls_generator/runtime_config.json`; update `references/configuration.md` when the policy changes.
 - Keep skill dependencies in `runtime/hls_generator/runtime_config.json`; missing required or recommended dependencies are blocking. Install only after the user confirms, then restart Codex so new skill metadata is loaded.
+- If `vitis-developer` is installed, dependency installation must not install `vitis-hls-synthesis` from FPGA-Agent-Skills; the remaining Vivado skills are still required.
 - Use `erie-remote-ssh` for remote SSH checks; do not copy server-list details into this skill.
 - If local Vitis tools are unavailable, prefer requesting a remote erie server over weakening validation or substituting non-HLS tools. Discover and present erie server choices before connecting.
 - When comment language is `auto`, use the user's `~/.hls-generator/config.json`; if it has no saved language, ask the user to choose English (`en`) or Chinese (`zh`) before generation.

@@ -6,6 +6,7 @@ import json
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
+from .config import resolve_vitis_skill_preference
 from .spec import normalize_spec
 from .user_config import COMMENT_LANGUAGES, require_comment_language
 from .vectors import VECTOR_HASH_TAG
@@ -236,11 +237,21 @@ def _hls_rules(spec: dict[str, Any], comment_language: str, hls_profile: dict[st
         "Avoid dynamic allocation, recursion, exceptions, RTTI, std::vector, and unsupported standard library features.",
         "Include a self-checking C++ testbench and hls_config.cfg when requested by outputs.",
         "Make generated HLS suitable for Vitis C simulation, synthesis, and co-simulation.",
+        *_vitis_skill_rules(),
         *_performance_rules_for(spec),
         *_hls_profile_rules(hls_profile),
         *_comment_rules_for(comment_language),
     ]
     return rules
+
+
+def _vitis_skill_rules() -> list[str]:
+    preference = resolve_vitis_skill_preference()
+    fallbacks = ", ".join(preference["fallback_skills"])
+    return [
+        f"For Vitis development, simulation, co-simulation, and HLS debug guidance, prefer the `{preference['selected_skill']}` Codex skill when available.",
+        f"If `{preference['preferred_skill']}` is not installed, fall back to: {fallbacks}.",
+    ]
 
 
 def _stage_guidance(

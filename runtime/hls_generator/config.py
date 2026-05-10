@@ -10,7 +10,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from .skill_dependencies import check_skill_dependencies, validate_skill_dependency_config
+from .skill_dependencies import check_skill_dependencies, find_installed_skill, validate_skill_dependency_config
 
 CONFIG_ENV_VAR = "HLS_GENERATOR_RUNTIME_CONFIG"
 _DEFAULT_CONFIG_NAME = "runtime_config.json"
@@ -63,6 +63,7 @@ def validate_runtime_config() -> None:
     protected_files()
     missing_vitis_tool_id()
     vitis_tools()
+    vitis_skill_routing()
     vitis_tcl_config()
     for stage in ("compile", "execute", "implement", "cosim"):
         vitis_tool_timeout(stage)
@@ -131,6 +132,50 @@ def vitis_tools() -> list[dict[str, Any]]:
 
 def vitis_tool_names() -> tuple[str, ...]:
     return tuple(str(tool["name"]) for tool in vitis_tools())
+
+
+def vitis_skill_routing() -> dict[str, Any]:
+    raw = _vitis_config().get("skill_routing", {})
+    if not isinstance(raw, dict):
+        raise ValueError("Runtime config vitis.skill_routing must be a JSON object.")
+    preferred = str(raw.get("preferred_skill") or "").strip()
+    fallbacks = raw.get("fallback_skills", [])
+    if not preferred:
+        raise ValueError("Runtime config vitis.skill_routing.preferred_skill must be set.")
+    if not isinstance(fallbacks, list) or not fallbacks:
+        raise ValueError("Runtime config vitis.skill_routing.fallback_skills must be a non-empty list.")
+    resolved_fallbacks = [str(item).strip() for item in fallbacks]
+    if any(not item for item in resolved_fallbacks):
+        raise ValueError("Runtime config vitis.skill_routing.fallback_skills must contain only non-empty strings.")
+    return {"preferred_skill": preferred, "fallback_skills": resolved_fallbacks}
+
+
+def resolve_vitis_skill_preference(
+    *,
+    skill_dirs: list[Path] | None = None,
+    plugin_cache_dirs: list[Path] | None = None,
+) -> dict[str, Any]:
+    routing = vitis_skill_routing()
+    candidates = [routing["preferred_skill"], *routing["fallback_skills"]]
+    installed: list[dict[str, Any]] = []
+    for name in candidates:
+        match = find_installed_skill(name, skill_dirs=skill_dirs, plugin_cache_dirs=plugin_cache_dirs)
+        if match and str(match.get("frontmatter_name") or "") == name:
+            installed.append(match)
+            return {
+                "preferred_skill": routing["preferred_skill"],
+                "fallback_skills": routing["fallback_skills"],
+                "selected_skill": name,
+                "status": "ok",
+                "installed": installed,
+            }
+    return {
+        "preferred_skill": routing["preferred_skill"],
+        "fallback_skills": routing["fallback_skills"],
+        "selected_skill": routing["preferred_skill"],
+        "status": "missing",
+        "installed": installed,
+    }
 
 
 def vitis_blocking_tool_ids() -> set[str]:

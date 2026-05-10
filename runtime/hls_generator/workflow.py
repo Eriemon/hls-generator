@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .config import vitis_blocking_tool_ids
+from .config import resolve_vitis_skill_preference, vitis_blocking_tool_ids
 from .extractor import ExtractionError, extract_response
 from .interface_contract import audit_interface
 from .model_provider import GenerationContext, ManualResponseRequired, ModelProviderError, build_model_provider
@@ -474,11 +474,13 @@ def _blocked_toolchain(validation_report: Any) -> bool:
 def _write_remote_toolchain_request(attempt_dir: Path, attempt_id: str, config: dict[str, Any], validation_report: Any) -> Path:
     path = attempt_dir / "remote_toolchain_request.json"
     readiness = str(config.get("readiness", "execute"))
+    vitis_skill = resolve_vitis_skill_preference()
     request = {
         "version": 1,
         "action": "ask_remote_server",
         "primary_source": "local_vitis_missing",
         "preferred_skill": "erie-remote-ssh",
+        "vitis_skill_routing": vitis_skill,
         "question": "Local Vitis HLS tools were not found. Ask the user to choose a configured erie-remote-ssh server with Vitis/Vivado available, then run remote HLS validation there.",
         "attempt_id": attempt_id,
         "readiness": readiness,
@@ -508,7 +510,7 @@ def _write_remote_toolchain_request(attempt_dir: Path, attempt_id: str, config: 
             "user_config_path": "~/.hls-generator/config.json",
             "selection_override": "Pass --vitis-version <version> to save and use a specific remote Vitis version for the selected server.",
         },
-        "expected_next_step": "Use erie-remote-ssh discovery/choices first; after the user selects a server, run scan-software and the HLS remote acceptance helper. If multiple Vitis versions are detected, ask the user to choose one before continuing. By default, inspect the retained remote_dir under the selected server workdir after Vitis validation.",
+        "expected_next_step": f"Use erie-remote-ssh discovery/choices first; use {vitis_skill['selected_skill']} for Vitis flow guidance when available; after the user selects a server, run scan-software and the HLS remote acceptance helper. If multiple Vitis versions are detected, ask the user to choose one before continuing. By default, inspect the retained remote_dir under the selected server workdir after Vitis validation.",
     }
     write_json(path, request)
     return path

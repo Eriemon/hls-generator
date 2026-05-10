@@ -64,7 +64,7 @@ class ReleaseError(RuntimeError):
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Prepare a versioned erie-hls-generator release directory and zip.")
-    parser.add_argument("--version", required=True, help="Explicit SemVer release version, for example 0.1.3.")
+    parser.add_argument("--version", required=True, help="Explicit SemVer release version, for example 0.1.4.")
     parser.add_argument("--dist-root", type=Path, default=REPO_ROOT / "dist", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     try:

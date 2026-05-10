@@ -47,6 +47,17 @@ def check_skill_dependencies(
     }
 
 
+def find_installed_skill(
+    name: str,
+    *,
+    aliases: list[str] | tuple[str, ...] | set[str] | None = None,
+    skill_dirs: list[Path] | None = None,
+    plugin_cache_dirs: list[Path] | None = None,
+) -> dict[str, Any] | None:
+    index = _discover_installed_skills(skill_dirs=skill_dirs, plugin_cache_dirs=plugin_cache_dirs)
+    return _find_skill(name, set(aliases or []), index)
+
+
 def require_skill_dependencies(dependencies: list[dict[str, Any]] | None) -> dict[str, Any]:
     report = check_skill_dependencies(dependencies)
     if report["status"] == BLOCKED_DEPENDENCY:
@@ -105,6 +116,12 @@ def install_skill_dependencies(
             missing = item.get("missing", entry["expected_skill_names"]) if item else entry["expected_skill_names"]
             to_install.append((entry, list(missing)))
     results = [_install_one(entry, destination, missing_names) for entry, missing_names in to_install]
+    install_skipped = [
+        {"dependency_id": item["id"], **satisfied}
+        for item in report["dependencies"]
+        if item["id"] in {entry["id"] for entry in selected}
+        for satisfied in item.get("satisfied_by", [])
+    ]
     if repair_required:
         status = "repair_required"
     else:
@@ -115,6 +132,7 @@ def install_skill_dependencies(
         "destination": str(destination),
         "installed": results,
         "skipped": skipped,
+        "install_skipped": install_skipped,
         "repair_required": repair_required,
         "restart_required": True,
         "next_step": "Restart Codex to pick up newly installed skills.",
@@ -135,6 +153,8 @@ def format_dependency_report(report: dict[str, Any]) -> str:
         detail = f"- {item['id']}: {item['status']} ({item['level']})"
         if item.get("missing"):
             detail += f"; missing={', '.join(item['missing'])}"
+        if item.get("satisfied_by"):
+            detail += "; satisfied_by=" + ", ".join(f"{entry['name']}->{entry['provider']['frontmatter_name']}" for entry in item["satisfied_by"])
         if item.get("invalid"):
             detail += f"; invalid={', '.join(item['invalid'])}"
         lines.append(detail)
@@ -146,10 +166,16 @@ def _check_one(entry: dict[str, Any], index: dict[str, list[dict[str, Any]]]) ->
     aliases = set(entry.get("aliases", []))
     allowed_names = set(expected) | aliases
     installed: list[dict[str, Any]] = []
+    satisfied_by: list[dict[str, Any]] = []
     missing: list[str] = []
     invalid: list[str] = []
     for name in expected:
         match = _find_skill(name, aliases, index)
+        if not match:
+            alternative = _find_alternative_provider(name, entry.get("alternative_providers", []), index)
+            if alternative:
+                satisfied_by.append(alternative)
+                continue
         if not match:
             missing.append(name)
             continue
@@ -178,9 +204,30 @@ def _check_one(entry: dict[str, Any], index: dict[str, list[dict[str, Any]]]) ->
         "blocking": entry["blocking"],
         "status": status,
         "installed": installed,
+        "satisfied_by": satisfied_by,
         "missing": missing,
         "invalid": invalid,
     }
+
+
+def _find_alternative_provider(name: str, providers: list[dict[str, Any]], index: dict[str, list[dict[str, Any]]]) -> dict[str, Any] | None:
+    for provider in providers:
+        if provider["for"] != name:
+            continue
+        allowed_names = set(provider["skill_names"]) | set(provider["aliases"])
+        for skill_name in provider["skill_names"]:
+            match = _find_skill(skill_name, set(provider["aliases"]), index)
+            if not match:
+                continue
+            if str(match.get("frontmatter_name") or "") not in allowed_names:
+                continue
+            return {
+                "name": name,
+                "provider": match,
+                "install_policy": provider["install_policy"],
+                "purpose": provider["purpose"],
+            }
+    return None
 
 
 def _find_skill(name: str, aliases: set[str], index: dict[str, list[dict[str, Any]]]) -> dict[str, Any] | None:
@@ -326,10 +373,36 @@ def _normalize_dependency(item: Any) -> dict[str, Any]:
         "adapter": _non_empty_string(item["adapter"], "adapter"),
         "blocking": bool(item["blocking"]),
         "required_files": _string_list(item.get("required_files", []), "required_files", allow_empty=True),
+        "alternative_providers": _normalize_alternative_providers(item.get("alternative_providers", []), expected),
     }
     if normalized["level"] not in {"required", "recommended"}:
         raise ValueError(f"Skill dependency {normalized['id']!r} level must be required or recommended.")
     return normalized
+
+
+def _normalize_alternative_providers(value: Any, expected: list[str]) -> list[dict[str, Any]]:
+    if value in (None, []):
+        return []
+    if not isinstance(value, list):
+        raise ValueError("Skill dependency alternative_providers must be a list.")
+    result: list[dict[str, Any]] = []
+    expected_set = set(expected)
+    for item in value:
+        if not isinstance(item, dict):
+            raise ValueError("Each skill dependency alternative provider must be a JSON object.")
+        target = _non_empty_string(item.get("for"), "alternative_providers.for")
+        if target not in expected_set:
+            raise ValueError(f"Alternative provider target {target!r} is not listed in expected_skill_names.")
+        result.append(
+            {
+                "for": target,
+                "skill_names": _string_list(item.get("skill_names"), "alternative_providers.skill_names"),
+                "aliases": _string_list(item.get("aliases", []), "alternative_providers.aliases", allow_empty=True),
+                "install_policy": str(item.get("install_policy") or "skip_if_present").strip() or "skip_if_present",
+                "purpose": str(item.get("purpose") or "").strip(),
+            }
+        )
+    return result
 
 
 def _string_list(value: Any, name: str, *, allow_empty: bool = False) -> list[str]:

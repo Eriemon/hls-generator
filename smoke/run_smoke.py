@@ -183,6 +183,8 @@ def _run_prompt_and_static_validation(base: Path, artifact_dir: Path) -> None:
     assert "Return only fenced code blocks" in text
     assert "Create HLS C/C++ source, header, self-checking testbench, and cfg artifacts." in text
     assert "Vitis HLS 2024.2" in text
+    assert "vitis-developer" in text
+    assert "vitis-hls-synthesis" in text
     assert "DATA_PACK" in text and "set_directive_resource" in text
     assert "array_partition and array_reshape" in text
     assert "AXI4-Stream" in text
@@ -579,6 +581,9 @@ def _run_missing_toolchain_workflow(base: Path) -> None:
     assert request["action"] == "ask_remote_server"
     assert request["primary_source"] == "local_vitis_missing"
     assert request["preferred_skill"] == "erie-remote-ssh"
+    assert request["vitis_skill_routing"]["preferred_skill"] == "vitis-developer"
+    assert request["vitis_skill_routing"]["fallback_skills"] == ["vitis-hls-synthesis"]
+    assert request["vitis_skill_routing"]["selected_skill"] in {"vitis-developer", "vitis-hls-synthesis"}
     assert "choices" in " ".join(request["erie_remote_ssh"]["selection_commands"])
     assert "remote_vitis_acceptance.py --mode vitis --server <erie-server>" in " ".join(request["hls_generator_remote_commands"])
     assert request["remote_artifact_policy"]["default"] == "retain"
@@ -954,7 +959,7 @@ def _run_release_packaging_checks(base: Path) -> None:
 
     dist_root = base / "release-dist"
     valid = REAL_SUBPROCESS_RUN(
-        [sys.executable, str(script), "--version", "0.1.3", "--dist-root", str(dist_root)],
+        [sys.executable, str(script), "--version", "0.1.4", "--dist-root", str(dist_root)],
         cwd=ROOT.parent,
         capture_output=True,
         text=True,

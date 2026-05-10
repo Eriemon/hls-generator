@@ -59,6 +59,12 @@
       "execute": 180,
       "implement": 600,
       "cosim": 900
+    },
+    "skill_routing": {
+      "preferred_skill": "vitis-developer",
+      "fallback_skills": [
+        "vitis-hls-synthesis"
+      ]
     }
   },
   "remote_validation": {
@@ -146,7 +152,18 @@
       ],
       "aliases": [],
       "adapter": "fpga-agent-skills",
-      "blocking": true
+      "blocking": true,
+      "alternative_providers": [
+        {
+          "for": "vitis-hls-synthesis",
+          "skill_names": [
+            "vitis-developer"
+          ],
+          "aliases": [],
+          "install_policy": "skip_if_present",
+          "purpose": "Use vitis-developer for Vitis HLS development, simulation, cosim, and debug guidance when it is already installed."
+        }
+      ]
     },
     {
       "id": "superpowers",

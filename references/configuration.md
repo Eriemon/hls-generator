@@ -42,6 +42,18 @@ csim, csynth, and cosim readiness.
 `vitis.timeouts_s` controls per-readiness timeout budgets for compile, execute,
 implement, and cosim validation.
 
+`vitis.skill_routing` controls which Codex skill should guide Vitis work around
+simulation, development, HLS components, cosim, and debug:
+
+- `preferred_skill`: the first skill to use when installed. The default is
+  `vitis-developer`.
+- `fallback_skills`: ordered fallback skills. The default is
+  `vitis-hls-synthesis`.
+
+This routing is advisory for Codex skill use. Runtime validation still executes
+the configured local `vitis-run` or `vitis_hls` command, or the remote Vitis
+acceptance helper when local tools are missing.
+
 ## Skill Dependency Policy
 
 `skill_dependencies` is the declarative list of Codex skills this skill expects
@@ -54,6 +66,9 @@ to be installed before HLS workflows run. Each dependency entry includes:
 - `paths`: repo paths to install. Use `.` for single-skill repository roots.
 - `expected_skill_names`, `destination_names`, and `aliases`: installed skill
   names accepted by the scanner.
+- `alternative_providers`: optional installed skills that can satisfy one
+  expected skill without installing it. The default configuration lets
+  `vitis-developer` satisfy `vitis-hls-synthesis` only.
 - `adapter`: dependency family, such as `erie-remote-ssh`, `fpga-agent-skills`,
   `superpowers`, or `context-engineering`.
 - `blocking`: must remain `true` for all configured dependencies.
@@ -65,6 +80,11 @@ platform path separator. When `HLS_GENERATOR_SKILLS_DIRS` is set, `deps
 install` also defaults to the first listed skills directory. This lets the
 Superpowers plugin satisfy the Superpowers dependency without copying each skill
 into the normal skills directory.
+
+When `vitis-developer` is already installed, `deps install --all` skips
+`vitis-hls-synthesis` from FPGA-Agent-Skills and reports the skip in
+`install_skipped`. The seven `vivado-*` skills remain required and are not
+satisfied by `vitis-developer`.
 
 Use these commands from the skill root:
 

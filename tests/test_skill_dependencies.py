@@ -13,6 +13,7 @@ SKILL_ROOT = Path(__file__).resolve().parents[1]
 if str(SKILL_ROOT) not in sys.path:
     sys.path.insert(0, str(SKILL_ROOT))
 
+from runtime.hls_generator.config import resolve_vitis_skill_preference
 from runtime.hls_generator.skill_dependencies import _default_install_root, build_dependency_request, check_skill_dependencies, install_skill_dependencies
 
 
@@ -21,6 +22,65 @@ def _write_skill(root: Path, name: str) -> Path:
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text(f"---\nname: {name}\ndescription: test skill\n---\n\n# {name}\n", encoding="utf-8")
     return skill_dir
+
+
+def _fpga_dependency_config() -> list[dict]:
+    return [
+        {
+            "id": "fpga-agent-skills",
+            "level": "required",
+            "purpose": "fpga",
+            "repo_url": "https://github.com/adeleempurpled290/FPGA-Agent-skills.git",
+            "ref": "main",
+            "paths": [
+                "vitis-hls-synthesis",
+                "vivado-analysis",
+                "vivado-constraints",
+                "vivado-debug",
+                "vivado-impl",
+                "vivado-sim",
+                "vivado-synth",
+                "vivado-tcl",
+            ],
+            "expected_skill_names": [
+                "vitis-hls-synthesis",
+                "vivado-analysis",
+                "vivado-constraints",
+                "vivado-debug",
+                "vivado-impl",
+                "vivado-sim",
+                "vivado-synth",
+                "vivado-tcl",
+            ],
+            "destination_names": [
+                "vitis-hls-synthesis",
+                "vivado-analysis",
+                "vivado-constraints",
+                "vivado-debug",
+                "vivado-impl",
+                "vivado-sim",
+                "vivado-synth",
+                "vivado-tcl",
+            ],
+            "aliases": [],
+            "adapter": "fpga-agent-skills",
+            "blocking": True,
+            "alternative_providers": [
+                {
+                    "for": "vitis-hls-synthesis",
+                    "skill_names": ["vitis-developer"],
+                    "aliases": [],
+                    "install_policy": "skip_if_present",
+                    "purpose": "Use vitis-developer for Vitis HLS development when it is already installed.",
+                }
+            ],
+        }
+    ]
+
+
+def _write_vivado_bundle(root: Path) -> None:
+    for name in ["vivado-analysis", "vivado-constraints", "vivado-debug", "vivado-impl", "vivado-sim", "vivado-synth", "vivado-tcl"]:
+        _write_skill(root, name)
 
 
 class SkillDependencyTests(unittest.TestCase):
@@ -172,6 +232,66 @@ class SkillDependencyTests(unittest.TestCase):
         self.assertEqual(report["status"], "blocked_dependency")
         self.assertEqual(report["dependencies"][0]["status"], "invalid")
         self.assertIn("frontmatter_name", json.dumps(report["dependencies"][0], ensure_ascii=False))
+
+    def test_vitis_developer_satisfies_vitis_hls_synthesis_alternative(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_skill(root, "vitis-developer")
+            _write_vivado_bundle(root)
+            report = check_skill_dependencies(_fpga_dependency_config(), skill_dirs=[root], plugin_cache_dirs=[])
+
+        self.assertEqual(report["status"], "ok")
+        dependency = report["dependencies"][0]
+        self.assertEqual(dependency["status"], "ok")
+        self.assertNotIn("vitis-hls-synthesis", dependency["missing"])
+        self.assertEqual(dependency["satisfied_by"][0]["name"], "vitis-hls-synthesis")
+        self.assertEqual(dependency["satisfied_by"][0]["provider"]["frontmatter_name"], "vitis-developer")
+
+    def test_missing_vitis_provider_still_blocks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_vivado_bundle(root)
+            report = check_skill_dependencies(_fpga_dependency_config(), skill_dirs=[root], plugin_cache_dirs=[])
+
+        self.assertEqual(report["status"], "blocked_dependency")
+        self.assertEqual(report["dependencies"][0]["status"], "missing")
+        self.assertIn("vitis-hls-synthesis", report["dependencies"][0]["missing"])
+
+    def test_bad_vitis_developer_frontmatter_does_not_satisfy_alternative(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bad = _write_skill(root, "vitis-developer")
+            (bad / "SKILL.md").write_text("---\nname: wrong-name\ndescription: bad\n---\n", encoding="utf-8")
+            _write_vivado_bundle(root)
+            report = check_skill_dependencies(_fpga_dependency_config(), skill_dirs=[root], plugin_cache_dirs=[])
+
+        self.assertEqual(report["status"], "blocked_dependency")
+        self.assertEqual(report["dependencies"][0]["status"], "missing")
+        self.assertIn("vitis-hls-synthesis", report["dependencies"][0]["missing"])
+
+    def test_install_all_skips_vitis_hls_synthesis_when_vitis_developer_exists(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_skill(root, "vitis-developer")
+            _write_vivado_bundle(root)
+            result = install_skill_dependencies(_fpga_dependency_config(), install_all=True, dest_root=root, skill_dirs=[root], plugin_cache_dirs=[])
+
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["installed"], [])
+        self.assertEqual(result["skipped"][0]["id"], "fpga-agent-skills")
+        self.assertEqual(result["skipped"][0]["reason"], "already_installed")
+        self.assertEqual(result["install_skipped"][0]["name"], "vitis-hls-synthesis")
+        self.assertEqual(result["install_skipped"][0]["provider"]["frontmatter_name"], "vitis-developer")
+
+    def test_resolve_vitis_skill_preference_prefers_vitis_developer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_skill(root, "vitis-hls-synthesis")
+            _write_skill(root, "vitis-developer")
+            preference = resolve_vitis_skill_preference(skill_dirs=[root], plugin_cache_dirs=[])
+
+        self.assertEqual(preference["selected_skill"], "vitis-developer")
+        self.assertEqual(preference["installed"][0]["frontmatter_name"], "vitis-developer")
 
     def test_install_all_skips_valid_installed_dependencies_and_reports_invalid_existing_dirs(self) -> None:
         config = [
