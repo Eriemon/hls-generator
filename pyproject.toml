@@ -9,7 +9,10 @@ description = "Agent-usable Codex skill for AMD/Xilinx Vitis HLS generation work
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
-authors = [{ name = "Jiyuan Liu", email = "erie@seu.edu.cn" }]
+authors = [
+  { name = "Jiyuan Liu", email = "erie@seu.edu.cn" },
+  { name = "He Li" },
+]
 keywords = ["codex-skill", "agent-skill", "hls", "vitis-hls", "fpga", "hardware-generation"]
 classifiers = [
   "Development Status :: 3 - Alpha",

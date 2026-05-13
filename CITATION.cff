@@ -6,6 +6,10 @@ authors:
   - family-names: "Liu"
     given-names: "Jiyuan"
     email: "erie@seu.edu.cn"
+    affiliation: "Southeast University"
+  - family-names: "Li"
+    given-names: "He"
+    affiliation: "Southeast University"
 abstract: "HLS Generator is a Codex-ready agent skill package for structured AMD/Xilinx Vitis HLS workflows, including requirement confirmation, staged generation, deterministic runtime helpers, and validation evidence."
 keywords:
   - agent skill
