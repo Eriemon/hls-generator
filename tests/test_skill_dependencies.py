@@ -283,6 +283,55 @@ class SkillDependencyTests(unittest.TestCase):
         self.assertEqual(result["install_skipped"][0]["name"], "vitis-hls-synthesis")
         self.assertEqual(result["install_skipped"][0]["provider"]["frontmatter_name"], "vitis-developer")
 
+    def test_scope_filter_ignores_non_core_vivado_helpers(self) -> None:
+        config = [
+            {
+                "id": "fpga-hls-routing",
+                "level": "required",
+                "purpose": "core hls routing",
+                "scopes": ["core"],
+                "repo_url": "https://github.com/adeleempurpled290/FPGA-Agent-skills.git",
+                "ref": "main",
+                "paths": ["vitis-hls-synthesis"],
+                "expected_skill_names": ["vitis-hls-synthesis"],
+                "destination_names": ["vitis-hls-synthesis"],
+                "aliases": [],
+                "adapter": "fpga-agent-skills",
+                "blocking": True,
+                "alternative_providers": [
+                    {
+                        "for": "vitis-hls-synthesis",
+                        "skill_names": ["vitis-developer"],
+                        "aliases": [],
+                        "install_policy": "skip_if_present",
+                        "purpose": "Use vitis-developer for Vitis HLS development when it is already installed.",
+                    }
+                ],
+            },
+            {
+                "id": "fpga-vivado-guidance",
+                "level": "recommended",
+                "purpose": "vivado helpers",
+                "scopes": ["vivado-extended"],
+                "repo_url": "https://github.com/adeleempurpled290/FPGA-Agent-skills.git",
+                "ref": "main",
+                "paths": ["vivado-analysis", "vivado-debug"],
+                "expected_skill_names": ["vivado-analysis", "vivado-debug"],
+                "destination_names": ["vivado-analysis", "vivado-debug"],
+                "aliases": [],
+                "adapter": "fpga-agent-skills",
+                "blocking": True,
+            }
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_skill(root, "vitis-developer")
+            report = check_skill_dependencies(config, skill_dirs=[root], plugin_cache_dirs=[], scopes={"core"})
+
+        self.assertEqual(report["status"], "ok")
+        self.assertEqual(len(report["dependencies"]), 1)
+        self.assertEqual(report["dependencies"][0]["id"], "fpga-hls-routing")
+
     def test_resolve_vitis_skill_preference_prefers_vitis_developer(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -393,7 +442,8 @@ class SkillDependencyTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         payload = json.loads(result.stdout)
         self.assertEqual(payload["status"], "blocked_dependency")
-        self.assertGreaterEqual(len(payload["dependencies"]), 4)
+        self.assertEqual(payload["scopes"], ["core"])
+        self.assertGreaterEqual(len(payload["dependencies"]), 2)
 
     def test_confidence_loop_reports_missing_dependencies_without_traceback(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -429,6 +479,7 @@ class SkillDependencyTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertEqual(payload["confidence_status"], "needs_attention")
         self.assertEqual(payload["gates"]["skill_dependencies"]["status"], "failed")
+        self.assertEqual(payload["gates"]["skill_dependencies"]["report"]["scopes"], ["core"])
         self.assertEqual(payload["gates"]["example_mock_validation"]["status"], "skipped")
 
 

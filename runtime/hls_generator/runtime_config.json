@@ -95,6 +95,9 @@
       "id": "remote-ssh",
       "level": "required",
       "purpose": "Remote SSH server discovery, remote links, and remote Vitis HLS validation.",
+      "scopes": [
+        "core"
+      ],
       "repo_url": "https://github.com/Eriemon/remote-ssh.git",
       "ref": "main",
       "paths": [
@@ -115,40 +118,22 @@
       ]
     },
     {
-      "id": "fpga-agent-skills",
+      "id": "fpga-hls-routing",
       "level": "required",
-      "purpose": "Vitis/Vivado FPGA development, synthesis, implementation, analysis, constraints, simulation, debug, and Tcl guidance.",
+      "purpose": "Core Vitis HLS skill routing for generation, simulation, cosim, and HLS debug guidance.",
+      "scopes": [
+        "core"
+      ],
       "repo_url": "https://github.com/adeleempurpled290/FPGA-Agent-skills.git",
       "ref": "main",
       "paths": [
-        "vitis-hls-synthesis",
-        "vivado-analysis",
-        "vivado-constraints",
-        "vivado-debug",
-        "vivado-impl",
-        "vivado-sim",
-        "vivado-synth",
-        "vivado-tcl"
+        "vitis-hls-synthesis"
       ],
       "expected_skill_names": [
-        "vitis-hls-synthesis",
-        "vivado-analysis",
-        "vivado-constraints",
-        "vivado-debug",
-        "vivado-impl",
-        "vivado-sim",
-        "vivado-synth",
-        "vivado-tcl"
+        "vitis-hls-synthesis"
       ],
       "destination_names": [
-        "vitis-hls-synthesis",
-        "vivado-analysis",
-        "vivado-constraints",
-        "vivado-debug",
-        "vivado-impl",
-        "vivado-sim",
-        "vivado-synth",
-        "vivado-tcl"
+        "vitis-hls-synthesis"
       ],
       "aliases": [],
       "adapter": "fpga-agent-skills",
@@ -166,9 +151,52 @@
       ]
     },
     {
+      "id": "fpga-vivado-guidance",
+      "level": "recommended",
+      "purpose": "Optional Vivado analysis, constraints, simulation, implementation, debug, synthesis, and Tcl guidance for non-core HLS follow-on tasks.",
+      "scopes": [
+        "vivado-extended"
+      ],
+      "repo_url": "https://github.com/adeleempurpled290/FPGA-Agent-skills.git",
+      "ref": "main",
+      "paths": [
+        "vivado-analysis",
+        "vivado-constraints",
+        "vivado-debug",
+        "vivado-impl",
+        "vivado-sim",
+        "vivado-synth",
+        "vivado-tcl"
+      ],
+      "expected_skill_names": [
+        "vivado-analysis",
+        "vivado-constraints",
+        "vivado-debug",
+        "vivado-impl",
+        "vivado-sim",
+        "vivado-synth",
+        "vivado-tcl"
+      ],
+      "destination_names": [
+        "vivado-analysis",
+        "vivado-constraints",
+        "vivado-debug",
+        "vivado-impl",
+        "vivado-sim",
+        "vivado-synth",
+        "vivado-tcl"
+      ],
+      "aliases": [],
+      "adapter": "fpga-agent-skills",
+      "blocking": true
+    },
+    {
       "id": "superpowers",
       "level": "recommended",
       "purpose": "Planning, task management, systematic debugging, TDD, and verification workflows.",
+      "scopes": [
+        "all"
+      ],
       "repo_url": "https://github.com/obra/superpowers.git",
       "ref": "main",
       "paths": [
@@ -206,6 +234,9 @@
       "id": "context-engineering",
       "level": "recommended",
       "purpose": "Context engineering guidance for agent-system debugging and engineering-task diagnosis.",
+      "scopes": [
+        "all"
+      ],
       "repo_url": "https://github.com/muratcankoylan/Agent-Skills-for-Context-Engineering.git",
       "ref": "main",
       "paths": [

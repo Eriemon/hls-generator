@@ -77,7 +77,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def run_acceptance(args: argparse.Namespace) -> dict[str, Any]:
-    require_skill_dependencies(skill_dependencies_config())
+    require_skill_dependencies(skill_dependencies_config(), scopes={"core"})
     config = remote_validation_config()
     timeout = int(args.timeout or config["default_timeout_s"])
     helper = ErieHelper(config, timeout)

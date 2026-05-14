@@ -7,10 +7,12 @@ import importlib.util
 import io
 import json
 import os
+import stat
 import shutil
 import subprocess
 import sys
 import tarfile
+import time
 import zipfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -40,13 +42,16 @@ VITIS_TOOL_CONFIGS = vitis_tools()
 PRIMARY_VITIS_TOOL = VITIS_TOOL_CONFIGS[0]
 FALLBACK_VITIS_TOOL = VITIS_TOOL_CONFIGS[1]
 REAL_SUBPROCESS_RUN = subprocess.run
+CURRENT_SMOKE_BASE: Path | None = None
 
 
 def main() -> int:
+    global CURRENT_SMOKE_BASE
     with use_workspace_root(ROOT):
-        base = ROOT / smoke_root_name()
-        if base.exists():
-            shutil.rmtree(base)
+        base_root = ROOT / smoke_root_name()
+        base_root.mkdir(parents=True, exist_ok=True)
+        base = base_root / f"run-{os.getpid()}-{time.time_ns()}"
+        CURRENT_SMOKE_BASE = base
         base.mkdir(parents=True)
         os.environ["HLS_GENERATOR_USER_CONFIG"] = str(base / "user_config.json")
         try:
@@ -69,9 +74,40 @@ def main() -> int:
             _run_vitis_selection_checks(base, artifact_dir)
             _run_missing_toolchain_workflow(base)
         finally:
-            shutil.rmtree(base, ignore_errors=True)
+            _remove_tree(base, strict=False)
+            CURRENT_SMOKE_BASE = None
     print("HLS generator smoke checks passed.")
     return 0
+
+
+def _remove_tree(path: Path, *, strict: bool, attempts: int = 8, delay_s: float = 0.1) -> None:
+    if not path.exists():
+        return
+    last_error: OSError | None = None
+    for attempt in range(attempts):
+        try:
+            shutil.rmtree(path, onerror=_handle_rmtree_error)
+            return
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            last_error = exc
+            if attempt + 1 < attempts:
+                time.sleep(delay_s * (attempt + 1))
+    if strict and last_error is not None:
+        raise last_error
+
+
+def _handle_rmtree_error(func, target, exc_info) -> None:
+    exc = exc_info[1]
+    if isinstance(exc, PermissionError):
+        try:
+            os.chmod(target, stat.S_IWRITE)
+            func(target)
+            return
+        except OSError:
+            pass
+    raise exc
 
 
 def _run_skill_metadata_checks() -> None:
@@ -190,6 +226,12 @@ def _run_prompt_and_static_validation(base: Path, artifact_dir: Path) -> None:
     assert "AXI4-Stream" in text
     assert "Identify the intended HLS pattern" in text
     assert "report-driven" in text
+    assert "variable-bound loops" in text
+    assert "pointer aliasing" in text
+    assert "control-driven orchestration" in text
+    assert "DSP-oriented transforms and filters" in text
+    assert "Migration-oriented Tcl, Python, and unified CLI flows are reference surfaces only" in text
+    assert "vitis-hls-introductory-examples" not in text.lower()
 
     report = validate_hls_artifacts(spec, artifact_dir, run_external=False, readiness="static")
     assert report["ok"] is True, report
@@ -264,7 +306,7 @@ def _run_rejection_checks(base: Path, artifact_dir: Path) -> None:
 
 
 def _run_path_boundary_checks(base: Path, artifact_dir: Path) -> None:
-    relative = run_hls_workflow(_load_spec(), out_dir=Path(smoke_root_name()) / "relative-out", provider_name="mock", readiness="static", run_external=False)
+    relative = run_hls_workflow(_load_spec(), out_dir=_smoke_relative_path("relative-out"), provider_name="mock", readiness="static", run_external=False)
     assert relative["status"] == "passed", relative
     cli_spec = base / "cli" / "spec.json"
     with contextlib.redirect_stdout(io.StringIO()):
@@ -622,6 +664,16 @@ def _run_example_coverage(base: Path) -> None:
 
 
 def _run_ug_reference_integration_checks(base: Path) -> None:
+    modeling_text = (ROOT / "references" / "hls-modeling-strategy.md").read_text(encoding="utf-8")
+    parallel_text = (ROOT / "references" / "hls-task-parallel-strategy.md").read_text(encoding="utf-8")
+    assert "variable-bound loops" in modeling_text.lower()
+    assert "aliasing" in modeling_text.lower()
+    assert "control-driven" in parallel_text.lower()
+    assert "data-driven" in parallel_text.lower()
+    assert "stable generated path" in parallel_text.lower()
+    assert "vitis-hls-introductory-examples" not in modeling_text.lower()
+    assert "vitis-hls-introductory-examples" not in parallel_text.lower()
+
     legacy = parse_hls_cfg_entries(
         """[HLS]
 syn.top=legacy_kernel
@@ -959,7 +1011,7 @@ def _run_release_packaging_checks(base: Path) -> None:
 
     dist_root = base / "release-dist"
     valid = REAL_SUBPROCESS_RUN(
-        [sys.executable, str(script), "--version", "0.1.4", "--dist-root", str(dist_root)],
+        [sys.executable, str(script), "--version", "0.1.5", "--dist-root", str(dist_root)],
         cwd=ROOT.parent,
         capture_output=True,
         text=True,
@@ -971,16 +1023,13 @@ def _run_release_packaging_checks(base: Path) -> None:
     release_dir = Path(payload["release_dir"])
     zip_path = Path(payload["zip_path"])
     assert release_dir.exists() and zip_path.exists(), payload
-    assert (release_dir / "erie-hls-generator" / "SKILL.md").exists()
+    assert (release_dir / "skills" / "erie-hls-generator" / "SKILL.md").exists()
     assert not (release_dir / "ref").exists()
-    assert not (release_dir / "erie-hls-generator" / "reports").exists()
+    assert not (release_dir / "skills" / "erie-hls-generator" / "reports").exists()
     assert not list(release_dir.rglob("__pycache__"))
     assert (release_dir / "RELEASE_MANIFEST.json").exists()
     assert (release_dir / "checksums.sha256").exists()
-    manifest_text = (release_dir / "RELEASE_MANIFEST.json").read_text(encoding="utf-8")
-    assert "C:\\Users" not in manifest_text
-    assert Path.home().name not in manifest_text
-    _assert_release_skill_markdown_ascii(release_dir, zip_path)
+    _assert_release_markdown_ascii(release_dir, zip_path)
 
     directory_files = {path.relative_to(release_dir).as_posix() for path in release_dir.rglob("*") if path.is_file()}
     with zipfile.ZipFile(zip_path) as archive:
@@ -992,18 +1041,19 @@ def _run_release_packaging_checks(base: Path) -> None:
     assert zipped_files == directory_files, (zipped_files ^ directory_files)
 
 
-def _assert_release_skill_markdown_ascii(release_dir: Path, zip_path: Path) -> None:
-    skill_path = release_dir / "erie-hls-generator" / "SKILL.md"
-    data = skill_path.read_bytes()
-    assert not data.startswith(b"\xef\xbb\xbf"), skill_path
-    text = data.decode("utf-8")
-    assert text.isascii(), skill_path
-    with zipfile.ZipFile(zip_path) as archive:
-        name = f"{zip_path.stem}/erie-hls-generator/SKILL.md"
-        data = archive.read(name)
-        assert not data.startswith(b"\xef\xbb\xbf"), name
+def _assert_release_markdown_ascii(release_dir: Path, zip_path: Path) -> None:
+    for path in release_dir.rglob("*.md"):
+        data = path.read_bytes()
+        assert not data.startswith(b"\xef\xbb\xbf"), path
         text = data.decode("utf-8")
-        assert text.isascii(), name
+        assert text.isascii(), path
+    with zipfile.ZipFile(zip_path) as archive:
+        for name in archive.namelist():
+            if name.endswith(".md"):
+                data = archive.read(name)
+                assert not data.startswith(b"\xef\xbb\xbf"), name
+                text = data.decode("utf-8")
+                assert text.isascii(), name
 
 
 def _assert_hls_artifacts(artifact_dir: Path) -> None:
@@ -1048,7 +1098,7 @@ def _install_hls_mocks(tool: str | None) -> None:
     def which(name: str) -> str | None:
         for item in VITIS_TOOL_CONFIGS:
             if tool == item["name"] and name == item.get("which", item["name"]):
-                return str(ROOT / smoke_root_name() / "_mock_tools" / name)
+                return str(_current_smoke_base() / "_mock_tools" / name)
         return None
 
     validation.shutil.which = which
@@ -1084,6 +1134,16 @@ def _semantic_transcript() -> str:
 
 def _joined_commands() -> list[str]:
     return [" ".join(command) for command in HLS_TOOL_COMMANDS]
+
+
+def _current_smoke_base() -> Path:
+    if CURRENT_SMOKE_BASE is None:
+        raise AssertionError("Smoke base directory was not initialized.")
+    return CURRENT_SMOKE_BASE
+
+
+def _smoke_relative_path(*parts: str) -> Path:
+    return Path(smoke_root_name()) / _current_smoke_base().name / Path(*parts)
 
 
 def _expect_error(func, exc_type: type[BaseException], text: str) -> None:

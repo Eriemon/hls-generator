@@ -64,6 +64,8 @@ deleted after a successful run.
 - Load `references/configuration.md` before changing generated roots, protected paths, Vitis tool commands, or timeouts.
 - Load `references/vitis-hls-2024-2-script-guide.md` before changing Vitis HLS `.cfg` parsing, Tcl rendering, pragma rules, report handling, or compatibility checks. The temporary import folder used to create this reference must not remain in the final skill.
 - Load `references/vitis-hls-official-patterns.md` before changing optimization examples, prompt pragma policy, report-driven tuning rules, or reusable HLS pattern guidance.
+- Load `references/hls-modeling-strategy.md` before changing loop-bound handling, numeric-type guidance, pointer modeling, template/vector usage, or conditional pragma policy.
+- Load `references/hls-task-parallel-strategy.md` before changing task-level parallelism guidance, channel semantics, restart behavior, or migration/execution-surface positioning.
 - Load `references/hls-library-policy.md` before changing HLS include choices, advanced HLS library usage, or generated library examples.
 - Load `references/hls-comment-style.md` before changing generated C/C++ comment language, comment coverage, or comment validation rules.
 - Use `assets/examples/` for minimal HLS memory, stream, partition, dataflow, multi-`m_axi`, and numeric-strategy specs.

@@ -28,7 +28,7 @@ from .workspace import require_configured_output_path, require_workspace_path
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="hls-gen", description="AMD-Xilinx/Vitis HLS-only generator CLI.")
-    parser.add_argument("--version", action="version", version="hls-gen 0.1.4")
+    parser.add_argument("--version", action="version", version="hls-gen 0.1.5")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     scaffold = subparsers.add_parser("scaffold", help="Create a starter HLS spec.")
@@ -215,7 +215,7 @@ def _cmd_user_config(args: argparse.Namespace) -> int:
 
 
 def _cmd_deps_check(args: argparse.Namespace) -> int:
-    report = check_skill_dependencies(skill_dependencies_config())
+    report = check_skill_dependencies(skill_dependencies_config(), scopes={"core"})
     if args.json or not args.human:
         print(json.dumps(report, indent=2, ensure_ascii=False))
     else:
@@ -224,7 +224,7 @@ def _cmd_deps_check(args: argparse.Namespace) -> int:
 
 
 def _cmd_deps_request(args: argparse.Namespace) -> int:
-    report = check_skill_dependencies(skill_dependencies_config())
+    report = check_skill_dependencies(skill_dependencies_config(), scopes={"core"})
     request = build_dependency_request(report)
     output = require_configured_output_path(args.out, purpose="dependency request output path")
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -258,7 +258,7 @@ def _require_resolved_comment_language(comment_language: str) -> str:
 
 
 def _require_dependencies_for_use(request_dir: Path | None) -> None:
-    report = check_skill_dependencies(skill_dependencies_config())
+    report = check_skill_dependencies(skill_dependencies_config(), scopes={"core"})
     if report["status"] != BLOCKED_DEPENDENCY:
         return
     if request_dir is not None:

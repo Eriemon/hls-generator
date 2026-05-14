@@ -31,16 +31,23 @@ def check_skill_dependencies(
     *,
     skill_dirs: list[Path] | None = None,
     plugin_cache_dirs: list[Path] | None = None,
+    scopes: list[str] | tuple[str, ...] | set[str] | None = None,
 ) -> dict[str, Any]:
     """Return a machine-readable dependency status report."""
 
-    entries = [_normalize_dependency(item) for item in dependencies or []]
+    requested_scopes = _normalize_requested_scopes(scopes)
+    entries = [
+        entry
+        for entry in (_normalize_dependency(item) for item in dependencies or [])
+        if _dependency_matches_scopes(entry, requested_scopes)
+    ]
     index = _discover_installed_skills(skill_dirs=skill_dirs, plugin_cache_dirs=plugin_cache_dirs)
     reports = [_check_one(entry, index) for entry in entries]
     blocked = [item for item in reports if item["blocking"] and item["status"] != DEPENDENCY_OK]
     return {
         "version": 1,
         "status": BLOCKED_DEPENDENCY if blocked else DEPENDENCY_OK,
+        "scopes": sorted(requested_scopes) if requested_scopes else ["all"],
         "skills_dirs": [str(path) for path in _default_skill_dirs() if skill_dirs is None] if skill_dirs is None else [str(path) for path in skill_dirs],
         "plugin_cache_dirs": [str(path) for path in _default_plugin_cache_dirs() if plugin_cache_dirs is None] if plugin_cache_dirs is None else [str(path) for path in plugin_cache_dirs],
         "dependencies": reports,
@@ -58,8 +65,12 @@ def find_installed_skill(
     return _find_skill(name, set(aliases or []), index)
 
 
-def require_skill_dependencies(dependencies: list[dict[str, Any]] | None) -> dict[str, Any]:
-    report = check_skill_dependencies(dependencies)
+def require_skill_dependencies(
+    dependencies: list[dict[str, Any]] | None,
+    *,
+    scopes: list[str] | tuple[str, ...] | set[str] | None = None,
+) -> dict[str, Any]:
+    report = check_skill_dependencies(dependencies, scopes=scopes)
     if report["status"] == BLOCKED_DEPENDENCY:
         raise SkillDependencyError(report)
     return report
@@ -80,6 +91,7 @@ def build_dependency_request(report: dict[str, Any]) -> dict[str, Any]:
         ],
         "restart_required": "Restart Codex after installing new skills so trigger metadata is reloaded.",
         "policy": "All configured required and recommended dependencies are blocking for this skill.",
+        "scopes": report.get("scopes", ["all"]),
     }
 
 
@@ -372,6 +384,7 @@ def _normalize_dependency(item: Any) -> dict[str, Any]:
         "aliases": _string_list(item["aliases"], "aliases", allow_empty=True),
         "adapter": _non_empty_string(item["adapter"], "adapter"),
         "blocking": bool(item["blocking"]),
+        "scopes": _string_list(item.get("scopes", ["all"]), "scopes"),
         "required_files": _string_list(item.get("required_files", []), "required_files", allow_empty=True),
         "alternative_providers": _normalize_alternative_providers(item.get("alternative_providers", []), expected),
     }
@@ -471,6 +484,22 @@ def _path_list_env(name: str) -> list[Path] | None:
     if not raw.strip():
         return []
     return _dedupe_paths([Path(item) for item in raw.split(os.pathsep) if item.strip()])
+
+
+def _normalize_requested_scopes(scopes: list[str] | tuple[str, ...] | set[str] | None) -> set[str]:
+    if scopes is None:
+        return set()
+    normalized = {str(item).strip().lower() for item in scopes if str(item).strip()}
+    return normalized or {"all"}
+
+
+def _dependency_matches_scopes(entry: dict[str, Any], requested_scopes: set[str]) -> bool:
+    if not requested_scopes:
+        return True
+    entry_scopes = {str(item).strip().lower() for item in entry.get("scopes", []) if str(item).strip()}
+    if not entry_scopes or "all" in entry_scopes:
+        return True
+    return bool(entry_scopes & requested_scopes)
 
 
 def _format_blocked_error(report: dict[str, Any]) -> str:

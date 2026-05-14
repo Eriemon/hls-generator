@@ -48,7 +48,7 @@ The design uses the local Skill-pattern reference reviewed during planning:
 
 ## Version Control And Locality
 
-All development must stay inside the current repository directory; the formal Skill root is the `erie-hls-generator/` subdirectory so the folder name matches `name: erie-hls-generator`. Git is the source of change tracking for this directory. Use commit-sized changes, keep generated caches ignored, and never modify sibling or external folders while implementing this skill.
+All development must stay inside the current repository directory; the formal Skill root is `skills/erie-hls-generator/` so the folder name still matches `name: erie-hls-generator` while following the canonical `skills/<skill-name>/` layout. Git is the source of change tracking for this directory. Use commit-sized changes, keep generated caches ignored, and never modify sibling or external folders while implementing this skill.
 
 Runtime path policy, generated-output roots, protected source areas, Vitis tool command templates, and validation timeouts are centralized in `runtime/hls_generator/runtime_config.json` and described in `references/configuration.md`. Avoid adding new hard-coded machine paths to scripts or Skill instructions.
 

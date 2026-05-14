@@ -62,7 +62,7 @@ def run_hls_workflow(
     hls_profile: str | Path | dict[str, Any] | None = None,
     model_timeout_s: int | None = None,
 ) -> dict[str, Any]:
-    require_skill_dependencies(skill_dependencies_config())
+    require_skill_dependencies(skill_dependencies_config(), scopes={"core"})
     _reject_non_hls_target(target)
     defaults = load_default_workflow_config()
     overrides = _load_optional_json(workflow_config) or {}
@@ -151,7 +151,7 @@ def render_hls_prompt(
     hls_profile: str | Path | dict[str, Any] | None = None,
     decision: str | Path | dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    require_skill_dependencies(skill_dependencies_config())
+    require_skill_dependencies(skill_dependencies_config(), scopes={"core"})
     _reject_non_hls_target(target)
     resolved_spec = _prepare_facade_spec(
         spec,
@@ -199,7 +199,7 @@ def validate_hls_artifacts(
     reference_contract: str | Path | dict[str, Any] | None = None,
     report_json: str | Path | None = None,
 ) -> dict[str, Any]:
-    require_skill_dependencies(skill_dependencies_config())
+    require_skill_dependencies(skill_dependencies_config(), scopes={"core"})
     _reject_non_hls_target(target)
     resolved_spec = _prepare_facade_spec(
         spec,

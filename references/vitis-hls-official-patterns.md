@@ -45,6 +45,12 @@ Source note: distilled from AMD/Xilinx Vitis-Tutorials 2025.2 HLS material. Keep
 - Device generation matters: floating-point QoR can change significantly across DSP architectures.
 - Decide explicitly whether `config_compile -unsafe_math_optimizations` is allowed; do not assume it for mathematically sensitive kernels.
 
+## DSP-Oriented Building Blocks
+
+- Treat transform and filter kernels as explicit design intents. Do not introduce FFT, FIR, or DSP intrinsic patterns unless the confirmed requirement actually calls for them.
+- When a DSP-oriented block is required, preserve the interface contract and numeric model before applying throughput optimizations.
+- Reusable DSP patterns belong in reference guidance and validation heuristics first; they should not become default generation templates for unrelated kernels.
+
 ## Report-Driven Checks
 
 - For each optimized example, record the intended pattern and the report signal that justifies it.

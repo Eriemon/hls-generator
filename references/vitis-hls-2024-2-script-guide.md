@@ -93,6 +93,12 @@ Reject these in generated code/config/scripts:
 - Do not generate `v++ -c`, `v++ -m cosim`, or `v++ -p` command lines as the primary path; keep them documented as future extension points.
 - Do not silently pass through unknown `.cfg` sections or `set_directive_*` commands. Add explicit whitelist support and tests first.
 
+## Migration Surface Policy
+
+- Keep Tcl, Python, and unified CLI migration examples as reference material for compatibility reasoning and future extension planning.
+- Do not switch the skill's stable execution path away from the current Tcl plus `.cfg` flow unless the runtime adds an explicit mode flag and smoke coverage proves it.
+- When documenting migration options, describe roles and tradeoffs rather than copying upstream example names or directory structure.
+
 For floating-point kernels, require an explicit decision about `config_compile -unsafe_math_optimizations`; do not silently enable it.
 
 ## Common Diagnostics

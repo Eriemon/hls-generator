@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Iterable
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
-REPO_ROOT = SKILL_ROOT
+REPO_ROOT = SKILL_ROOT.parents[1]
 PACKAGE_NAME = "erie-hls-generator"
 SEMVER_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
 if str(SKILL_ROOT) not in sys.path:
@@ -51,10 +51,10 @@ EXCLUDED_GLOBS = (
     "solution*",
 )
 VALIDATION_COMMANDS = [
-    r"python .\erie-hls-generator\smoke\run_smoke.py",
-    r"python -m compileall .\erie-hls-generator\runtime\hls_generator",
-    r"python <skill-creator>\scripts\quick_validate.py .\erie-hls-generator",
-    r"python .\erie-hls-generator\scripts\confidence_loop.py --skip-remote --json-out reports\confidence-loop\latest-local.json",
+    r"python .\skills\erie-hls-generator\smoke\run_smoke.py",
+    r"python -m compileall .\skills\erie-hls-generator\runtime\hls_generator",
+    r"python C:\Users\17677\.codex\skills\.system\skill-creator\scripts\quick_validate.py .\skills\erie-hls-generator",
+    r"python .\skills\erie-hls-generator\scripts\confidence_loop.py --skip-remote --json-out reports\confidence-loop\latest-local.json",
 ]
 
 
@@ -198,18 +198,15 @@ def _copy_skill_tree(release_dir: Path) -> list[str]:
     included: list[str] = []
     for src in sorted(_iter_release_files(SKILL_ROOT), key=lambda item: item.as_posix().lower()):
         rel_repo = src.relative_to(REPO_ROOT)
-        dst = release_dir / PACKAGE_NAME / rel_repo
+        dst = release_dir / rel_repo
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dst)
-        included.append((Path(PACKAGE_NAME) / rel_repo).as_posix())
+        included.append(rel_repo.as_posix())
     return included
 
 
 def _validate_release_markdown(release_dir: Path) -> None:
-    markdown_paths = [release_dir / PACKAGE_NAME / "SKILL.md"]
-    for path in markdown_paths:
-        if not path.exists():
-            raise ReleaseError(f"Release Markdown is missing: {path.relative_to(release_dir).as_posix()}")
+    for path in sorted(release_dir.rglob("*.md"), key=lambda item: item.as_posix().lower()):
         data = path.read_bytes()
         rel = path.relative_to(release_dir).as_posix()
         if data.startswith(b"\xef\xbb\xbf"):

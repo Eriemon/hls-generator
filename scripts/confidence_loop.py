@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -22,11 +23,30 @@ from runtime.hls_generator.skill_dependencies import check_skill_dependencies  #
 SOURCE_NOTE_PATHS = {
     "references/vitis-hls-2024-2-script-guide.md",
     "references/vitis-hls-official-patterns.md",
+    "references/hls-modeling-strategy.md",
+    "references/hls-task-parallel-strategy.md",
 }
 REF_DEPENDENCY_PATTERN = "ref[/\\\\]|" + "Vitis-" + "Tutorials|" + "Vitis-HLS" + r"\.md|" + "UG" + "1399"
+FORBIDDEN_REFERENCE_TERMS = ("vitis-hls-introductory-examples",)
+SCAN_EXCLUDE_GLOBS = (
+    "!ref/**",
+    "!.git/**",
+    "!reports/**",
+    "!tests/**",
+    "!smoke/**",
+    "!scripts/confidence_loop.py",
+)
+
+
+def repo_root() -> Path:
+    return SKILL_ROOT.parents[1]
 
 
 def main(argv: list[str] | None = None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser(description="Run Erie HLS Generator local and optional remote confidence gates.")
     parser.add_argument("--server", help="Optional erie-remote-ssh server for real remote Vitis validation.")
     parser.add_argument("--readiness", default="cosim", choices=("static", "compile", "execute", "implement", "cosim"))
@@ -38,7 +58,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json-out", help="Write JSON summary to this path.")
     args = parser.parse_args(argv)
 
-    run_root = SKILL_ROOT / "reports" / "confidence-loop" / dt.datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    run_root = SKILL_ROOT / "reports" / "confidence-loop" / f"{dt.datetime.utcnow().strftime('%Y%m%dT%H%M%S%fZ')}-pid{os.getpid()}"
     run_root.mkdir(parents=True, exist_ok=True)
 
     gates: dict[str, dict[str, Any]] = {}
@@ -50,6 +70,7 @@ def main(argv: list[str] | None = None) -> int:
         gates["quick_validate"] = _run_command([sys.executable, str(_quick_validate_path()), str(SKILL_ROOT)], cwd=SKILL_ROOT)
     gates["skill_dependencies"] = _skill_dependency_gate()
     gates["ref_dependency_scan"] = _ref_dependency_scan()
+    gates["forbidden_reference_names"] = _forbidden_reference_name_scan()
     if gates["skill_dependencies"]["status"] == "passed":
         examples_gate, example_specs = _validate_examples(run_root)
     else:
@@ -73,9 +94,7 @@ def main(argv: list[str] | None = None) -> int:
         "residual_risks": _residual_risks(confidence_status, bool(args.server and not args.skip_remote)),
     }
     if args.json_out:
-        output_path = Path(args.json_out)
-        if not output_path.is_absolute():
-            output_path = (SKILL_ROOT / output_path).resolve()
+        output_path = _resolve_json_output(args.json_out)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(json.dumps(payload, indent=2, ensure_ascii=False))
@@ -100,7 +119,7 @@ def _quick_validate_path() -> Path:
 def _skill_dependency_gate() -> dict[str, Any]:
     try:
         dependencies = skill_dependencies_config()
-        report = check_skill_dependencies(dependencies)
+        report = check_skill_dependencies(dependencies, scopes={"core"})
     except ValueError as exc:
         return {"status": "failed", "error": str(exc)}
     return {
@@ -112,7 +131,7 @@ def _skill_dependency_gate() -> dict[str, Any]:
 
 def _ref_dependency_scan() -> dict[str, Any]:
     result = subprocess.run(
-        ["rg", REF_DEPENDENCY_PATTERN, "."],
+        ["rg", *sum((["--glob", item] for item in SCAN_EXCLUDE_GLOBS), []), REF_DEPENDENCY_PATTERN, "."],
         cwd=SKILL_ROOT,
         capture_output=True,
         text=True,
@@ -124,7 +143,27 @@ def _ref_dependency_scan() -> dict[str, Any]:
     unexpected = [line for line in lines if _relative_match_path(line) not in SOURCE_NOTE_PATHS]
     return {
         "status": "passed" if result.returncode in {0, 1} and not unexpected else "failed",
-        "command": ["rg", REF_DEPENDENCY_PATTERN, "."],
+        "command": ["rg", *sum((["--glob", item] for item in SCAN_EXCLUDE_GLOBS), []), REF_DEPENDENCY_PATTERN, "."],
+        "matches": lines,
+        "unexpected_matches": unexpected,
+    }
+
+
+def _forbidden_reference_name_scan() -> dict[str, Any]:
+    result = subprocess.run(
+        ["rg", "-n", *sum((["--glob", item] for item in SCAN_EXCLUDE_GLOBS), []), "|".join(FORBIDDEN_REFERENCE_TERMS), "."],
+        cwd=SKILL_ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    lines = [line for line in result.stdout.splitlines() if line.strip()]
+    unexpected = [line for line in lines if not line.split(":", 1)[0].replace("\\", "/").startswith("ref/")]
+    return {
+        "status": "passed" if result.returncode in {0, 1} and not unexpected else "failed",
+        "command": ["rg", "-n", *sum((["--glob", item] for item in SCAN_EXCLUDE_GLOBS), []), "|".join(FORBIDDEN_REFERENCE_TERMS), "."],
         "matches": lines,
         "unexpected_matches": unexpected,
     }
@@ -137,7 +176,7 @@ def _relative_match_path(line: str) -> str:
     root = SKILL_ROOT.as_posix().rstrip("/") + "/"
     if path_text.startswith(root):
         return path_text[len(root) :]
-    marker = "erie-hls-generator/"
+    marker = SKILL_ROOT.relative_to(repo_root()).as_posix().rstrip("/") + "/"
     if marker in path_text:
         return path_text.split(marker, 1)[1]
     return path_text
@@ -216,6 +255,19 @@ def _residual_risks(confidence_status: str, remote_requested: bool) -> list[str]
 
 def _tail(text: str, *, limit: int = 4000) -> str:
     return text[-limit:] if len(text) > limit else text
+
+
+def _resolve_json_output(path_text: str) -> Path:
+    output_path = Path(path_text)
+    if output_path.is_absolute():
+        return output_path
+    parts = output_path.parts
+    skill_prefix = tuple(SKILL_ROOT.relative_to(repo_root()).parts)
+    if len(parts) >= len(skill_prefix) and tuple(part.lower() for part in parts[: len(skill_prefix)]) == tuple(part.lower() for part in skill_prefix):
+        output_path = Path(*parts[len(skill_prefix) :]) if len(parts) > len(skill_prefix) else Path()
+    elif parts and parts[0].lower() == SKILL_ROOT.name.lower():
+        output_path = Path(*parts[1:]) if len(parts) > 1 else Path()
+    return (SKILL_ROOT / output_path).resolve()
 
 
 if __name__ == "__main__":
