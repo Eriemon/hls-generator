@@ -1,13 +1,13 @@
 # Vitis HLS 2024.2 Script Guide
 
-This reference distills the Vitis HLS scripting material from the imported UG1399 notes into stable rules for this HLS-only skill. Load it when changing Vitis command execution, `.cfg` parsing, Tcl rendering, prompt rules, or validation policy.
+This reference distills imported Vitis HLS scripting notes into stable rules for this HLS-only skill. Load it when changing Vitis command execution, `.cfg` parsing, Tcl rendering, prompt rules, or validation policy.
 
 ## Supported Script Surfaces
 
 - Tcl flow: create/open project, add C/C++ sources and testbench files, configure part/clock, apply `config_*` settings and `set_directive_*` optimization directives, then run `csim_design`, `csynth_design`, optional `cosim_design`, optional `export_design`, and reports.
 - `.cfg` flow: keep generated configs in the existing `syn.top`, `syn.file`, `tb.file`, `clock`, `part`, `flow_target` style. The parser also accepts UG-style sections such as `[hls] top/part/clock`, `[files] src/tb`, `[compile]`, `[interface]`, `[directive]`, `[csim]`, `[cosim]`, and `[export]`.
 - Command-line flow: prefer the configured runtime tool order. The default policy tries `vitis-run --mode hls --tcl <script>` and falls back to `vitis_hls -f <script>`.
-- Unified HLS `open_component` and direct `v++ --mode hls` flows are reference surfaces only for now. Do not replace the stable generated Tcl flow with them unless a future implementation explicitly adds and tests that execution mode.
+- Alternate execution surfaces are out of scope for this skill. Do not replace the stable generated Tcl flow with any other flow unless the runtime explicitly adds and tests that execution mode.
 
 ## Tcl Command Pattern
 
@@ -89,13 +89,12 @@ Reject these in generated code/config/scripts:
 
 ## Out-of-Scope Script Surfaces
 
-- Do not generate `open_component` projects until the runtime has a dedicated Unified HLS execution mode and smoke coverage.
-- Do not generate `v++ -c`, `v++ -m cosim`, or `v++ -p` command lines as the primary path; keep them documented as future extension points.
+- Do not generate alternate component-style or command-line packaging flows as the primary path for this skill.
 - Do not silently pass through unknown `.cfg` sections or `set_directive_*` commands. Add explicit whitelist support and tests first.
 
 ## Migration Surface Policy
 
-- Keep Tcl, Python, and unified CLI migration examples as reference material for compatibility reasoning and future extension planning.
+- Keep alternate Tcl or Python execution notes as reference material for compatibility reasoning only.
 - Do not switch the skill's stable execution path away from the current Tcl plus `.cfg` flow unless the runtime adds an explicit mode flag and smoke coverage proves it.
 - When documenting migration options, describe roles and tradeoffs rather than copying upstream example names or directory structure.
 

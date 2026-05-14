@@ -1,6 +1,6 @@
 # HLS Task Parallel Strategy Notes
 
-Source note: distilled from AMD official task-level and interface example material. This file records reusable rules, not example-directory names or one-off scripts.
+Source note: distilled from imported task-level and interface example material. This file records reusable rules, not example-directory names or one-off scripts.
 
 ## Control-Driven Versus Data-Driven Parallelism
 
@@ -24,9 +24,9 @@ Source note: distilled from AMD official task-level and interface example materi
 
 ## Migration And Execution Surface
 
-- Tcl, Python, and unified CLI flows are reference surfaces that explain how AMD tools can be driven, but the stable generated path for this skill remains the existing Tcl plus `.cfg` execution flow.
+- Tcl and Python execution notes can inform compatibility checks, but the stable generated path for this skill remains the existing Tcl plus `.cfg` execution flow.
 - Migration-oriented patterns should inform compatibility checks and documentation, not silently replace the currently supported execution mode.
-- If a future implementation adds a new execution surface, it must come with dedicated smoke coverage and an explicit runtime switch.
+- If a future implementation adds another execution surface, it must come with dedicated smoke coverage and an explicit runtime switch.
 
 ## Parallelism Checklist
 

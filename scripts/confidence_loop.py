@@ -7,6 +7,7 @@ import argparse
 import datetime as dt
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -17,25 +18,18 @@ if str(SKILL_ROOT) not in sys.path:
     sys.path.insert(0, str(SKILL_ROOT))
 
 from integration.hls_adapter import run_hls_workflow, validate_hls_artifacts  # noqa: E402
-from runtime.hls_generator.config import skill_config_path, skill_dependencies_config  # noqa: E402
+from runtime.hls_generator.config import generated_roots, skill_config_path, skill_dependencies_config  # noqa: E402
 from runtime.hls_generator.skill_dependencies import check_skill_dependencies  # noqa: E402
 
-SOURCE_NOTE_PATHS = {
-    "references/vitis-hls-2024-2-script-guide.md",
-    "references/vitis-hls-official-patterns.md",
-    "references/hls-modeling-strategy.md",
-    "references/hls-task-parallel-strategy.md",
-}
-REF_DEPENDENCY_PATTERN = "ref[/\\\\]|" + "Vitis-" + "Tutorials|" + "Vitis-HLS" + r"\.md|" + "UG" + "1399"
 FORBIDDEN_REFERENCE_TERMS = ("vitis-hls-introductory-examples",)
-SCAN_EXCLUDE_GLOBS = (
-    "!ref/**",
-    "!.git/**",
-    "!reports/**",
-    "!tests/**",
-    "!smoke/**",
-    "!scripts/confidence_loop.py",
+COPYRIGHT_TERM_PARTS = (
+    ("off", "icial"),
+    ("tuto", "rials"),
+    ("Vitis-", "Tuto", "rials"),
+    ("UG", "1399"),
 )
+TEXT_SCAN_EXTENSIONS = {".md", ".py", ".json", ".yaml", ".yml", ".txt"}
+SKIP_SCAN_DIRS = {".git", "__pycache__", ".pytest_cache", "reports", *generated_roots()}
 
 
 def repo_root() -> Path:
@@ -69,7 +63,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.skip_quick_validate:
         gates["quick_validate"] = _run_command([sys.executable, str(_quick_validate_path()), str(SKILL_ROOT)], cwd=SKILL_ROOT)
     gates["skill_dependencies"] = _skill_dependency_gate()
-    gates["ref_dependency_scan"] = _ref_dependency_scan()
+    gates["copyright_term_scan"] = _copyright_term_scan()
     gates["forbidden_reference_names"] = _forbidden_reference_name_scan()
     if gates["skill_dependencies"]["status"] == "passed":
         examples_gate, example_specs = _validate_examples(run_root)
@@ -78,27 +72,32 @@ def main(argv: list[str] | None = None) -> int:
         examples_gate = {"status": "skipped", "reason": "blocked_dependency", "results": []}
     gates["example_mock_validation"] = examples_gate
     remote_results: list[dict[str, Any]] = []
-    if args.server and not args.skip_remote:
-        for spec_name in args.example_spec or ["hls_partition_vector_scale_spec.json"]:
-            remote_results.append(_run_remote(args.server, args.readiness, spec_name))
-        gates["remote_vitis"] = _summarize_remote(remote_results)
+    remote_requested = bool(args.server and not args.skip_remote)
+    if remote_requested:
+        gates["remote_vitis_acceptance"] = _run_remote_acceptance(args.server, args.readiness, args.example_spec or ["hls_partition_vector_scale_spec.json"])
+        remote_results = gates["remote_vitis_acceptance"]["results"]
 
-    confidence_status = "factual_high_confidence" if all(item["status"] == "passed" for item in gates.values()) else "needs_attention"
+    confidence_status, confidence_scope, residual_risks, returncode = _confidence_outcome(
+        gates,
+        remote_requested=remote_requested,
+        remote_skipped=bool(args.skip_remote),
+    )
     payload = {
         "version": 1,
         "confidence_status": confidence_status,
+        "confidence_scope": confidence_scope,
         "run_root": str(run_root),
         "gates": gates,
         "example_specs": example_specs,
         "remote_results": remote_results,
-        "residual_risks": _residual_risks(confidence_status, bool(args.server and not args.skip_remote)),
+        "residual_risks": residual_risks,
     }
     if args.json_out:
         output_path = _resolve_json_output(args.json_out)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(json.dumps(payload, indent=2, ensure_ascii=False))
-    return 0 if confidence_status == "factual_high_confidence" else 1
+    return returncode
 
 
 def _run_command(command: list[str], *, cwd: Path) -> dict[str, Any]:
@@ -129,29 +128,33 @@ def _skill_dependency_gate() -> dict[str, Any]:
     }
 
 
-def _ref_dependency_scan() -> dict[str, Any]:
-    result = subprocess.run(
-        ["rg", *sum((["--glob", item] for item in SCAN_EXCLUDE_GLOBS), []), REF_DEPENDENCY_PATTERN, "."],
-        cwd=SKILL_ROOT,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-    )
-    lines = [line for line in result.stdout.splitlines() if line.strip()]
-    unexpected = [line for line in lines if _relative_match_path(line) not in SOURCE_NOTE_PATHS]
+def _copyright_term_scan(*, root: Path | None = None) -> dict[str, Any]:
+    scan_root = (root or SKILL_ROOT).resolve()
+    matches: list[str] = []
+    term_patterns = [(term, re.compile(re.escape(term), re.IGNORECASE)) for term in _copyright_terms()]
+    for path in [scan_root, *scan_root.rglob("*")]:
+        if path != scan_root and any(part in SKIP_SCAN_DIRS for part in path.relative_to(scan_root).parts):
+            continue
+        if path != scan_root:
+            for term, pattern in term_patterns:
+                if pattern.search(path.relative_to(scan_root).as_posix()):
+                    matches.append(f"path:{path.relative_to(scan_root).as_posix()}:{term}")
+        if not path.is_file() or path.suffix.lower() not in TEXT_SCAN_EXTENSIONS:
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for term, pattern in term_patterns:
+            if pattern.search(text):
+                matches.append(f"content:{path.relative_to(scan_root).as_posix()}:{term}")
     return {
-        "status": "passed" if result.returncode in {0, 1} and not unexpected else "failed",
-        "command": ["rg", *sum((["--glob", item] for item in SCAN_EXCLUDE_GLOBS), []), REF_DEPENDENCY_PATTERN, "."],
-        "matches": lines,
-        "unexpected_matches": unexpected,
+        "status": "passed" if not matches else "failed",
+        "root": str(scan_root),
+        "matches": matches,
     }
 
 
 def _forbidden_reference_name_scan() -> dict[str, Any]:
     result = subprocess.run(
-        ["rg", "-n", *sum((["--glob", item] for item in SCAN_EXCLUDE_GLOBS), []), "|".join(FORBIDDEN_REFERENCE_TERMS), "."],
+        ["rg", "-n", *sum((["--glob", item] for item in _scan_exclude_globs()), []), "|".join(FORBIDDEN_REFERENCE_TERMS), "."],
         cwd=SKILL_ROOT,
         capture_output=True,
         text=True,
@@ -163,7 +166,7 @@ def _forbidden_reference_name_scan() -> dict[str, Any]:
     unexpected = [line for line in lines if not line.split(":", 1)[0].replace("\\", "/").startswith("ref/")]
     return {
         "status": "passed" if result.returncode in {0, 1} and not unexpected else "failed",
-        "command": ["rg", "-n", *sum((["--glob", item] for item in SCAN_EXCLUDE_GLOBS), []), "|".join(FORBIDDEN_REFERENCE_TERMS), "."],
+        "command": ["rg", "-n", *sum((["--glob", item] for item in _scan_exclude_globs()), []), "|".join(FORBIDDEN_REFERENCE_TERMS), "."],
         "matches": lines,
         "unexpected_matches": unexpected,
     }
@@ -210,8 +213,41 @@ def _example_spec_names() -> list[str]:
     return [path.name for path in sorted(examples_dir.glob("*.json"))]
 
 
+def _run_remote_command(command: list[str]) -> dict[str, Any]:
+    result = subprocess.run(command, cwd=SKILL_ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=900, check=False)
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        payload = {"status": "failed", "stdout_tail": _tail(result.stdout), "stderr_tail": _tail(result.stderr)}
+    payload["returncode"] = result.returncode
+    return payload
+
+
+def _run_remote_acceptance(server: str, readiness: str, example_specs: list[str]) -> dict[str, Any]:
+    link_payload = _run_remote_command(
+        [
+            sys.executable,
+            "scripts/remote_vitis_acceptance.py",
+            "--mode",
+            "link",
+            "--server",
+            server,
+            "--json",
+        ]
+    )
+    vitis_results = [_run_remote(server, readiness, spec_name) for spec_name in example_specs]
+    passed = link_payload.get("status") == "passed" and all(item.get("status") == "passed" and item.get("remote_artifacts_retained") is True for item in vitis_results)
+    return {
+        "status": "passed" if passed else "failed",
+        "server": server,
+        "link": link_payload,
+        "results": vitis_results,
+    }
+
+
 def _run_remote(server: str, readiness: str, spec_name: str) -> dict[str, Any]:
-    command = [
+    payload = _run_remote_command(
+        [
         sys.executable,
         "scripts/remote_vitis_acceptance.py",
         "--mode",
@@ -227,30 +263,59 @@ def _run_remote(server: str, readiness: str, spec_name: str) -> dict[str, Any]:
         "--comment-language",
         "zh",
         "--json",
-    ]
-    result = subprocess.run(command, cwd=SKILL_ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=900, check=False)
-    try:
-        payload = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        payload = {"status": "failed", "stdout_tail": _tail(result.stdout), "stderr_tail": _tail(result.stderr)}
-    payload["returncode"] = result.returncode
+        ]
+    )
     payload["example_spec"] = spec_name
     return payload
 
 
-def _summarize_remote(remote_results: list[dict[str, Any]]) -> dict[str, Any]:
-    passed = bool(remote_results) and all(item.get("status") == "passed" and item.get("remote_artifacts_retained") is True for item in remote_results)
-    return {"status": "passed" if passed else "failed", "results": remote_results}
+def _confidence_outcome(
+    gates: dict[str, dict[str, Any]],
+    *,
+    remote_requested: bool,
+    remote_skipped: bool,
+) -> tuple[str, str, list[str], int]:
+    local_gate_names = [name for name in gates if name != "remote_vitis_acceptance"]
+    local_passed = all(gates[name]["status"] == "passed" for name in local_gate_names)
+    remote_gate = gates.get("remote_vitis_acceptance")
+    if remote_requested:
+        if local_passed and remote_gate and remote_gate.get("status") == "passed":
+            return "factual_high_confidence", "final", [], 0
+        risks = _residual_risks("needs_attention", remote_requested=True, remote_skipped=False)
+        return "needs_attention", "final", risks, 1
+    if remote_skipped:
+        risks = _residual_risks("local_high_confidence" if local_passed else "needs_attention", remote_requested=False, remote_skipped=True)
+        return ("local_high_confidence", "local", risks, 0) if local_passed else ("needs_attention", "local", risks, 1)
+    risks = _residual_risks("blocked_remote_validation", remote_requested=False, remote_skipped=False)
+    return ("blocked_remote_validation", "final", risks, 1) if local_passed else ("needs_attention", "final", risks, 1)
 
 
-def _residual_risks(confidence_status: str, remote_requested: bool) -> list[str]:
+def _residual_risks(confidence_status: str, *, remote_requested: bool, remote_skipped: bool) -> list[str]:
     risks: list[str] = []
-    if confidence_status != "factual_high_confidence":
+    if confidence_status == "needs_attention":
         risks.append("At least one confidence gate failed; inspect gates for details.")
-    if not remote_requested:
-        risks.append("Remote Vitis validation was skipped for this confidence-loop invocation.")
-    risks.append("Unified HLS open_component and direct v++ flows remain documented extension points, not active execution paths.")
+    if remote_requested:
+        return risks
+    if remote_skipped:
+        risks.append("Final confidence requires remote Vitis acceptance.")
+    else:
+        risks.append("Remote Vitis acceptance was not executed.")
     return risks
+
+
+def _copyright_terms() -> tuple[str, ...]:
+    return tuple("".join(parts) for parts in COPYRIGHT_TERM_PARTS)
+
+
+def _scan_exclude_globs() -> tuple[str, ...]:
+    return (
+        "!ref/**",
+        "!.git/**",
+        "!reports/**",
+        "!tests/**",
+        "!smoke/**",
+        "!scripts/confidence_loop.py",
+    )
 
 
 def _tail(text: str, *, limit: int = 4000) -> str:

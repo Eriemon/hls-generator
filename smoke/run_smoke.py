@@ -67,6 +67,7 @@ def main() -> int:
             _run_config_safety_checks(base)
             _run_remote_acceptance_checks(base)
             _run_extraction_safety_checks(base)
+            _run_copyright_gate_checks(base)
             _run_example_coverage(base)
             _run_ug_reference_integration_checks(base)
             _run_confidence_loop_checks(base)
@@ -226,12 +227,16 @@ def _run_prompt_and_static_validation(base: Path, artifact_dir: Path) -> None:
     assert "AXI4-Stream" in text
     assert "Identify the intended HLS pattern" in text
     assert "report-driven" in text
+    assert "validated sequential baseline" in text
     assert "variable-bound loops" in text
     assert "pointer aliasing" in text
     assert "control-driven orchestration" in text
+    assert "QoR portability review" in text
     assert "DSP-oriented transforms and filters" in text
-    assert "Migration-oriented Tcl, Python, and unified CLI flows are reference surfaces only" in text
+    assert "stable Tcl/.cfg execution flow only" in text
     assert "vitis-hls-introductory-examples" not in text.lower()
+    assert "open_component" not in text
+    assert "direct v++" not in text
 
     report = validate_hls_artifacts(spec, artifact_dir, run_external=False, readiness="static")
     assert report["ok"] is True, report
@@ -663,9 +668,35 @@ def _run_example_coverage(base: Path) -> None:
             assert marker in source_text, (name, marker, source_text)
 
 
+def _run_copyright_gate_checks(base: Path) -> None:
+    module = _load_script_module(ROOT / "scripts" / "confidence_loop.py", "confidence_loop_smoke")
+    clean_scan = module._copyright_term_scan()
+    assert clean_scan["status"] == "passed", clean_scan
+
+    bad_root = base / "copyright-scan"
+    (bad_root / "references").mkdir(parents=True)
+    (bad_root / "references" / "scan_notes.md").write_text("source " + "off" + "icial" + " note\n", encoding="utf-8")
+    (bad_root / ("tuto" + "rials")).mkdir()
+    blocked_scan = module._copyright_term_scan(root=bad_root)
+    assert blocked_scan["status"] == "failed", blocked_scan
+    assert len(blocked_scan["matches"]) >= 2, blocked_scan
+
+    skill_text = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+    assert "references/hls-optimization-patterns.md" in skill_text
+    assert "references/hls-report-driven-optimization.md" in skill_text
+    assert "references/hls-device-migration-strategy.md" in skill_text
+    assert ("vitis-hls-" + "off" + "icial-patterns.md") not in skill_text
+
+
 def _run_ug_reference_integration_checks(base: Path) -> None:
+    optimization_text = (ROOT / "references" / "hls-optimization-patterns.md").read_text(encoding="utf-8")
+    report_text = (ROOT / "references" / "hls-report-driven-optimization.md").read_text(encoding="utf-8")
+    migration_text = (ROOT / "references" / "hls-device-migration-strategy.md").read_text(encoding="utf-8")
     modeling_text = (ROOT / "references" / "hls-modeling-strategy.md").read_text(encoding="utf-8")
     parallel_text = (ROOT / "references" / "hls-task-parallel-strategy.md").read_text(encoding="utf-8")
+    assert "optimization class" in optimization_text.lower()
+    assert "ii violation" in report_text.lower()
+    assert "qor" in migration_text.lower()
     assert "variable-bound loops" in modeling_text.lower()
     assert "aliasing" in modeling_text.lower()
     assert "control-driven" in parallel_text.lower()
@@ -972,8 +1003,11 @@ def _run_confidence_loop_checks(base: Path) -> None:
     )
     assert result.returncode == 0, result
     payload = json.loads(output.read_text(encoding="utf-8"))
-    assert payload["confidence_status"] == "factual_high_confidence", payload
-    assert payload["gates"]["ref_dependency_scan"]["status"] == "passed", payload
+    assert payload["confidence_status"] == "local_high_confidence", payload
+    assert payload["confidence_scope"] == "local", payload
+    assert payload["gates"]["copyright_term_scan"]["status"] == "passed", payload
+    assert "remote_vitis_acceptance" not in payload["gates"], payload
+    assert "Final confidence requires remote Vitis acceptance." in payload["residual_risks"], payload
     assert "hls_array_reshape_vector_scale_spec.json" in payload["example_specs"], payload
 
 
@@ -1011,7 +1045,7 @@ def _run_release_packaging_checks(base: Path) -> None:
 
     dist_root = base / "release-dist"
     valid = REAL_SUBPROCESS_RUN(
-        [sys.executable, str(script), "--version", "0.1.5", "--dist-root", str(dist_root)],
+        [sys.executable, str(script), "--version", "0.1.6", "--dist-root", str(dist_root)],
         cwd=ROOT.parent,
         capture_output=True,
         text=True,
@@ -1144,6 +1178,15 @@ def _current_smoke_base() -> Path:
 
 def _smoke_relative_path(*parts: str) -> Path:
     return Path(smoke_root_name()) / _current_smoke_base().name / Path(*parts)
+
+
+def _load_script_module(path: Path, module_name: str):
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    if spec is None or spec.loader is None:
+        raise AssertionError(f"Could not load module from {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _expect_error(func, exc_type: type[BaseException], text: str) -> None:

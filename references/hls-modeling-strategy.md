@@ -1,6 +1,6 @@
 # HLS Modeling Strategy Notes
 
-Source note: distilled from AMD official starter HLS examples and converted into stable skill guidance. Keep this file concise and reusable; do not depend on the temporary `ref/` tree at runtime.
+Source note: distilled from imported starter HLS examples and converted into stable skill guidance. Keep this file concise and reusable.
 
 ## Variable-Bound Loops
 

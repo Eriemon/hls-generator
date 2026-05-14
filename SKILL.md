@@ -15,8 +15,8 @@ Use this skill for local AMD-Xilinx/Vitis HLS C/C++ kernel generation. The bundl
    - `run_hls_workflow(...)` for full staged execution or resume.
    - `render_hls_prompt(...)` when a caller owns the model call.
    - `validate_hls_artifacts(...)` before using generated files downstream.
-4. Require a confirmed requirement contract before generation: `pipeline_required`, `streamability`, `interface_family`, `interface_profile`, `confirmed_by_user`, and `confirmation_notes`.
-5. Run the fixed HLS pipeline: `requirements -> codegen_plan -> tests -> python -> hls`.
+4. Require a confirmed requirement contract before generation: `pipeline_required`, `streamability`, `interface_family`, `interface_profile`, `confirmed_by_user`, and `confirmation_notes`. When throughput targets, numeric strategy, task parallelism, or device portability are in scope, confirm those constraints before code generation.
+5. Run the fixed HLS pipeline: `requirements -> codegen_plan -> tests -> python -> hls -> report_review -> remote_acceptance`.
 6. Keep final hardware-facing artifacts limited to HLS C/C++ headers, sources, C++ testbenches, `.cfg` files, and reports. Python models and vectors are validation intermediates.
 7. Validate with AMD-Xilinx tooling. The validator prefers `vitis-run` and falls back to `vitis_hls`; missing local tools block with a remote-server request so the caller can ask the user to choose an `erie-remote-ssh` server with Vitis available.
 8. For Vitis development, simulation, cosim, and debug guidance, follow `runtime_config.json` skill routing: prefer `vitis-developer` when installed, otherwise fall back to `vitis-hls-synthesis`.
@@ -62,10 +62,12 @@ deleted after a successful run.
 - Load `references/integration.md` when wiring the local facade into another script.
 - Load `references/workflow-contracts.md` when handling run directories, statuses, resume behavior, or traces.
 - Load `references/configuration.md` before changing generated roots, protected paths, Vitis tool commands, or timeouts.
-- Load `references/vitis-hls-2024-2-script-guide.md` before changing Vitis HLS `.cfg` parsing, Tcl rendering, pragma rules, report handling, or compatibility checks. The temporary import folder used to create this reference must not remain in the final skill.
-- Load `references/vitis-hls-official-patterns.md` before changing optimization examples, prompt pragma policy, report-driven tuning rules, or reusable HLS pattern guidance.
+- Load `references/vitis-hls-2024-2-script-guide.md` before changing Vitis HLS `.cfg` parsing, Tcl rendering, pragma rules, report handling, or compatibility checks.
+- Load `references/hls-optimization-patterns.md` before changing optimization examples, prompt pragma policy, report-driven tuning rules, or reusable HLS pattern guidance.
+- Load `references/hls-report-driven-optimization.md` before changing performance-goal framing, synthesis-report interpretation, or optimization-step sequencing.
 - Load `references/hls-modeling-strategy.md` before changing loop-bound handling, numeric-type guidance, pointer modeling, template/vector usage, or conditional pragma policy.
-- Load `references/hls-task-parallel-strategy.md` before changing task-level parallelism guidance, channel semantics, restart behavior, or migration/execution-surface positioning.
+- Load `references/hls-task-parallel-strategy.md` before changing task-level parallelism guidance, channel semantics, restart behavior, or stream/dataflow positioning.
+- Load `references/hls-device-migration-strategy.md` before changing target-part migration guidance, QoR comparison rules, or floating-point/fixed-point portability advice.
 - Load `references/hls-library-policy.md` before changing HLS include choices, advanced HLS library usage, or generated library examples.
 - Load `references/hls-comment-style.md` before changing generated C/C++ comment language, comment coverage, or comment validation rules.
 - Use `assets/examples/` for minimal HLS memory, stream, partition, dataflow, multi-`m_axi`, and numeric-strategy specs.
