@@ -99,8 +99,8 @@ def prepare_release(version: str, dist_root: Path) -> dict[str, object]:
         "version": version,
         "tag": f"v{version}",
         "package": PACKAGE_NAME,
-        "source_commit": _git_output(["rev-parse", "HEAD"]),
-        "source_branch": _git_output(["branch", "--show-current"]),
+        "source_commit": _optional_git_output(["rev-parse", "HEAD"]),
+        "source_branch": _optional_git_output(["branch", "--show-current"]),
         "built_at_utc": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "included_files": included_files,
         "excluded_paths": sorted(EXCLUDED_DIR_NAMES | set(EXCLUDED_GLOBS) | EXCLUDED_FILE_SUFFIXES),
@@ -261,6 +261,14 @@ def _git_output(args: list[str]) -> str:
     if result.returncode != 0:
         raise ReleaseError(f"git {' '.join(args)} failed: {result.stderr.strip()}")
     return result.stdout.strip()
+
+
+def _optional_git_output(args: list[str]) -> str:
+    try:
+        value = _git_output(args)
+    except ReleaseError:
+        return "unavailable"
+    return value or "unavailable"
 
 
 if __name__ == "__main__":

@@ -1045,7 +1045,7 @@ def _run_release_packaging_checks(base: Path) -> None:
 
     dist_root = base / "release-dist"
     valid = REAL_SUBPROCESS_RUN(
-        [sys.executable, str(script), "--version", "0.1.6", "--dist-root", str(dist_root)],
+        [sys.executable, str(script), "--version", "0.1.7", "--dist-root", str(dist_root)],
         cwd=ROOT.parent,
         capture_output=True,
         text=True,
