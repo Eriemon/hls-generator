@@ -1,0 +1,84 @@
+{
+  "name": "template_axi4_burst_kernel",
+  "target": "hls",
+  "design_requirements": {
+    "target": "hls",
+    "pipeline_required": true,
+    "streamability": "streamable",
+    "interface_family": "axi4",
+    "interface_profile": {
+      "axi4_variant": "axi4_full",
+      "role": "master",
+      "read_write_mode": "read_write",
+      "data_width": 32,
+      "addr_width": 32,
+      "id_width": 1,
+      "burst_support": true,
+      "max_burst_len": 32,
+      "clock_reset_domain": {
+        "clock": "i_axi_aclk",
+        "reset": "i_axi_arstn"
+      }
+    },
+    "confirmed_by_user": true,
+    "confirmation_notes": "Burst-ready contiguous AXI4 access has been confirmed."
+  },
+  "streamability": "streamable",
+  "interface_family": "axi4",
+  "interface_profile": {
+    "axi4_variant": "axi4_full",
+    "role": "master",
+    "read_write_mode": "read_write",
+    "data_width": 32,
+    "addr_width": 32,
+    "id_width": 1,
+    "burst_support": true,
+    "max_burst_len": 32,
+    "clock_reset_domain": {
+      "clock": "i_axi_aclk",
+      "reset": "i_axi_arstn"
+    }
+  },
+  "pipeline_required": true,
+  "codegen_plan_required": true,
+  "description": "Template for an AXI4 burst-friendly kernel.",
+  "interfaces": {
+    "top_function": "template_axi4_burst_kernel",
+    "arguments": [
+      {"name": "input", "type": "const ap_uint<32> *", "direction": "input", "interface": "m_axi", "bundle": "gmem0", "depth": 1024},
+      {"name": "output", "type": "ap_uint<32> *", "direction": "output", "interface": "m_axi", "bundle": "gmem1", "depth": 1024},
+      {"name": "scale", "type": "ap_uint<16>", "direction": "input", "interface": "s_axilite"},
+      {"name": "length", "type": "int", "direction": "input", "interface": "s_axilite"}
+    ],
+    "control": "s_axilite"
+  },
+  "behavior": [
+    "Replace these sample semantics with the confirmed burst-safe kernel behavior."
+  ],
+  "clock": {"period_ns": 10.0, "uncertainty_ns": 1.0},
+  "reset": {"strategy": "tool_default"},
+  "constraints": ["Use contiguous AXI4 access compatible with the configured burst length."],
+  "outputs": [
+    {"path": "src/template_axi4_burst_kernel.h", "kind": "header", "language": "cpp"},
+    {"path": "src/template_axi4_burst_kernel.cpp", "kind": "source", "language": "cpp"},
+    {"path": "tb/template_axi4_burst_kernel_tb.cpp", "kind": "testbench", "language": "cpp"},
+    {"path": "hls_config.cfg", "kind": "config", "language": "ini"}
+  ],
+  "notes": [],
+  "subfunctions": [],
+  "workflow": {},
+  "performance": {"target_ii": 1, "max_length": 1024},
+  "hls_profile": {
+    "example_pattern": "axi4_burst",
+    "allowed_libraries": ["ap_int.h"],
+    "required_headers": ["ap_int.h"],
+    "required_pragmas": ["#pragma HLS PIPELINE II=1"],
+    "required_metadata_fields": ["burst_max_len", "coalesced_access"],
+    "metadata": {
+      "burst_max_len": 32,
+      "coalesced_access": "contiguous sequential walk"
+    },
+    "forbidden_combinations": [],
+    "required_cfg_entries": ["clock=10.0", "m_axi_max_read_burst_length=32"]
+  }
+}

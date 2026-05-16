@@ -1,0 +1,88 @@
+{
+  "name": "template_line_buffer_stencil_kernel",
+  "target": "hls",
+  "design_requirements": {
+    "target": "hls",
+    "pipeline_required": true,
+    "streamability": "streamable",
+    "interface_family": "axi4",
+    "interface_profile": {
+      "axi4_variant": "axi4_full",
+      "role": "master",
+      "read_write_mode": "read_write",
+      "data_width": 32,
+      "addr_width": 32,
+      "id_width": 1,
+      "burst_support": false,
+      "clock_reset_domain": {
+        "clock": "i_axi_aclk",
+        "reset": "i_axi_arstn"
+      }
+    },
+    "confirmed_by_user": true,
+    "confirmation_notes": "Window shape, border handling, and line-buffer ownership have been confirmed."
+  },
+  "streamability": "streamable",
+  "interface_family": "axi4",
+  "interface_profile": {
+    "axi4_variant": "axi4_full",
+    "role": "master",
+    "read_write_mode": "read_write",
+    "data_width": 32,
+    "addr_width": 32,
+    "id_width": 1,
+    "burst_support": false,
+    "clock_reset_domain": {
+      "clock": "i_axi_aclk",
+      "reset": "i_axi_arstn"
+    }
+  },
+  "pipeline_required": true,
+  "codegen_plan_required": true,
+  "description": "Template for a local line-buffer stencil kernel.",
+  "interfaces": {
+    "top_function": "template_line_buffer_stencil_kernel",
+    "arguments": [
+      {"name": "input", "type": "const ap_uint<32> *", "direction": "input", "interface": "m_axi", "bundle": "gmem0", "depth": 1024},
+      {"name": "output", "type": "ap_uint<32> *", "direction": "output", "interface": "m_axi", "bundle": "gmem1", "depth": 1024},
+      {"name": "length", "type": "int", "direction": "input", "interface": "s_axilite"}
+    ],
+    "control": "s_axilite"
+  },
+  "behavior": ["Replace these sample semantics with the confirmed stencil behavior."],
+  "clock": {"period_ns": 8.0, "uncertainty_ns": 0.8},
+  "reset": {"strategy": "tool_default"},
+  "constraints": ["Keep the line buffer and border policy explicit."],
+  "outputs": [
+    {"path": "src/template_line_buffer_stencil_kernel.h", "kind": "header", "language": "cpp"},
+    {"path": "src/template_line_buffer_stencil_kernel.cpp", "kind": "source", "language": "cpp"},
+    {"path": "tb/template_line_buffer_stencil_kernel_tb.cpp", "kind": "testbench", "language": "cpp"},
+    {"path": "hls_config.cfg", "kind": "config", "language": "ini"}
+  ],
+  "notes": [],
+  "subfunctions": [],
+  "workflow": {},
+  "performance": {"target_ii": 1, "max_length": 1024},
+  "hls_profile": {
+    "example_pattern": "line_buffer_stencil",
+    "allowed_libraries": ["ap_int.h"],
+    "required_headers": ["ap_int.h"],
+    "required_pragmas": ["#pragma HLS PIPELINE II=1", "#pragma HLS ARRAY_PARTITION variable=line_buf complete dim=1"],
+    "required_metadata_fields": ["window_shape", "border_policy", "line_buffer_name"],
+    "metadata": {
+      "window_shape": "3-tap",
+      "border_policy": "clamp",
+      "line_buffer_name": "line_buf"
+    },
+    "forbidden_combinations": [
+      {
+        "all_of": [
+          "#pragma HLS ARRAY_PARTITION variable=line_buf complete dim=1",
+          "#pragma HLS ARRAY_RESHAPE variable=line_buf complete dim=1"
+        ],
+        "message": "Do not partition and reshape the same stencil line buffer."
+      }
+    ],
+    "required_cfg_entries": ["clock=8.0"]
+  }
+}

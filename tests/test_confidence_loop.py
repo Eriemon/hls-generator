@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
@@ -124,6 +127,106 @@ class ConfidenceLoopTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertTrue(any(("/" + "tools" + "/Xilinx/") in item for item in result["matches"]))
         self.assertTrue(any("xcu50" in item for item in result["matches"]))
+
+    def test_release_sensitivity_scan_catches_sensitive_zip_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            archive_path = Path(tmp) / "erie-hls-generator-v0.1.8.zip"
+            with zipfile.ZipFile(archive_path, "w") as archive:
+                archive.writestr(
+                    "erie-hls-generator-v0.1.8/skills/erie-hls-generator/runtime/hls_generator/runtime_config.json",
+                    (
+                        "{\n"
+                        '  "remote_validation": {\n'
+                        '    "settings_script": "/' + "tools" + '/Xilinx/Vitis/2022.2/settings64.sh"\n'
+                        "  }\n"
+                        "}\n"
+                    ),
+                )
+
+            result = self.module._release_sensitivity_scan(root=archive_path)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(any(archive_path.name in item for item in result["matches"]))
+        self.assertTrue(any(("/" + "tools" + "/Xilinx/") in item for item in result["matches"]))
+
+    def test_example_spec_names_include_new_shipped_patterns(self) -> None:
+        spec_names = self.module._example_spec_names()
+
+        self.assertIn("hls_axi4_burst_vector_scale_spec.json", spec_names)
+        self.assertIn("hls_task_graph_axis_spec.json", spec_names)
+        self.assertIn("hls_directio_freerun_axis_spec.json", spec_names)
+
+    def test_run_remote_passes_vitis_version_when_requested(self) -> None:
+        seen: dict[str, object] = {}
+
+        def fake_run_remote_command(command):
+            seen["command"] = command
+            return {"status": "passed"}
+
+        with patch.object(self.module, "_run_remote_command", side_effect=fake_run_remote_command):
+            result = self.module._run_remote("server-a", "cosim", "hls_vector_scale_spec.json", vitis_version="2024.2")
+
+        self.assertEqual(result["status"], "passed")
+        self.assertIn("--vitis-version", seen["command"])
+        self.assertIn("2024.2", seen["command"])
+
+    def test_run_remote_acceptance_stops_when_link_fails(self) -> None:
+        commands: list[list[str]] = []
+
+        def fake_run_remote_command(command):
+            commands.append(command)
+            if "--mode" in command and command[command.index("--mode") + 1] == "link":
+                return {"status": "failed", "error": "link failed"}
+            return {"status": "passed"}
+
+        with patch.object(self.module, "_run_remote_command", side_effect=fake_run_remote_command):
+            result = self.module._run_remote_acceptance("server-a", "cosim", ["hls_vector_scale_spec.json"], vitis_version="2024.2")
+
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["results"], [])
+        self.assertEqual(len(commands), 1)
+
+    def test_run_split_remote_passes_dual_server_arguments(self) -> None:
+        seen: dict[str, object] = {}
+
+        def fake_run_remote_command(command):
+            seen["command"] = command
+            return {"status": "passed"}
+
+        with patch.object(self.module, "_run_remote_command", side_effect=fake_run_remote_command):
+            result = self.module._run_split_remote(
+                "build-a",
+                "validate-b",
+                "cosim",
+                "hls_vector_scale_spec.json",
+                vitis_version="2022.2",
+            )
+
+        self.assertEqual(result["status"], "passed")
+        self.assertIn("--build-server", seen["command"])
+        self.assertIn("build-a", seen["command"])
+        self.assertIn("--validate-server", seen["command"])
+        self.assertIn("validate-b", seen["command"])
+
+    def test_run_split_remote_acceptance_stops_when_preflight_fails(self) -> None:
+        calls: list[list[str]] = []
+
+        def fake_run_remote_command(command):
+            calls.append(command)
+            return {"status": "failed", "error": "preflight failed"}
+
+        with patch.object(self.module, "_run_remote_command", side_effect=fake_run_remote_command):
+            result = self.module._run_split_remote_acceptance(
+                "build-a",
+                "validate-b",
+                "cosim",
+                ["hls_vector_scale_spec.json"],
+                vitis_version="2022.2",
+            )
+
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["results"], [])
+        self.assertEqual(len(calls), 1)
 
 
 if __name__ == "__main__":

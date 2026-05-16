@@ -1,0 +1,93 @@
+{
+  "name": "axi4_burst_vector_scale",
+  "target": "hls",
+  "design_requirements": {
+    "target": "hls",
+    "pipeline_required": true,
+    "streamability": "streamable",
+    "interface_family": "axi4",
+    "interface_profile": {
+      "axi4_variant": "axi4_full",
+      "role": "master",
+      "read_write_mode": "read_write",
+      "data_width": 32,
+      "addr_width": 32,
+      "id_width": 1,
+      "burst_support": true,
+      "max_burst_len": 32,
+      "clock_reset_domain": {
+        "clock": "i_axi_aclk",
+        "reset": "i_axi_arstn"
+      }
+    },
+    "confirmed_by_user": true,
+    "confirmation_notes": "Use contiguous AXI4 memory traversal with an explicit burst length of 32."
+  },
+  "streamability": "streamable",
+  "interface_family": "axi4",
+  "interface_profile": {
+    "axi4_variant": "axi4_full",
+    "role": "master",
+    "read_write_mode": "read_write",
+    "data_width": 32,
+    "addr_width": 32,
+    "id_width": 1,
+    "burst_support": true,
+    "max_burst_len": 32,
+    "clock_reset_domain": {
+      "clock": "i_axi_aclk",
+      "reset": "i_axi_arstn"
+    }
+  },
+  "pipeline_required": true,
+  "codegen_plan_required": true,
+  "description": "Scale a contiguous AXI4 vector while preserving a burst-friendly access pattern.",
+  "interfaces": {
+    "top_function": "axi4_burst_vector_scale_kernel",
+    "arguments": [
+      {"name": "input", "type": "const ap_uint<32> *", "direction": "input", "interface": "m_axi", "bundle": "gmem0", "depth": 1024},
+      {"name": "output", "type": "ap_uint<32> *", "direction": "output", "interface": "m_axi", "bundle": "gmem1", "depth": 1024},
+      {"name": "scale", "type": "ap_uint<16>", "direction": "input", "interface": "s_axilite"},
+      {"name": "length", "type": "int", "direction": "input", "interface": "s_axilite"}
+    ],
+    "control": "s_axilite"
+  },
+  "behavior": [
+    "For each index below length, output[index] equals input[index] multiplied by scale.",
+    "Keep the loop order contiguous so the memory path supports bursts up to max_burst_len.",
+    "Document why the coalesced access pattern is safe for the chosen AXI4 configuration."
+  ],
+  "clock": {"period_ns": 10.0, "uncertainty_ns": 1.0},
+  "reset": {"strategy": "tool_default"},
+  "constraints": [
+    "Use Vitis HLS compatible C++.",
+    "Keep burst settings and cfg entries aligned with interface_profile.max_burst_len.",
+    "Avoid dynamic allocation and recursion."
+  ],
+  "outputs": [
+    {"path": "src/axi4_burst_vector_scale_kernel.h", "kind": "header", "language": "cpp"},
+    {"path": "src/axi4_burst_vector_scale_kernel.cpp", "kind": "source", "language": "cpp"},
+    {"path": "tb/axi4_burst_vector_scale_kernel_tb.cpp", "kind": "testbench", "language": "cpp"},
+    {"path": "hls_config.cfg", "kind": "config", "language": "ini"}
+  ],
+  "notes": [],
+  "subfunctions": [],
+  "workflow": {},
+  "performance": {
+    "target_ii": 1,
+    "max_length": 1024
+  },
+  "hls_profile": {
+    "example_pattern": "axi4_burst",
+    "allowed_libraries": ["ap_int.h"],
+    "required_headers": ["ap_int.h"],
+    "required_pragmas": ["#pragma HLS PIPELINE II=1"],
+    "required_metadata_fields": ["burst_max_len", "coalesced_access"],
+    "metadata": {
+      "burst_max_len": 32,
+      "coalesced_access": "contiguous sequential vector walk"
+    },
+    "forbidden_combinations": [],
+    "required_cfg_entries": ["clock=10.0", "m_axi_max_read_burst_length=32"]
+  }
+}

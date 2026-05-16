@@ -18,6 +18,7 @@ from .hls_profile import validate_hls_profile
 from .hls_reports import collect_hls_report_metrics
 from .hls_tcl import render_vitis_hls_tcl
 from .interface_contract import audit_interface
+from .patterns import ADVANCED_LIBRARY_HEADERS, canonical_pattern_name, required_pattern_headers
 from .prompt import require_comment_language
 from .reference_contract import compare_reference_to_transcript, parse_semantic_transcript
 from .spec import normalize_spec
@@ -148,6 +149,7 @@ def validate_generated(
     issues.extend(_validate_vector_contracts(normalized, root))
     issues.extend(_validate_reference_models(root, readiness, reference_cases))
     issues.extend(_validate_hls(normalized, root))
+    issues.extend(_validate_advanced_library_alignment(normalized, root))
     issues.extend(_contract_gate_issues(plan_contract_interface_issues(normalized, audit_interface("hls", root))))
     profile = hls_profile or normalized.get("hls_profile") or {}
     issues.extend(_profile_issues(validate_hls_profile(profile, root, normalized)))
@@ -505,6 +507,31 @@ def _cfg_issues(spec: dict[str, Any], root: Path) -> list[ValidationIssue]:
     observed_part = str(cfg_entries.get("part") or "").strip()
     if expected_part and observed_part and observed_part != expected_part:
         issues.append(ValidationIssue("error", f"HLS cfg part={observed_part!r} does not match spec workflow part={expected_part!r}.", cfg_files[0].relative_to(root).as_posix()))
+    interface_profile = spec.get("interface_profile") if isinstance(spec.get("interface_profile"), dict) else {}
+    if interface_profile.get("burst_support") is True:
+        expected_burst = interface_profile.get("max_burst_len")
+        observed_burst = cfg_entries.get("interface", {}).get("m_axi_max_read_burst_length") if isinstance(cfg_entries.get("interface"), dict) else cfg_entries.get("m_axi_max_read_burst_length")
+        if expected_burst in (None, ""):
+            issues.append(ValidationIssue("error", "HLS spec enables burst_support but omits interface_profile.max_burst_len.", cfg_files[0].relative_to(root).as_posix()))
+        elif str(observed_burst or "") != str(expected_burst):
+            issues.append(ValidationIssue("error", f"HLS cfg burst length {observed_burst!r} does not match spec.interface_profile.max_burst_len={expected_burst!r}.", cfg_files[0].relative_to(root).as_posix()))
+    return issues
+
+
+def _validate_advanced_library_alignment(spec: dict[str, Any], root: Path) -> list[ValidationIssue]:
+    required = set(required_pattern_headers(spec))
+    pattern = canonical_pattern_name(spec)
+    issues: list[ValidationIssue] = []
+    for path in _hls_files(root):
+        if path.suffix.lower() not in {".cpp", ".cc", ".cxx", ".h", ".hpp"}:
+            continue
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        rel_path = path.relative_to(root).as_posix()
+        for header in ADVANCED_LIBRARY_HEADERS:
+            if f"#include <{header}>" not in text and f'#include "{header}"' not in text:
+                continue
+            if header not in required:
+                issues.append(ValidationIssue("error", f"Advanced HLS header {header!r} is not justified by the selected pattern {pattern or 'none'!r}.", rel_path, "static", "spec_issue"))
     return issues
 
 

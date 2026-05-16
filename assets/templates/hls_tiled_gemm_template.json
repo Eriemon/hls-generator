@@ -1,0 +1,81 @@
+{
+  "name": "template_tiled_gemm_kernel",
+  "target": "hls",
+  "design_requirements": {
+    "target": "hls",
+    "pipeline_required": true,
+    "streamability": "streamable",
+    "interface_family": "axi4",
+    "interface_profile": {
+      "axi4_variant": "axi4_full",
+      "role": "master",
+      "read_write_mode": "read_write",
+      "data_width": 32,
+      "addr_width": 32,
+      "id_width": 1,
+      "burst_support": false,
+      "clock_reset_domain": {
+        "clock": "i_axi_aclk",
+        "reset": "i_axi_arstn"
+      }
+    },
+    "confirmed_by_user": true,
+    "confirmation_notes": "Tile shape, layout, and accumulation strategy have been confirmed."
+  },
+  "streamability": "streamable",
+  "interface_family": "axi4",
+  "interface_profile": {
+    "axi4_variant": "axi4_full",
+    "role": "master",
+    "read_write_mode": "read_write",
+    "data_width": 32,
+    "addr_width": 32,
+    "id_width": 1,
+    "burst_support": false,
+    "clock_reset_domain": {
+      "clock": "i_axi_aclk",
+      "reset": "i_axi_arstn"
+    }
+  },
+  "pipeline_required": true,
+  "codegen_plan_required": true,
+  "description": "Template for a tiled GEMM-style local-buffer kernel.",
+  "interfaces": {
+    "top_function": "template_tiled_gemm_kernel",
+    "arguments": [
+      {"name": "input_a", "type": "const ap_uint<32> *", "direction": "input", "interface": "m_axi", "bundle": "gmem_a", "depth": 256},
+      {"name": "input_b", "type": "const ap_uint<32> *", "direction": "input", "interface": "m_axi", "bundle": "gmem_b", "depth": 256},
+      {"name": "output", "type": "ap_uint<32> *", "direction": "output", "interface": "m_axi", "bundle": "gmem_out", "depth": 256},
+      {"name": "length", "type": "int", "direction": "input", "interface": "s_axilite"}
+    ],
+    "control": "s_axilite"
+  },
+  "behavior": ["Replace these sample semantics with the confirmed tiled GEMM behavior."],
+  "clock": {"period_ns": 8.0, "uncertainty_ns": 0.8},
+  "reset": {"strategy": "tool_default"},
+  "constraints": ["Keep tile-buffer roles and layout explicit."],
+  "outputs": [
+    {"path": "src/template_tiled_gemm_kernel.h", "kind": "header", "language": "cpp"},
+    {"path": "src/template_tiled_gemm_kernel.cpp", "kind": "source", "language": "cpp"},
+    {"path": "tb/template_tiled_gemm_kernel_tb.cpp", "kind": "testbench", "language": "cpp"},
+    {"path": "hls_config.cfg", "kind": "config", "language": "ini"}
+  ],
+  "notes": [],
+  "subfunctions": [],
+  "workflow": {},
+  "performance": {"target_ii": 1, "tile_length": 4},
+  "hls_profile": {
+    "example_pattern": "tiled_gemm",
+    "allowed_libraries": ["ap_int.h"],
+    "required_headers": ["ap_int.h"],
+    "required_pragmas": ["#pragma HLS ARRAY_PARTITION variable=tile_a complete dim=1", "#pragma HLS ARRAY_PARTITION variable=tile_b complete dim=1"],
+    "required_metadata_fields": ["tile_shape", "accumulator_type", "layout"],
+    "metadata": {
+      "tile_shape": "2x2",
+      "accumulator_type": "ap_uint<32>",
+      "layout": "row_major_tiles"
+    },
+    "forbidden_combinations": [],
+    "required_cfg_entries": ["clock=8.0"]
+  }
+}

@@ -19,6 +19,22 @@ from typing import Iterable
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = SKILL_ROOT.parents[1]
 PACKAGE_NAME = "erie-hls-generator"
+PACKAGE_RELEASE_PREFIX = Path("skills") / PACKAGE_NAME
+PACKAGE_OWNED_DIR_NAMES = {
+    "agents",
+    "assets",
+    "integration",
+    "references",
+    "runtime",
+    "scripts",
+    "smoke",
+    "tests",
+}
+PACKAGE_OWNED_FILE_NAMES = {
+    ".gitignore",
+    "DESIGN_GOALS.md",
+    "SKILL.md",
+}
 SEMVER_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
 if str(SKILL_ROOT) not in sys.path:
     sys.path.insert(0, str(SKILL_ROOT))
@@ -197,11 +213,12 @@ def _replace_release_outputs(release_dir: Path, zip_path: Path) -> None:
 def _copy_skill_tree(release_dir: Path) -> list[str]:
     included: list[str] = []
     for src in sorted(_iter_release_files(SKILL_ROOT), key=lambda item: item.as_posix().lower()):
-        rel_repo = src.relative_to(REPO_ROOT)
-        dst = release_dir / rel_repo
+        rel_skill = src.relative_to(SKILL_ROOT)
+        rel_release = PACKAGE_RELEASE_PREFIX / rel_skill
+        dst = release_dir / rel_release
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dst)
-        included.append(rel_repo.as_posix())
+        included.append(rel_release.as_posix())
     return included
 
 
@@ -231,6 +248,8 @@ def _iter_release_files(root: Path) -> Iterable[Path]:
 
 
 def _is_excluded(rel: Path, path: Path) -> bool:
+    if path.is_file() and not _is_package_owned(rel):
+        return True
     if any(part in EXCLUDED_DIR_NAMES for part in rel.parts):
         return True
     if path.is_file() and path.suffix in EXCLUDED_FILE_SUFFIXES:
@@ -238,6 +257,14 @@ def _is_excluded(rel: Path, path: Path) -> bool:
     if path.name in EXCLUDED_FILE_NAMES:
         return True
     return any(path.match(pattern) or rel.match(pattern) for pattern in EXCLUDED_GLOBS)
+
+
+def _is_package_owned(rel: Path) -> bool:
+    if not rel.parts:
+        return False
+    if rel.parts[0] in PACKAGE_OWNED_DIR_NAMES:
+        return True
+    return rel.as_posix() in PACKAGE_OWNED_FILE_NAMES
 
 
 def _write_checksums(release_dir: Path) -> list[str]:

@@ -11,9 +11,9 @@
 <p align="center">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-1f6feb"></a>
   <a href="pyproject.toml"><img alt="Python" src="https://img.shields.io/badge/python-3.10%2B-2f81f7"></a>
-  <img alt="Version" src="https://img.shields.io/badge/version-v0.1.8-7c3aed">
+  <img alt="Version" src="https://img.shields.io/badge/version-v0.1.9-7c3aed">
   <a href="SKILL.md"><img alt="Agent Skill" src="https://img.shields.io/badge/agent-skill-16a34a"></a>
-  <a href="references/vitis-hls-official-patterns.md"><img alt="Target" src="https://img.shields.io/badge/target-Vitis%20HLS-f59e0b"></a>
+  <a href="references/vitis-hls-2024-2-script-guide.md"><img alt="Target" src="https://img.shields.io/badge/target-Vitis%20HLS-f59e0b"></a>
 </p>
 
 <h1 align="center">HLS Generator</h1>
@@ -126,7 +126,7 @@ If this skill helps your research, teaching, or engineering workflow, please cit
   author       = {Jiyuan Liu and He Li},
   title        = {{HLS Generator}: An Agent Skill for Vitis HLS Workflows},
   year         = {2026},
-  version      = {0.1.8},
+  version      = {0.1.9},
   date         = {2026-05-09},
   url          = {https://github.com/Eriemon/hls-generator},
   license      = {Apache-2.0},

@@ -14,8 +14,9 @@ import shlex
 import subprocess
 import sys
 import tarfile
+import time
 import uuid
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
@@ -23,7 +24,7 @@ if str(SKILL_ROOT) not in sys.path:
     sys.path.insert(0, str(SKILL_ROOT))
 
 from integration.hls_adapter import run_hls_workflow  # noqa: E402
-from runtime.hls_generator.config import remote_validation_config, skill_config_path, skill_dependencies_config, skill_root  # noqa: E402
+from runtime.hls_generator.config import remote_validation_config, skill_config_path, skill_dependencies_config, skill_root, vitis_tool_timeout  # noqa: E402
 from runtime.hls_generator.skill_dependencies import SkillDependencyError, require_skill_dependencies  # noqa: E402
 from runtime.hls_generator.user_config import get_vitis_selection, set_vitis_selection, user_config_path  # noqa: E402
 from runtime.hls_generator.validation import READINESS_LEVELS  # noqa: E402
@@ -44,9 +45,12 @@ class RemoteAcceptanceError(RuntimeError):
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Validate HLS generator remote confidence through erie-remote-ssh.")
     parser.add_argument("--mode", required=True, choices=("link", "vitis"))
-    parser.add_argument("--server", required=True, help="Server id or name from erie-remote-ssh config.")
+    parser.add_argument("--server", help="Single-server target id or name from erie-remote-ssh config.")
+    parser.add_argument("--build-server", help="Build-server id or name for split build/validate topology.")
+    parser.add_argument("--validate-server", help="Validation-server id or name for split build/validate topology.")
     parser.add_argument("--profile", help="Optional remote_validation.vitis_profiles key for Vitis mode.")
     parser.add_argument("--vitis-version", help="Explicit remote Vitis version to use and remember for this server.")
+    parser.add_argument("--target-part", help="Optional explicit target part override for remote HLS synthesis.")
     parser.add_argument("--readiness", default="cosim", choices=READINESS_LEVELS)
     parser.add_argument("--example-spec", default="hls_vector_scale_mock_spec.json", help="Example spec from assets/examples used for Vitis acceptance artifacts.")
     parser.add_argument("--comment-language", default="auto", choices=("auto", "en", "zh"), help="Comment language for locally generated HLS acceptance artifacts.")
@@ -82,23 +86,47 @@ def main(argv: list[str] | None = None) -> int:
 def run_acceptance(args: argparse.Namespace) -> dict[str, Any]:
     require_skill_dependencies(skill_dependencies_config(), scopes={"core"})
     config = remote_validation_config()
-    timeout = int(args.timeout or config["default_timeout_s"])
+    base_timeout = int(args.timeout or config["default_timeout_s"])
+    if args.mode == "vitis":
+        base_timeout = max(base_timeout, int(vitis_tool_timeout(args.readiness)) + 30)
+    timeout = base_timeout
     helper = ErieHelper(config, timeout)
-    plan = _planned_steps(args.mode, args.server, args.profile, args.readiness, cleanup_remote=bool(getattr(args, "cleanup_remote", False)), example_spec=str(getattr(args, "example_spec", "")))
+    topology = _resolve_topology(args)
+    plan = _planned_steps(
+        args.mode,
+        topology["server"],
+        args.profile,
+        args.readiness,
+        cleanup_remote=bool(getattr(args, "cleanup_remote", False)),
+        example_spec=str(getattr(args, "example_spec", "")),
+        validate_server=topology.get("validate_server"),
+        topology=topology["topology"],
+    )
     if args.dry_run:
-        result = {"status": DRY_RUN_STATUS, "mode": args.mode, "server": args.server, "steps": plan, "uses_erie_remote_ssh": True}
+        result = {
+            "status": DRY_RUN_STATUS,
+            "mode": args.mode,
+            "server": topology["server"],
+            "build_server": topology.get("build_server"),
+            "validate_server": topology.get("validate_server"),
+            "topology": topology["topology"],
+            "steps": plan,
+            "uses_erie_remote_ssh": True,
+        }
         if args.mode == "vitis":
             result.update({"cleanup_performed": False, "remote_artifacts_retained": True})
         return result
     if args.mode == "link":
-        return _run_link_mode(args, config, helper, plan)
-    return _run_vitis_mode(args, config, helper, plan)
+        return _run_link_mode(args, config, helper, plan, topology)
+    if topology["topology"] == "split_build_validate":
+        return _run_split_vitis_mode(args, config, helper, plan, topology)
+    return _run_vitis_mode(args, config, helper, plan, topology)
 
 
-def _run_link_mode(args: argparse.Namespace, config: dict[str, Any], helper: "ErieHelper", plan: list[str]) -> dict[str, Any]:
+def _run_link_mode(args: argparse.Namespace, config: dict[str, Any], helper: "ErieHelper", plan: list[str], topology: dict[str, Any]) -> dict[str, Any]:
     run_dir = _new_run_dir(config, "link")
-    helper.preflight(args.server)
-    output = helper.exec(args.server, list(config["link_probe_command"]))
+    helper.preflight(topology["server"])
+    output = helper.exec(topology["server"], list(config["link_probe_command"]))
     _reject_decode_noise(output)
     required = ("HLS_REMOTE_LINK_OK", "host=", "pwd=", "python=")
     missing = [item for item in required if item not in output]
@@ -106,7 +134,8 @@ def _run_link_mode(args: argparse.Namespace, config: dict[str, Any], helper: "Er
     result = {
         "status": status,
         "mode": "link",
-        "server": args.server,
+        "server": topology["server"],
+        "topology": topology["topology"],
         "run_dir": str(run_dir),
         "steps": plan,
         "output": output,
@@ -117,13 +146,14 @@ def _run_link_mode(args: argparse.Namespace, config: dict[str, Any], helper: "Er
     return result
 
 
-def _run_vitis_mode(args: argparse.Namespace, config: dict[str, Any], helper: "ErieHelper", plan: list[str]) -> dict[str, Any]:
+def _run_vitis_mode(args: argparse.Namespace, config: dict[str, Any], helper: "ErieHelper", plan: list[str], topology: dict[str, Any]) -> dict[str, Any]:
     profiles = config.get("vitis_profiles", {})
     run_dir = _new_run_dir(config, "vitis")
     settings = _write_erie_settings_overlay(config, run_dir)
-    helper.preflight(args.server, settings=settings)
-    helper.scan_software(args.server, settings=settings)
-    candidates = _vitis_version_candidates(config, settings, args.server)
+    server = topology["server"]
+    helper.preflight(server, settings=settings)
+    helper.scan_software(server, settings=settings)
+    candidates = _vitis_version_candidates(config, settings, server)
     profile = _resolve_profile_config(
         args,
         run_dir,
@@ -139,16 +169,19 @@ def _run_vitis_mode(args: argparse.Namespace, config: dict[str, Any], helper: "E
         _write_report(run_dir, selected_profile)
         return selected_profile
 
-    profile_probe = _probe_vitis(args.server, settings, helper, selected_profile)
+    if args.target_part and not str(selected_profile.get("target_part") or "").strip():
+        selected_profile = {**selected_profile, "target_part": str(args.target_part)}
+    profile_probe = _probe_vitis(server, settings, helper, selected_profile)
     if profile_probe["status"] != PASS_STATUS:
         result = {
             "status": BLOCKED_VITIS_STATUS,
             "mode": "vitis",
-            "server": args.server,
+            "server": server,
             "profile": args.profile,
             "vitis_version": selected_profile.get("version"),
             "readiness": args.readiness,
             "run_dir": str(run_dir),
+            "topology": topology["topology"],
             "steps": plan,
             "probe": profile_probe,
             "uses_erie_remote_ssh": True,
@@ -162,18 +195,19 @@ def _run_vitis_mode(args: argparse.Namespace, config: dict[str, Any], helper: "E
     cleanup_performed = False
 
     request_paths: list[str] = []
-    request_paths.append(helper.request_and_run(settings, args.server, "mkdir", [remote_dir], "prepare remote HLS validation directory"))
-    request_paths.extend(_transfer_package_by_request_commands(helper, settings, args.server, remote_dir, package_path))
+    request_paths.append(helper.request_and_run(settings, server, "mkdir", [remote_dir], "prepare remote HLS validation directory"))
+    request_paths.extend(_transfer_package_by_request_commands(helper, settings, server, remote_dir, package_path))
     command = _remote_vitis_command(remote_dir, selected_profile, args.readiness)
-    request_paths.append(helper.request_and_run(settings, args.server, "command", command, "run Vitis HLS acceptance"))
+    request_paths.append(helper.request_and_run(settings, server, "command", command, "run Vitis HLS acceptance"))
     if args.cleanup_remote:
-        request_paths.append(helper.request_and_run(settings, args.server, "delete", [remote_dir, "--recursive"], "cleanup remote HLS validation directory"))
+        request_paths.append(helper.request_and_run(settings, server, "delete", [remote_dir, "--recursive"], "cleanup remote HLS validation directory"))
         cleanup_performed = True
 
     result = {
         "status": PASS_STATUS,
         "mode": "vitis",
-        "server": args.server,
+        "server": server,
+        "topology": topology["topology"],
         "profile": args.profile,
         "vitis_version": selected_profile.get("version"),
         "readiness": args.readiness,
@@ -185,6 +219,122 @@ def _run_vitis_mode(args: argparse.Namespace, config: dict[str, Any], helper: "E
         "remote_artifacts_retained": not cleanup_performed,
         "requests": request_paths,
         "uses_erie_remote_ssh": True,
+    }
+    _write_report(run_dir, result)
+    return result
+
+
+def _run_split_vitis_mode(args: argparse.Namespace, config: dict[str, Any], helper: "ErieHelper", plan: list[str], topology: dict[str, Any]) -> dict[str, Any]:
+    profiles = config.get("vitis_profiles", {})
+    run_dir = _new_run_dir(config, "vitis-split")
+    settings = _write_erie_settings_overlay(config, run_dir)
+    build_server = topology["build_server"]
+    validate_server = topology["validate_server"]
+
+    helper.preflight(build_server, settings=settings)
+    helper.preflight(validate_server, settings=settings)
+    helper.scan_software(build_server, settings=settings)
+    helper.scan_software(validate_server, settings=settings)
+
+    build_candidates = _vitis_version_candidates(config, settings, build_server)
+    validate_candidates = _vitis_version_candidates(config, settings, validate_server)
+    shared_version = _select_shared_vitis_version(args, build_candidates, validate_candidates)
+    build_profile = _resolve_profile_for_version(build_server, build_candidates, profiles, shared_version)
+    validate_profile = _resolve_profile_for_version(validate_server, validate_candidates, profiles, shared_version)
+    target_part = _resolve_target_part(args, settings, validate_server, validate_profile, build_profile)
+    if not target_part:
+        blocked = _blocked_profile_config(
+            argparse.Namespace(
+                server=build_server,
+                profile=args.profile,
+                readiness=args.readiness,
+                example_spec=args.example_spec,
+            ),
+            run_dir,
+            missing_fields=["target_part"],
+            configured_profiles=profiles,
+        )
+        blocked["topology"] = topology["topology"]
+        blocked["build_server"] = build_server
+        blocked["validate_server"] = validate_server
+        blocked["vitis_version"] = shared_version
+        _write_report(run_dir, blocked)
+        return blocked
+
+    build_profile = {**build_profile, "target_part": target_part}
+    validate_profile = {**validate_profile, "target_part": target_part}
+    build_workdir = _probe_remote_workdir(build_server, settings, helper)
+    validate_workdir = _probe_remote_workdir(validate_server, settings, helper)
+
+    build_probe = _probe_vitis(build_server, settings, helper, build_profile)
+    validate_probe = _probe_vitis(validate_server, settings, helper, validate_profile)
+    device_probe = _probe_fpga_presence(validate_server, settings, helper)
+    if build_probe["status"] != PASS_STATUS or validate_probe["status"] != PASS_STATUS or device_probe["status"] != PASS_STATUS:
+        result = {
+            "status": BLOCKED_VITIS_STATUS,
+            "mode": "vitis",
+            "topology": topology["topology"],
+            "build_server": build_server,
+            "validate_server": validate_server,
+            "vitis_version": shared_version,
+            "target_part": target_part,
+            "run_dir": str(run_dir),
+            "steps": plan,
+            "build_probe": build_probe,
+            "validate_probe": validate_probe,
+            "device_probe": device_probe,
+            "uses_erie_remote_ssh": True,
+        }
+        _write_report(run_dir, result)
+        return result
+
+    artifact_dir = _generate_local_hls_artifacts(run_dir, comment_language=args.comment_language, example_spec=args.example_spec)
+    package_path = _create_vitis_package(run_dir, artifact_dir)
+
+    build_result = _run_server_vitis_phase(
+        helper,
+        settings,
+        build_server,
+        build_profile,
+        args.readiness,
+        package_path,
+        config,
+        run_dir,
+        phase_label="build",
+        cleanup_remote=args.cleanup_remote,
+        remote_workdir=build_workdir,
+    )
+    validate_result = _run_server_vitis_phase(
+        helper,
+        settings,
+        validate_server,
+        validate_profile,
+        args.readiness,
+        package_path,
+        config,
+        run_dir,
+        phase_label="validation",
+        cleanup_remote=args.cleanup_remote,
+        remote_workdir=validate_workdir,
+    )
+
+    passed = build_result["status"] == PASS_STATUS and validate_result["status"] == PASS_STATUS
+    result = {
+        "status": PASS_STATUS if passed else FAILED_STATUS,
+        "mode": "vitis",
+        "topology": topology["topology"],
+        "build_server": build_server,
+        "validate_server": validate_server,
+        "vitis_version": shared_version,
+        "target_part": target_part,
+        "readiness": args.readiness,
+        "example_spec": args.example_spec,
+        "run_dir": str(run_dir),
+        "steps": plan,
+        "build_result": build_result,
+        "validation_result": validate_result,
+        "uses_erie_remote_ssh": True,
+        "remote_artifacts_retained": (build_result.get("remote_artifacts_retained") is True and validate_result.get("remote_artifacts_retained") is True),
     }
     _write_report(run_dir, result)
     return result
@@ -234,16 +384,69 @@ class ErieHelper:
         self._run(["run-request", "--settings", str(settings), "--request", request_path, "--execute", "--timeout", str(self.timeout)])
         return request_path
 
+    def exec_detached(self, server: str, reason: str, command: str, *, settings: Path | None = None) -> dict[str, Any]:
+        active_settings = settings or self.settings
+        output = self._run(["exec-detached", "--settings", str(active_settings), "--server", server, "--reason", reason, "--timeout", str(self.timeout), "--", "bash", "-lc", command])
+        job_id = _field_from_output(output, "job_id")
+        remote_job_dir = _field_from_output(output, "remote_job_dir")
+        manifest = _field_from_output(output, "manifest")
+        return {"job_id": job_id, "remote_job_dir": remote_job_dir, "manifest": manifest, "output": output}
+
+    def wait_for_job(self, server: str, job_id: str, *, settings: Path | None = None, poll_s: int = 10, max_wait_s: int | None = None) -> dict[str, Any]:
+        active_settings = settings or self.settings
+        deadline = time.time() + float(max_wait_s or self.timeout)
+        last_output = ""
+        while time.time() < deadline:
+            last_output, returncode = self._run_with_returncode(
+                ["status", "--settings", str(active_settings), "--server", server, "--job", job_id, "--timeout", str(self.timeout)]
+            )
+            status = _field_from_output(last_output, "status")
+            if status in {"succeeded", "failed", "not_found"}:
+                return {"status": status, "output": last_output, "returncode": returncode}
+            if returncode != 0:
+                raise RemoteAcceptanceError(f"erie-remote-ssh status command failed: {last_output.strip()}")
+            time.sleep(poll_s)
+        tail = self.tail_log(server, job_id, settings=active_settings, lines=40)
+        raise RemoteAcceptanceError(f"Detached remote job {job_id} did not finish within {max_wait_s or self.timeout}s.\n{tail}")
+
+    def tail_log(self, server: str, job_id: str, *, settings: Path | None = None, lines: int = 40) -> str:
+        active_settings = settings or self.settings
+        return self._run(["tail-log", "--settings", str(active_settings), "--server", server, "--job", job_id, "--lines", str(lines), "--timeout", str(self.timeout)])
+
     def _run(self, args: list[str]) -> str:
+        combined, returncode = self._run_with_returncode(args)
+        if returncode != 0:
+            raise RemoteAcceptanceError(f"erie-remote-ssh command failed ({args[0]}): {combined.strip()}")
+        return combined
+
+    def _run_with_returncode(self, args: list[str]) -> tuple[str, int]:
         env = os.environ.copy()
         env.update(self.config["python_env"])
         command = [sys.executable, str(self.script), *args]
         result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, timeout=max(self.timeout + 10, 30), check=False)
         combined = (result.stdout or "") + (result.stderr or "")
         _reject_decode_noise(combined)
-        if result.returncode != 0:
-            raise RemoteAcceptanceError(f"erie-remote-ssh command failed ({args[0]}): {combined.strip()}")
-        return combined
+        return combined, result.returncode
+
+
+def _resolve_topology(args: argparse.Namespace) -> dict[str, Any]:
+    single = bool(getattr(args, "server", None))
+    split_build = bool(getattr(args, "build_server", None))
+    split_validate = bool(getattr(args, "validate_server", None))
+    if single and (split_build or split_validate):
+        raise ValueError("Use either --server or the pair --build-server/--validate-server, not both.")
+    if split_build != split_validate:
+        raise ValueError("Split topology requires both --build-server and --validate-server.")
+    if split_build and split_validate:
+        return {
+            "topology": "split_build_validate",
+            "server": str(args.build_server),
+            "build_server": str(args.build_server),
+            "validate_server": str(args.validate_server),
+        }
+    if single:
+        return {"topology": "single_server", "server": str(args.server)}
+    raise ValueError("Provide either --server or both --build-server and --validate-server.")
 
 
 def _probe_vitis(server: str, settings: Path, helper: ErieHelper, profile: dict[str, Any]) -> dict[str, Any]:
@@ -262,6 +465,26 @@ def _probe_vitis(server: str, settings: Path, helper: ErieHelper, profile: dict[
             tool_path = line.split("=", 1)[1].strip()
             break
     return {"status": PASS_STATUS if tool_path else BLOCKED_VITIS_STATUS, "expected_tool": expected_tool, "tool_path": tool_path, "output": output}
+
+
+def _probe_fpga_presence(server: str, settings: Path, helper: ErieHelper) -> dict[str, Any]:
+    command = [
+        "bash",
+        "-lc",
+        "if lspci | grep -iq 'xilinx'; then printf 'fpga_present=yes\\n'; lspci | grep -i 'xilinx' | head -n 12; else printf 'fpga_present=no\\n'; fi",
+    ]
+    output = helper.exec(server, command, settings=settings)
+    _reject_decode_noise(output)
+    return {"status": PASS_STATUS if "fpga_present=yes" in output else BLOCKED_VITIS_STATUS, "output": output}
+
+
+def _probe_remote_workdir(server: str, settings: Path, helper: ErieHelper) -> str:
+    output = helper.exec(server, ["bash", "-lc", "pwd"], settings=settings)
+    _reject_decode_noise(output)
+    lines = [line.strip() for line in output.splitlines() if line.strip()]
+    if not lines:
+        raise RemoteAcceptanceError(f"Could not determine remote workdir for server {server}.")
+    return lines[-1]
 
 
 def _select_vitis_profile(args: argparse.Namespace, run_dir: Path, candidates: list[dict[str, Any]], fallback_profile: dict[str, Any]) -> dict[str, Any]:
@@ -303,6 +526,47 @@ def _select_vitis_profile(args: argparse.Namespace, run_dir: Path, candidates: l
         "expected_tool": str(fallback_profile["expected_tool"]),
         "target_part": str(fallback_profile.get("target_part", "")),
     }
+
+
+def _select_shared_vitis_version(args: argparse.Namespace, build_candidates: list[dict[str, Any]], validate_candidates: list[dict[str, Any]]) -> str:
+    if args.vitis_version:
+        return str(args.vitis_version)
+    shared = sorted({str(item.get("version")) for item in build_candidates} & {str(item.get("version")) for item in validate_candidates}, key=_version_sort_key)
+    if not shared:
+        raise RemoteAcceptanceError("No shared Vitis version is available across the selected build and validation servers.")
+    return shared[0]
+
+
+def _version_sort_key(value: str) -> tuple[int, ...]:
+    match = re.findall(r"\d+", str(value))
+    return tuple(int(item) for item in match) if match else (9999,)
+
+
+def _resolve_profile_for_version(server: str, candidates: list[dict[str, Any]], configured_profiles: dict[str, Any], version: str) -> dict[str, Any]:
+    saved = get_vitis_selection(server)
+    if saved and str(saved.get("version") or "") == version and str(saved.get("settings_script") or "").strip() and str(saved.get("expected_tool") or "").strip():
+        return saved
+    candidate = _find_candidate(candidates, version)
+    if candidate:
+        set_vitis_selection(server, candidate)
+        return candidate
+    for _, profile in configured_profiles.items():
+        if not isinstance(profile, dict):
+            continue
+        if str(profile.get("version") or "") == version and str(profile.get("settings_script") or "").strip() and str(profile.get("expected_tool") or "").strip():
+            return profile
+    raise RemoteAcceptanceError(f"Could not resolve Vitis profile for server {server!r} and version {version!r}.")
+
+
+def _resolve_target_part(args: argparse.Namespace, settings: Path, validate_server: str, validate_profile: dict[str, Any], build_profile: dict[str, Any]) -> str:
+    if str(getattr(args, "target_part", "") or "").strip():
+        return str(args.target_part).strip()
+    for profile in (validate_profile, build_profile, get_vitis_selection(validate_server) or {}):
+        target_part = str(profile.get("target_part") or "").strip() if isinstance(profile, dict) else ""
+        if target_part:
+            return target_part
+    inferred = _infer_target_part_from_server(settings, validate_server)
+    return inferred
 
 
 def _resolve_profile_config(
@@ -395,6 +659,7 @@ def _vitis_version_candidates(config: dict[str, Any], settings_path: Path, serve
     raw_server = _find_server_record(server_list, server)
     if not raw_server:
         return []
+    inferred_target_part = _infer_target_part_from_server_record(raw_server)
     scan = raw_server.get("software_scan", {})
     tools = scan.get("tools", {}) if isinstance(scan, dict) else {}
     vitis = tools.get("vitis", {}) if isinstance(tools, dict) else {}
@@ -413,7 +678,7 @@ def _vitis_version_candidates(config: dict[str, Any], settings_path: Path, serve
                 "version": version,
                 "settings_script": settings_script,
                 "expected_tool": "vitis_hls",
-                "target_part": str(item.get("target_part") or ""),
+                "target_part": str(item.get("target_part") or inferred_target_part or ""),
                 "install_path": install_path,
                 "executable_path": executable_path,
             }
@@ -432,6 +697,34 @@ def _find_server_record(server_list: dict[str, Any], server: str) -> dict[str, A
         if server in selectors:
             return item
     return None
+
+
+def _infer_target_part_from_server(settings_path: Path, server: str) -> str:
+    settings = json.loads(settings_path.read_text(encoding="utf-8"))
+    server_list_path = _resolve_erie_server_list(settings, settings_path, Path(remote_validation_config()["erie_skill_dir"]))
+    try:
+        server_list = json.loads(server_list_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return ""
+    record = _find_server_record(server_list, server)
+    if not record:
+        return ""
+    return _infer_target_part_from_server_record(record)
+
+
+def _infer_target_part_from_server_record(record: dict[str, Any]) -> str:
+    models: list[str] = []
+    for source_key in ("inventory_snapshot", "software_scan"):
+        source = record.get(source_key)
+        if not isinstance(source, dict):
+            continue
+        for item in source.get("fpga_devices", []) or []:
+            if isinstance(item, dict) and item.get("model"):
+                models.append(str(item["model"]))
+    normalized = " ".join(models).lower()
+    if "u55c" in normalized:
+        return "xcu55c-fsvh2892-2L-e"
+    return ""
 
 
 def _version_label(item: dict[str, Any]) -> str:
@@ -513,6 +806,61 @@ def _remote_vitis_command(remote_dir: str, profile: dict[str, Any], readiness: s
         "tar -xzf hls_artifacts.tar.gz && "
         f"HLS_SETTINGS_SCRIPT={settings_script} HLS_EXPECTED_TOOL={expected_tool} HLS_TARGET_PART={target_part} HLS_READINESS={readiness_arg} bash run_vitis.sh"
     )
+
+
+def _run_server_vitis_phase(
+    helper: ErieHelper,
+    settings: Path,
+    server: str,
+    profile: dict[str, Any],
+    readiness: str,
+    package_path: Path,
+    config: dict[str, Any],
+    run_dir: Path,
+    *,
+    phase_label: str,
+    cleanup_remote: bool,
+    remote_workdir: str,
+) -> dict[str, Any]:
+    remote_dir = f"{config['remote_tmp_dir']}/{run_dir.name}-{phase_label}"
+    remote_exec_dir = str(PurePosixPath(remote_workdir) / PurePosixPath(remote_dir))
+    request_paths: list[str] = []
+    request_paths.append(helper.request_and_run(settings, server, "mkdir", [remote_dir], f"prepare remote HLS {phase_label} directory"))
+    request_paths.extend(_transfer_package_by_request_commands(helper, settings, server, remote_dir, package_path))
+    command = _remote_vitis_command(remote_exec_dir, profile, readiness)
+    detached = helper.exec_detached(server, f"run Vitis HLS {phase_label}", command, settings=settings)
+    job_result = helper.wait_for_job(server, detached["job_id"], settings=settings, max_wait_s=max(helper.timeout, 1800))
+    request_paths.append(detached["manifest"])
+    if job_result["status"] != "succeeded":
+        tail = _safe_tail_log(helper, server, detached["job_id"], settings)
+        details = job_result["output"].strip()
+        raise RemoteAcceptanceError(
+            f"Detached Vitis HLS {phase_label} job failed for server {server}.\n{details}\n{tail}"
+        )
+    cleanup_performed = False
+    if cleanup_remote:
+        request_paths.append(helper.request_and_run(settings, server, "delete", [remote_dir, "--recursive"], f"cleanup remote HLS {phase_label} directory"))
+        cleanup_performed = True
+    return {
+        "status": PASS_STATUS,
+        "server": server,
+        "phase": phase_label,
+        "vitis_version": profile.get("version"),
+        "target_part": profile.get("target_part"),
+        "remote_dir": remote_dir,
+        "job_id": detached["job_id"],
+        "requests": request_paths,
+        "cleanup_performed": cleanup_performed,
+        "remote_artifacts_retained": not cleanup_performed,
+        "job_status": job_result["status"],
+    }
+
+
+def _safe_tail_log(helper: ErieHelper, server: str, job_id: str, settings: Path) -> str:
+    try:
+        return helper.tail_log(server, job_id, settings=settings, lines=80)
+    except RemoteAcceptanceError as exc:
+        return f"tail_log_unavailable: {exc}"
 
 
 def _remote_runner_script() -> str:
@@ -632,13 +980,27 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
-def _planned_steps(mode: str, server: str, profile: str, readiness: str, *, cleanup_remote: bool = False, example_spec: str = "") -> list[str]:
+def _planned_steps(
+    mode: str,
+    server: str,
+    profile: str,
+    readiness: str,
+    *,
+    cleanup_remote: bool = False,
+    example_spec: str = "",
+    validate_server: str | None = None,
+    topology: str = "single_server",
+) -> list[str]:
     steps = ["erie discover", "erie list", f"erie check {server}", f"erie workspace-check {server}"]
+    if topology == "split_build_validate" and validate_server:
+        steps.extend([f"erie check {validate_server}", f"erie workspace-check {validate_server}"])
     if mode == "link":
         steps.append("erie exec read-only UTF-8 link probe")
     else:
         profile_label = profile or "<user-configured-profile>"
         steps.extend([f"erie exec Vitis profile probe {profile_label}", f"generate local HLS mock artifacts from {example_spec or 'default example'}", "erie request mkdir", "erie request command payload transfer", f"erie request command Vitis {readiness}"])
+        if topology == "split_build_validate" and validate_server:
+            steps.extend(["erie exec validation server device probe", "erie request mkdir validation", "erie request command payload transfer validation", f"erie request command validation Vitis {readiness}"])
         if cleanup_remote:
             steps.append("erie request delete cleanup")
         else:
@@ -653,6 +1015,14 @@ def _parse_request_path(stdout: str) -> str:
     raise RemoteAcceptanceError(f"Could not find request path in erie output: {stdout}")
 
 
+def _field_from_output(output: str, key: str) -> str:
+    prefix = f"{key}: "
+    for line in output.splitlines():
+        if line.startswith(prefix):
+            return line.split(prefix, 1)[1].strip()
+    return ""
+
+
 def _reject_decode_noise(output: str) -> None:
     if "UnicodeDecodeError" in output or "_readerthread" in output:
         raise RemoteAcceptanceError(f"erie-remote-ssh output decoding failed. {UTF8_HINT}")
@@ -660,7 +1030,7 @@ def _reject_decode_noise(output: str) -> None:
 
 def _format_result(result: dict[str, Any]) -> str:
     lines = [f"status: {result.get('status')}"]
-    for key in ("mode", "server", "profile", "vitis_version", "readiness", "example_spec", "run_dir", "remote_dir", "remote_vitis_version_request", "remote_vitis_profile_request"):
+    for key in ("mode", "topology", "server", "build_server", "validate_server", "profile", "vitis_version", "readiness", "example_spec", "run_dir", "remote_dir", "remote_vitis_version_request", "remote_vitis_profile_request"):
         if result.get(key) is not None:
             lines.append(f"{key}: {result[key]}")
     if result.get("error"):

@@ -1,0 +1,91 @@
+{
+  "name": "reduction_tree_sum",
+  "target": "hls",
+  "design_requirements": {
+    "target": "hls",
+    "pipeline_required": true,
+    "streamability": "streamable",
+    "interface_family": "axi4",
+    "interface_profile": {
+      "axi4_variant": "axi4_full",
+      "role": "master",
+      "read_write_mode": "read_write",
+      "data_width": 32,
+      "addr_width": 32,
+      "id_width": 1,
+      "burst_support": false,
+      "clock_reset_domain": {
+        "clock": "i_axi_aclk",
+        "reset": "i_axi_arstn"
+      }
+    },
+    "confirmed_by_user": true,
+    "confirmation_notes": "Use a balanced reduction tree with an explicit accumulator type."
+  },
+  "streamability": "streamable",
+  "interface_family": "axi4",
+  "interface_profile": {
+    "axi4_variant": "axi4_full",
+    "role": "master",
+    "read_write_mode": "read_write",
+    "data_width": 32,
+    "addr_width": 32,
+    "id_width": 1,
+    "burst_support": false,
+    "clock_reset_domain": {
+      "clock": "i_axi_aclk",
+      "reset": "i_axi_arstn"
+    }
+  },
+  "pipeline_required": true,
+  "codegen_plan_required": true,
+  "description": "Reduce an AXI4 vector into a single scalar using a balanced tree-accumulation structure.",
+  "interfaces": {
+    "top_function": "reduction_tree_sum_kernel",
+    "arguments": [
+      {"name": "input", "type": "const ap_uint<32> *", "direction": "input", "interface": "m_axi", "bundle": "gmem0", "depth": 256},
+      {"name": "output", "type": "ap_uint<32> *", "direction": "output", "interface": "m_axi", "bundle": "gmem1", "depth": 1},
+      {"name": "length", "type": "int", "direction": "input", "interface": "s_axilite"}
+    ],
+    "control": "s_axilite"
+  },
+  "behavior": [
+    "Accumulate all valid input elements into output[0].",
+    "Use a small reduction tree so the accumulation structure remains reviewable.",
+    "Keep accumulator overflow assumptions explicit in comments."
+  ],
+  "clock": {"period_ns": 10.0, "uncertainty_ns": 1.0},
+  "reset": {"strategy": "tool_default"},
+  "constraints": [
+    "Use Vitis HLS compatible C++.",
+    "Avoid dynamic allocation and recursion.",
+    "Keep the reduction tree shape explicit."
+  ],
+  "outputs": [
+    {"path": "src/reduction_tree_sum_kernel.h", "kind": "header", "language": "cpp"},
+    {"path": "src/reduction_tree_sum_kernel.cpp", "kind": "source", "language": "cpp"},
+    {"path": "tb/reduction_tree_sum_kernel_tb.cpp", "kind": "testbench", "language": "cpp"},
+    {"path": "hls_config.cfg", "kind": "config", "language": "ini"}
+  ],
+  "notes": [],
+  "subfunctions": [],
+  "workflow": {},
+  "performance": {
+    "target_ii": 1,
+    "max_length": 256
+  },
+  "hls_profile": {
+    "example_pattern": "reduction_tree",
+    "allowed_libraries": ["ap_int.h"],
+    "required_headers": ["ap_int.h"],
+    "required_pragmas": ["#pragma HLS UNROLL factor=4"],
+    "required_metadata_fields": ["reduction_op", "accumulator_type", "tree_shape"],
+    "metadata": {
+      "reduction_op": "sum",
+      "accumulator_type": "ap_uint<32>",
+      "tree_shape": "balanced_4way"
+    },
+    "forbidden_combinations": [],
+    "required_cfg_entries": ["clock=10.0"]
+  }
+}

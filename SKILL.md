@@ -40,11 +40,12 @@ python -m runtime.hls_generator prompt --target hls --spec .\reports\hls\spec.js
 python -m runtime.hls_generator validate --target hls --spec .\reports\hls\spec.json --path .\reports\hls\generated --readiness static --no-external
 ```
 
-When local `vitis-run`/`vitis_hls` is missing, inspect the workflow's `remote_toolchain_request.json`, ask the user to choose a configured `erie-remote-ssh` server, then use the remote acceptance helper:
+When local `vitis-run`/`vitis_hls` is missing, inspect the workflow's `remote_toolchain_request.json`, ask the user to choose a configured `erie-remote-ssh` build server and, when needed, a separate validation server, then use the remote acceptance helper:
 
 ```powershell
 python .\scripts\remote_vitis_acceptance.py --mode link --server <erie-server>
 python .\scripts\remote_vitis_acceptance.py --mode vitis --server <erie-server> --profile <configured-profile> --readiness <execute|implement|cosim>
+python .\scripts\remote_vitis_acceptance.py --mode vitis --build-server <erie-build-server> --validate-server <erie-validate-server> --vitis-version <shared-version> --readiness <execute|implement|cosim>
 ```
 
 Remote Vitis acceptance refreshes erie software scan data. If multiple Vitis
@@ -56,6 +57,11 @@ If no remote Vitis profile has been configured and no previously saved remote
 selection provides the required tool path, expected tool, and target part,
 stop and ask the user to configure those values before continuing. Do not guess
 or fall back to a package default path.
+
+If the user chooses a split build/validate topology, keep the server choice in
+runtime arguments or user-local configuration only. Do not encode real server
+ids, hostnames, usernames, ports, or board-specific server defaults into the
+skill package.
 
 Vitis remote acceptance keeps the remote validation directory by default and reports
 `remote_dir` relative to the selected erie server workdir. Pass
@@ -71,11 +77,15 @@ deleted after a successful run.
 - Load `references/hls-optimization-patterns.md` before changing optimization examples, prompt pragma policy, report-driven tuning rules, or reusable HLS pattern guidance.
 - Load `references/hls-report-driven-optimization.md` before changing performance-goal framing, synthesis-report interpretation, or optimization-step sequencing.
 - Load `references/hls-modeling-strategy.md` before changing loop-bound handling, numeric-type guidance, pointer modeling, template/vector usage, or conditional pragma policy.
+- Load `references/hls-memory-burst-and-layout.md` before changing AXI4 burst policy, local memory layout, lane packing, or reusable buffer guidance.
 - Load `references/hls-task-parallel-strategy.md` before changing task-level parallelism guidance, channel semantics, restart behavior, or stream/dataflow positioning.
+- Load `references/hls-stencil-reduction-gemm-patterns.md` before changing stencil/window, reduction-tree, or tiled-GEMM guidance and templates.
+- Load `references/hls-advanced-library-patterns.md` before changing hls_task, hls_streamofblocks, hls_directio, or hls_fence guidance and validation.
 - Load `references/hls-device-migration-strategy.md` before changing target-part migration guidance, QoR comparison rules, or floating-point/fixed-point portability advice.
 - Load `references/hls-library-policy.md` before changing HLS include choices, advanced HLS library usage, or generated library examples.
 - Load `references/hls-comment-style.md` before changing generated C/C++ comment language, comment coverage, or comment validation rules.
-- Use `assets/examples/` for minimal HLS memory, stream, partition, dataflow, multi-`m_axi`, and numeric-strategy specs.
+- Use `assets/examples/` for minimal HLS memory, burst, stencil, reduction, tiled-GEMM, lane-packed, task-graph, stream-of-blocks, free-running, fence-ordering, stream, partition, dataflow, multi-`m_axi`, and numeric-strategy specs.
+- Use `assets/templates/` for reusable HLS JSON skeletons that already include `design_requirements`, `interface_profile`, `performance`, `hls_profile`, and confirmation notes.
 
 ## Boundaries
 

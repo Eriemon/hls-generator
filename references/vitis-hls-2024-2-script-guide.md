@@ -1,4 +1,4 @@
-# Vitis HLS 2024.2 Script Guide
+# Vitis HLS 2022.2+ Script Guide
 
 This reference distills imported Vitis HLS scripting notes into stable rules for this HLS-only skill. Load it when changing Vitis command execution, `.cfg` parsing, Tcl rendering, prompt rules, or validation policy.
 
@@ -85,7 +85,7 @@ Reject these in generated code/config/scripts:
 - Dynamic allocation, exceptions, RTTI, unsupported STL containers, and variable-length stack arrays in kernel code.
 - Kernel-only synthesizability restrictions must not be blindly applied to C++ testbench files.
 - C arbitrary-precision types. Use C++ with `ap_int.h`, `ap_fixed.h`, and `hls_stream.h`.
-- Obsolete `-std=c++0x` flags in Vitis HLS 2024.2 Clang-based flows.
+- Obsolete `-std=c++0x` flags in modern Vitis HLS 2022.2+ Clang-based flows.
 
 ## Out-of-Scope Script Surfaces
 

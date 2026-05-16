@@ -69,6 +69,7 @@ def main() -> int:
             _run_extraction_safety_checks(base)
             _run_copyright_gate_checks(base)
             _run_example_coverage(base)
+            _run_pattern_negative_checks(base)
             _run_ug_reference_integration_checks(base)
             _run_confidence_loop_checks(base)
             _run_release_packaging_checks(base)
@@ -219,7 +220,7 @@ def _run_prompt_and_static_validation(base: Path, artifact_dir: Path) -> None:
     assert "Vitis HLS implementation generation" in text
     assert "Return only fenced code blocks" in text
     assert "Create HLS C/C++ source, header, self-checking testbench, and cfg artifacts." in text
-    assert "Vitis HLS 2024.2" in text
+    assert "Vitis HLS 2022.2+" in text
     assert "vitis-developer" in text
     assert "vitis-hls-synthesis" in text
     assert "DATA_PACK" in text and "set_directive_resource" in text
@@ -675,10 +676,19 @@ def _run_missing_toolchain_workflow(base: Path) -> None:
 def _run_example_coverage(base: Path) -> None:
     pattern_expectations = {
         "hls_vector_scale_mock_spec.json": ["#pragma HLS PIPELINE", "bundle=gmem0"],
+        "hls_axi4_burst_vector_scale_spec.json": ["#pragma HLS PIPELINE", "[interface]", "m_axi_max_read_burst_length=32"],
         "hls_axis_increment_spec.json": ["#pragma HLS INTERFACE axis", "hls::stream"],
         "hls_partition_vector_scale_spec.json": ["#pragma HLS ARRAY_PARTITION", "local_buf"],
         "hls_array_reshape_vector_scale_spec.json": ["#pragma HLS ARRAY_RESHAPE", "wide_buf"],
         "hls_dataflow_axis_spec.json": ["#pragma HLS DATAFLOW", "read_dataflow_axis_increment", "compute_dataflow_axis_increment", "write_dataflow_axis_increment", "#pragma HLS STREAM variable=mid_stream depth=16"],
+        "hls_task_graph_axis_spec.json": ["#include <hls_task.h>", "#pragma HLS DATAFLOW", "task_stream", "task_result_stream", "hls::task compute_stage", "load_task_graph_memory_increment", "store_task_graph_memory_increment", "#pragma HLS PIPELINE II=1 style=flp"],
+        "hls_streamofblocks_axis_spec.json": ["#include <hls_streamofblocks.h>", "block_buf", "#pragma HLS DATAFLOW"],
+        "hls_directio_freerun_axis_spec.json": ["#pragma HLS INTERFACE ap_ctrl_none port=return", "#pragma HLS INTERFACE axis port=in_stream", "#pragma HLS INTERFACE axis port=out_stream"],
+        "hls_fence_ordering_spec.json": ["#include <hls_fence.h>", "ordered_writeback"],
+        "hls_line_buffer_stencil_spec.json": ["line_buf", "#pragma HLS ARRAY_PARTITION variable=line_buf complete dim=1"],
+        "hls_reduction_tree_sum_spec.json": ["tree_accum", "#pragma HLS UNROLL factor=4"],
+        "hls_tiled_gemm_spec.json": ["tile_a", "tile_b", "#pragma HLS ARRAY_PARTITION variable=tile_a complete dim=1"],
+        "hls_vector_lane_add_spec.json": ["#include <hls_vector.h>", "lane_buf_a", "#pragma HLS UNROLL factor=4"],
         "hls_multi_m_axi_add_spec.json": ["bundle=gmem_a", "bundle=gmem_b", "bundle=gmem_out"],
         "hls_fixed_point_scale_spec.json": ["ap_fixed<16,8, AP_RND, AP_SAT>", "ap_fixed<16,4, AP_RND, AP_SAT>"],
     }
@@ -692,9 +702,51 @@ def _run_example_coverage(base: Path) -> None:
         assert report["ok"] is True, report
         assert report["errors"] == 0, report
         assert report["warnings"] == 0, report
-        source_text = "\n".join(path.read_text(encoding="utf-8") for path in sorted((artifact_dir / "src").glob("*.cpp")))
+        source_text = "\n".join(path.read_text(encoding="utf-8") for path in sorted((artifact_dir / "src").glob("*")))
         for marker in expected_markers:
-            assert marker in source_text, (name, marker, source_text)
+            full_text = source_text + "\n" + (artifact_dir / "hls_config.cfg").read_text(encoding="utf-8")
+            assert marker in full_text, (name, marker, full_text)
+
+
+def _run_pattern_negative_checks(base: Path) -> None:
+    burst_spec = _load_spec("hls_axi4_burst_vector_scale_spec.json")
+    burst_spec["interface_profile"].pop("max_burst_len", None)
+    burst_spec["design_requirements"]["interface_profile"].pop("max_burst_len", None)
+    burst_spec["hls_profile"]["metadata"].pop("burst_max_len", None)
+    _expect_error(
+        lambda: run_hls_workflow(burst_spec, out_dir=base / "negative-burst", provider_name="mock", readiness="static", run_external=False),
+        ValueError,
+        "max_burst_len",
+    )
+
+    task_spec = _load_spec("hls_task_graph_axis_spec.json")
+    task_spec["hls_profile"]["metadata"].pop("restart_semantics", None)
+    task_result = run_hls_workflow(task_spec, out_dir=base / "negative-task", provider_name="mock", readiness="static", run_external=False)
+    assert task_result["status"] == "blocked_human", task_result
+
+    vector_spec = _load_spec("hls_vector_lane_add_spec.json")
+    vector_spec["hls_profile"]["metadata"].pop("lane_width", None)
+    vector_result = run_hls_workflow(vector_spec, out_dir=base / "negative-vector-lane", provider_name="mock", readiness="static", run_external=False)
+    assert vector_result["status"] == "blocked_human", vector_result
+
+    directio_spec = _load_spec("hls_directio_freerun_axis_spec.json")
+    directio_spec["hls_profile"]["metadata"].pop("free_running", None)
+    directio_result = run_hls_workflow(directio_spec, out_dir=base / "negative-directio", provider_name="mock", readiness="static", run_external=False)
+    assert directio_result["status"] == "blocked_human", directio_result
+
+    stencil_run = base / "negative-stencil"
+    stencil_result = run_hls_workflow(_load_spec("hls_line_buffer_stencil_spec.json"), out_dir=stencil_run, provider_name="mock", readiness="static", run_external=False)
+    assert stencil_result["status"] == "passed", stencil_result
+    stencil_artifact_dir = stencil_run / "attempt-001" / "hls" / "artifacts"
+    stencil_source = stencil_artifact_dir / "src" / "line_buffer_stencil_kernel.cpp"
+    stencil_source.write_text(
+        stencil_source.read_text(encoding="utf-8") + "\n#pragma HLS ARRAY_RESHAPE variable=line_buf complete dim=1\n",
+        encoding="utf-8",
+    )
+    stencil_report = validate_hls_artifacts(_load_spec("hls_line_buffer_stencil_spec.json"), stencil_artifact_dir, readiness="static", run_external=False)
+    assert stencil_report["ok"] is False, stencil_report
+    stencil_messages = "\n".join(issue["message"] for issue in stencil_report["issues"])
+    assert "line buffer" in stencil_messages.lower(), stencil_messages
 
 
 def _run_copyright_gate_checks(base: Path) -> None:
@@ -723,6 +775,9 @@ def _run_ug_reference_integration_checks(base: Path) -> None:
     migration_text = (ROOT / "references" / "hls-device-migration-strategy.md").read_text(encoding="utf-8")
     modeling_text = (ROOT / "references" / "hls-modeling-strategy.md").read_text(encoding="utf-8")
     parallel_text = (ROOT / "references" / "hls-task-parallel-strategy.md").read_text(encoding="utf-8")
+    memory_text = (ROOT / "references" / "hls-memory-burst-and-layout.md").read_text(encoding="utf-8")
+    stencil_text = (ROOT / "references" / "hls-stencil-reduction-gemm-patterns.md").read_text(encoding="utf-8")
+    advanced_text = (ROOT / "references" / "hls-advanced-library-patterns.md").read_text(encoding="utf-8")
     assert "optimization class" in optimization_text.lower()
     assert "ii violation" in report_text.lower()
     assert "qor" in migration_text.lower()
@@ -731,6 +786,14 @@ def _run_ug_reference_integration_checks(base: Path) -> None:
     assert "control-driven" in parallel_text.lower()
     assert "data-driven" in parallel_text.lower()
     assert "stable generated path" in parallel_text.lower()
+    assert "burst" in memory_text.lower()
+    assert "lane width" in memory_text.lower()
+    assert "stencil" in stencil_text.lower()
+    assert "reduction" in stencil_text.lower()
+    assert "gemm" in stencil_text.lower()
+    assert "hls_task.h" in advanced_text.lower()
+    assert "hls_directio.h" in advanced_text.lower()
+    assert "hls_fence.h" in advanced_text.lower()
     assert "vitis-hls-introductory-examples" not in modeling_text.lower()
     assert "vitis-hls-introductory-examples" not in parallel_text.lower()
 
@@ -1074,7 +1137,7 @@ def _run_release_packaging_checks(base: Path) -> None:
 
     dist_root = base / "release-dist"
     valid = REAL_SUBPROCESS_RUN(
-        [sys.executable, str(script), "--version", "0.1.8", "--dist-root", str(dist_root)],
+        [sys.executable, str(script), "--version", "0.1.9", "--dist-root", str(dist_root)],
         cwd=ROOT.parent,
         capture_output=True,
         text=True,

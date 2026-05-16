@@ -5,6 +5,8 @@ from __future__ import annotations
 import copy
 from typing import Any
 
+from .patterns import pattern_definition, pattern_open_questions
+
 STREAMABILITY_VALUES = ("streamable", "non_streamable", "unknown")
 INTERFACE_FAMILIES = ("native", "axi_stream", "axi4", "custom")
 AXI4_VARIANTS = ("axi4_full", "axi4_lite")
@@ -310,6 +312,9 @@ def _codegen_open_questions(spec: dict[str, Any]) -> list[str]:
             questions.append("Confirm the AXI4 full id width.")
         if profile.get("burst_support") is True and "max_burst_len" not in profile:
             questions.append("Confirm the AXI4 maximum burst length.")
+    for question in pattern_open_questions(spec):
+        if question not in questions:
+            questions.append(question)
     for issue in _requirement_confirmation_issues(spec, require_confirmed=False):
         if issue not in questions:
             questions.append(issue)
@@ -328,4 +333,7 @@ def _syntax_risk_checks(spec: dict[str, Any]) -> list[str]:
         checks.append("Preserve confirmed AXI-Stream ready/last/data-width semantics.")
     if spec.get("interface_family") == "axi4":
         checks.append("Preserve confirmed AXI4 variant, role, widths, and burst policy.")
+    definition = pattern_definition(spec)
+    if definition.get("label"):
+        checks.append(f"Preserve the confirmed {definition['label']} pattern metadata and keep comments aligned with it.")
     return checks

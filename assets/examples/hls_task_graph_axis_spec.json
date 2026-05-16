@@ -1,0 +1,96 @@
+{
+  "name": "task_graph_memory_increment",
+  "target": "hls",
+  "design_requirements": {
+    "target": "hls",
+    "pipeline_required": true,
+    "streamability": "streamable",
+    "interface_family": "axi4",
+    "interface_profile": {
+      "axi4_variant": "axi4_full",
+      "role": "master",
+      "read_write_mode": "read_write",
+      "data_width": 32,
+      "addr_width": 32,
+      "id_width": 1,
+      "burst_support": false,
+      "clock_reset_domain": {
+        "clock": "i_axi_aclk",
+        "reset": "i_axi_arstn"
+      }
+    },
+    "confirmed_by_user": true,
+    "confirmation_notes": "Use a memory-backed task graph with explicit restart semantics, channel depth, and ownership."
+  },
+  "streamability": "streamable",
+  "interface_family": "axi4",
+  "interface_profile": {
+    "axi4_variant": "axi4_full",
+    "role": "master",
+    "read_write_mode": "read_write",
+    "data_width": 32,
+    "addr_width": 32,
+    "id_width": 1,
+    "burst_support": false,
+    "clock_reset_domain": {
+      "clock": "i_axi_aclk",
+      "reset": "i_axi_arstn"
+    }
+  },
+  "pipeline_required": true,
+  "codegen_plan_required": true,
+  "description": "Increment memory-backed values using a task-graph style decomposition.",
+  "interfaces": {
+    "top_function": "task_graph_memory_increment_kernel",
+    "arguments": [
+      {"name": "input", "type": "const ap_uint<32> *", "direction": "input", "interface": "m_axi", "bundle": "gmem0"},
+      {"name": "output", "type": "ap_uint<32> *", "direction": "output", "interface": "m_axi", "bundle": "gmem1"},
+      {"name": "length", "type": "int", "direction": "input", "interface": "s_axilite"}
+    ],
+    "control": "s_axilite"
+  },
+  "behavior": [
+    "Read each input element, increment it by one inside a task actor, and store the result to output memory.",
+    "Keep task boundaries and channel ownership visible in comments.",
+    "Preserve a channel depth of 16 between load, compute, and store stages."
+  ],
+  "clock": {"period_ns": 8.0, "uncertainty_ns": 0.8},
+  "reset": {"strategy": "tool_default"},
+  "constraints": [
+    "Use hls_task metadata only when restart and ownership semantics are explicit.",
+    "For current factual validation, prefer memory-backed task graphs over top-level AXI-Stream task graphs.",
+    "Avoid global-state coupling inside the task graph."
+  ],
+  "outputs": [
+    {"path": "src/task_graph_memory_increment_kernel.h", "kind": "header", "language": "cpp"},
+    {"path": "src/task_graph_memory_increment_kernel.cpp", "kind": "source", "language": "cpp"},
+    {"path": "tb/task_graph_memory_increment_kernel_tb.cpp", "kind": "testbench", "language": "cpp"},
+    {"path": "hls_config.cfg", "kind": "config", "language": "ini"}
+  ],
+  "notes": [],
+  "subfunctions": [],
+  "workflow": {},
+  "performance": {
+    "target_ii": 1
+  },
+  "hls_profile": {
+    "example_pattern": "task_graph",
+    "allowed_libraries": ["ap_int.h", "hls_stream.h", "hls_task.h"],
+    "required_headers": ["hls_task.h"],
+    "required_pragmas": [
+      "#pragma HLS DATAFLOW",
+      "#pragma HLS INTERFACE m_axi port=input bundle=gmem0",
+      "#pragma HLS INTERFACE m_axi port=output bundle=gmem1",
+      "#pragma HLS STREAM variable=task_stream depth=16",
+      "#pragma HLS PIPELINE II=1 style=flp"
+    ],
+    "required_metadata_fields": ["restart_semantics", "channel_depth", "channel_ownership"],
+    "metadata": {
+      "restart_semantics": "per_transaction_restart",
+      "channel_depth": 16,
+      "channel_ownership": "load_stage -> compute_stage -> store_stage"
+    },
+    "forbidden_combinations": [],
+    "required_cfg_entries": ["clock=8.0"]
+  }
+}

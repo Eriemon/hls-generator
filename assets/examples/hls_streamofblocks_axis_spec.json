@@ -1,0 +1,81 @@
+{
+  "name": "streamofblocks_axis_increment",
+  "target": "hls",
+  "design_requirements": {
+    "target": "hls",
+    "pipeline_required": true,
+    "streamability": "streamable",
+    "interface_family": "axi_stream",
+    "interface_profile": {
+      "keep_ready": true,
+      "keep_last": false,
+      "data_width": 32,
+      "clock_reset_domain": {
+        "clock": "ap_clk",
+        "reset": "ap_rst_n"
+      }
+    },
+    "confirmed_by_user": true,
+    "confirmation_notes": "Use block-stream semantics with a fixed block size of 4."
+  },
+  "streamability": "streamable",
+  "interface_family": "axi_stream",
+  "interface_profile": {
+    "keep_ready": true,
+    "keep_last": false,
+    "data_width": 32,
+    "clock_reset_domain": {
+      "clock": "ap_clk",
+      "reset": "ap_rst_n"
+    }
+  },
+  "pipeline_required": true,
+  "codegen_plan_required": true,
+  "description": "Increment AXI-Stream data in fixed-size blocks backed by block-stream metadata.",
+  "interfaces": {
+    "top_function": "streamofblocks_axis_increment_kernel",
+    "arguments": [
+      {"name": "in_stream", "type": "hls::stream<ap_uint<32> >&", "direction": "input", "interface": "axis"},
+      {"name": "out_stream", "type": "hls::stream<ap_uint<32> >&", "direction": "output", "interface": "axis"},
+      {"name": "length", "type": "int", "direction": "input", "interface": "s_axilite"}
+    ],
+    "control": "s_axilite"
+  },
+  "behavior": [
+    "Process stream input in blocks of 4 elements.",
+    "Keep block ownership explicit in comments and helper names.",
+    "Emit one incremented output token for each input token."
+  ],
+  "clock": {"period_ns": 8.0, "uncertainty_ns": 0.8},
+  "reset": {"strategy": "tool_default"},
+  "constraints": [
+    "Use block-stream metadata only when block size and ownership are explicit.",
+    "Avoid hidden state sharing across block-processing stages."
+  ],
+  "outputs": [
+    {"path": "src/streamofblocks_axis_increment_kernel.h", "kind": "header", "language": "cpp"},
+    {"path": "src/streamofblocks_axis_increment_kernel.cpp", "kind": "source", "language": "cpp"},
+    {"path": "tb/streamofblocks_axis_increment_kernel_tb.cpp", "kind": "testbench", "language": "cpp"},
+    {"path": "hls_config.cfg", "kind": "config", "language": "ini"}
+  ],
+  "notes": [],
+  "subfunctions": [],
+  "workflow": {},
+  "performance": {
+    "target_ii": 1,
+    "block_size": 4
+  },
+  "hls_profile": {
+    "example_pattern": "streamofblocks",
+    "allowed_libraries": ["ap_int.h", "hls_stream.h", "hls_streamofblocks.h"],
+    "required_headers": ["hls_streamofblocks.h"],
+    "required_pragmas": ["#pragma HLS DATAFLOW"],
+    "required_metadata_fields": ["block_size", "block_ownership"],
+    "metadata": {
+      "block_size": 4,
+      "block_ownership": "reader owns input blocks; writer owns output blocks"
+    },
+    "forbidden_combinations": [],
+    "required_cfg_entries": ["clock=8.0"]
+  }
+}

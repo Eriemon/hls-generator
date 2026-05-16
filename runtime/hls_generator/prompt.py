@@ -7,6 +7,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 from .config import resolve_vitis_skill_preference
+from .patterns import pattern_prompt_rules, required_pattern_headers
 from .spec import normalize_spec
 from .user_config import COMMENT_LANGUAGES, require_comment_language
 from .vectors import VECTOR_HASH_TAG
@@ -217,8 +218,10 @@ Example fence header:
 
 
 def _hls_rules(spec: dict[str, Any], comment_language: str, hls_profile: dict[str, Any]) -> list[str]:
+    pattern_rules = pattern_prompt_rules(spec)
+    required_headers = required_pattern_headers(hls_profile)
     rules = [
-        "Target Vitis HLS 2024.2 compatible C/C++ and script/config artifacts.",
+        "Target Vitis HLS 2022.2+ compatible C/C++ and script/config artifacts.",
         "Use the stable Tcl/.cfg execution flow only; do not generate alternate execution-flow artifacts.",
         "Implement the top function named exactly as interfaces.top_function when present; otherwise use spec.name.",
         "Use fixed-width ap_int/ap_uint/ap_fixed types where they improve hardware intent.",
@@ -246,6 +249,8 @@ def _hls_rules(spec: dict[str, Any], comment_language: str, hls_profile: dict[st
         *_vitis_skill_rules(),
         *_performance_rules_for(spec),
         *_hls_profile_rules(hls_profile),
+        *_required_header_rules(required_headers),
+        *pattern_rules,
         *_comment_rules_for(comment_language),
     ]
     return rules
@@ -403,8 +408,16 @@ def _hls_profile_rules(profile: dict[str, Any]) -> list[str]:
         return []
     return [
         "Honor the explicit hls_profile compatibility rules for interfaces, pragma policy, memory policy, and forbidden C++ features.",
+        "Treat hls_profile.required_metadata_fields as mandatory design facts that must be reflected in comments, pragmas, and cfg behavior.",
         f"HLS profile: {json.dumps(profile, ensure_ascii=False, sort_keys=True)}",
     ]
+
+
+def _required_header_rules(required_headers: list[str]) -> list[str]:
+    if not required_headers:
+        return []
+    headers = ", ".join(required_headers)
+    return [f"Include and justify the required HLS headers for this pattern: {headers}."]
 
 
 def _vector_contract_rules(vector_contract: dict[str, Any] | None) -> list[str]:

@@ -1,0 +1,90 @@
+{
+  "name": "template_task_graph_memory_kernel",
+  "target": "hls",
+  "design_requirements": {
+    "target": "hls",
+    "pipeline_required": true,
+    "streamability": "streamable",
+    "interface_family": "axi4",
+    "interface_profile": {
+      "axi4_variant": "axi4_full",
+      "role": "master",
+      "read_write_mode": "read_write",
+      "data_width": 32,
+      "addr_width": 32,
+      "id_width": 1,
+      "burst_support": false,
+      "clock_reset_domain": {
+        "clock": "i_axi_aclk",
+        "reset": "i_axi_arstn"
+      }
+    },
+    "confirmed_by_user": true,
+    "confirmation_notes": "Task boundaries, restart semantics, channel ownership, and the memory-backed transaction surface have been confirmed."
+  },
+  "streamability": "streamable",
+  "interface_family": "axi4",
+  "interface_profile": {
+    "axi4_variant": "axi4_full",
+    "role": "master",
+    "read_write_mode": "read_write",
+    "data_width": 32,
+    "addr_width": 32,
+    "id_width": 1,
+    "burst_support": false,
+    "clock_reset_domain": {
+      "clock": "i_axi_aclk",
+      "reset": "i_axi_arstn"
+    }
+  },
+  "pipeline_required": true,
+  "codegen_plan_required": true,
+  "description": "Template for a memory-backed task-graph kernel.",
+  "interfaces": {
+    "top_function": "template_task_graph_memory_kernel",
+    "arguments": [
+      {"name": "input", "type": "const ap_uint<32> *", "direction": "input", "interface": "m_axi", "bundle": "gmem0"},
+      {"name": "output", "type": "ap_uint<32> *", "direction": "output", "interface": "m_axi", "bundle": "gmem1"},
+      {"name": "length", "type": "int", "direction": "input", "interface": "s_axilite"}
+    ],
+    "control": "s_axilite"
+  },
+  "behavior": ["Replace these sample semantics with the confirmed memory-backed task-graph behavior."],
+  "clock": {"period_ns": 8.0, "uncertainty_ns": 0.8},
+  "reset": {"strategy": "tool_default"},
+  "constraints": [
+    "Only use hls_task.h when ownership and restart semantics are explicit.",
+    "Task actors must use a flushing or free-running pipeline style to avoid deadlock-prone scheduling.",
+    "For current factual validation, prefer memory-backed task graphs over top-level AXI-Stream task graphs."
+  ],
+  "outputs": [
+    {"path": "src/template_task_graph_memory_kernel.h", "kind": "header", "language": "cpp"},
+    {"path": "src/template_task_graph_memory_kernel.cpp", "kind": "source", "language": "cpp"},
+    {"path": "tb/template_task_graph_memory_kernel_tb.cpp", "kind": "testbench", "language": "cpp"},
+    {"path": "hls_config.cfg", "kind": "config", "language": "ini"}
+  ],
+  "notes": [],
+  "subfunctions": [],
+  "workflow": {},
+  "performance": {"target_ii": 1},
+  "hls_profile": {
+    "example_pattern": "task_graph",
+    "allowed_libraries": ["ap_int.h", "hls_stream.h", "hls_task.h"],
+    "required_headers": ["hls_task.h"],
+    "required_pragmas": [
+      "#pragma HLS DATAFLOW",
+      "#pragma HLS INTERFACE m_axi port=input bundle=gmem0",
+      "#pragma HLS INTERFACE m_axi port=output bundle=gmem1",
+      "#pragma HLS STREAM variable=task_stream depth=16",
+      "#pragma HLS PIPELINE II=1 style=flp"
+    ],
+    "required_metadata_fields": ["restart_semantics", "channel_depth", "channel_ownership"],
+    "metadata": {
+      "restart_semantics": "per_transaction_restart",
+      "channel_depth": 16,
+      "channel_ownership": "load_stage -> compute_stage -> store_stage"
+    },
+    "forbidden_combinations": [],
+    "required_cfg_entries": ["clock=8.0"]
+  }
+}

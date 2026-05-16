@@ -1,11 +1,11 @@
-"""Vitis HLS 2024.2 command and source compatibility rules."""
+"""Vitis HLS 2022.2+ command and source compatibility rules."""
 
 from __future__ import annotations
 
 import re
 from typing import Any
 
-ALLOWED_INTERFACE_MODES = frozenset({"ap_ctrl_none", "ap_ctrl_hs", "ap_fifo", "ap_memory", "axis", "m_axi", "s_axilite"})
+ALLOWED_INTERFACE_MODES = frozenset({"ap_ctrl_none", "ap_ctrl_hs", "ap_fifo", "ap_memory", "ap_none", "axis", "m_axi", "s_axilite"})
 ALLOWED_CONFIG_COMMANDS = frozenset({"config_compile", "config_interface", "config_rtl", "config_dataflow", "config_csim", "config_cosim", "config_schedule", "config_export"})
 ALLOWED_CONFIG_OPTIONS = {
     "compile": frozenset({"pipeline_loops", "enable_auto_rewind", "pipeline_style", "unsafe_math_optimizations"}),
@@ -44,7 +44,7 @@ DEPRECATED_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"\bset_directive_resource\b", "Deprecated Vitis HLS command `set_directive_resource` is not allowed; use bind_op or bind_storage."),
     (r"#pragma\s+HLS\s+DATA_PACK\b", "Deprecated Vitis HLS pragma `DATA_PACK` is not allowed; use AGGREGATE."),
     (r"[\"<]hls_linear_algebra\.h[\">]", "Deprecated Vitis HLS header `hls_linear_algebra.h` is not allowed."),
-    (r"\b-std=c\+\+0x\b", "Obsolete C++ flag `-std=c++0x` is not suitable for the Vitis HLS 2024.2 Clang flow."),
+    (r"\b-std=c\+\+0x\b", "Obsolete C++ flag `-std=c++0x` is not suitable for modern Vitis HLS 2022.2+ Clang-based flows."),
 )
 
 VARIABLE_LENGTH_ARRAY_PATTERN = r"\b[A-Za-z_][A-Za-z0-9_:<>]*\s+[A-Za-z_][A-Za-z0-9_]*\s*\[[A-Za-z_][A-Za-z0-9_]*\]\s*;"

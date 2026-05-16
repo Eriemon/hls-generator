@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol, Sequence
 
+from .patterns import required_pattern_headers
 from .reference_contract import REFERENCE_RESULT_TAG
 from .vectors import VECTOR_HASH_TAG
 
@@ -255,7 +256,83 @@ def _mock_vectors(spec: dict[str, Any]) -> list[dict[str, Any]]:
     configured = (spec.get("workflow") or {}).get("mock_vectors")
     if isinstance(configured, list) and configured:
         return configured
+    pattern = _example_pattern(spec)
     arguments = {str(item.get("name")): item for item in spec.get("interfaces", {}).get("arguments", []) if isinstance(item, dict) and item.get("name")}
+    if pattern == "line_buffer_stencil":
+        return [
+            {
+                "id": "case_nominal",
+                "inputs": {"input": [1, 2, 3, 4], "length": 4},
+                "expected_outputs": {"output": [4, 6, 9, 11]},
+                "checkpoints": {"length": 4, "first_output": 4},
+            },
+            {
+                "id": "case_boundary",
+                "inputs": {"input": [5, 1], "length": 2},
+                "expected_outputs": {"output": [11, 7]},
+                "checkpoints": {"length": 2, "first_output": 11},
+            },
+        ]
+    if pattern == "reduction_tree":
+        return [
+            {
+                "id": "case_nominal",
+                "inputs": {"input": [1, 2, 3, 4], "length": 4},
+                "expected_outputs": {"output": [10]},
+                "checkpoints": {"length": 4, "first_output": 10},
+            },
+            {
+                "id": "case_boundary",
+                "inputs": {"input": [9], "length": 1},
+                "expected_outputs": {"output": [9]},
+                "checkpoints": {"length": 1, "first_output": 9},
+            },
+        ]
+    if pattern == "tiled_gemm":
+        return [
+            {
+                "id": "case_nominal",
+                "inputs": {"input_a": [1, 2, 3, 4], "input_b": [5, 6, 7, 8], "length": 4},
+                "expected_outputs": {"output": [5, 12, 21, 32]},
+                "checkpoints": {"length": 4, "first_output": 5},
+            },
+            {
+                "id": "case_boundary",
+                "inputs": {"input_a": [2, 0], "input_b": [4, 9], "length": 2},
+                "expected_outputs": {"output": [8, 0]},
+                "checkpoints": {"length": 2, "first_output": 8},
+            },
+        ]
+    if pattern == "task_graph" and {"input", "output", "length"}.issubset(arguments):
+        return [
+            {
+                "id": "case_nominal",
+                "inputs": {"input": [1, 2, 3], "length": 3},
+                "expected_outputs": {"output": [2, 3, 4]},
+                "checkpoints": {"length": 3, "first_output": 2},
+            },
+            {
+                "id": "case_boundary",
+                "inputs": {"input": [0, 15], "length": 2},
+                "expected_outputs": {"output": [1, 16]},
+                "checkpoints": {"length": 2, "first_output": 1},
+            },
+        ]
+    if pattern == "directio_freerun" and {"in_stream", "out_stream"}.issubset(arguments):
+        return [
+            {
+                "id": "case_nominal",
+                "inputs": {"in_stream": [1, 2, 3]},
+                "expected_outputs": {"out_stream": [2, 3, 4]},
+                "checkpoints": {"token_count": 3, "first_output": 2},
+            },
+            {
+                "id": "case_boundary",
+                "inputs": {"in_stream": [0, 15]},
+                "expected_outputs": {"out_stream": [1, 16]},
+                "checkpoints": {"token_count": 2, "first_output": 1},
+            },
+        ]
     if {"input", "output", "scale", "length"}.issubset(arguments):
         return [
             {
@@ -322,6 +399,9 @@ def run_case(case):
         length = int(inputs["length"])
         scale = int(inputs["scale"])
         return {{"output": [int(value) * scale for value in list(inputs["input"])[:length]]}}
+    if "input" in inputs and "length" in inputs:
+        length = int(inputs["length"])
+        return {{"output": [int(value) + 1 for value in list(inputs["input"])[:length]]}}
     if all(key in inputs for key in ("input_a", "input_b", "length")):
         length = int(inputs["length"])
         return {{"output": [int(a) + int(b) for a, b in zip(list(inputs["input_a"])[:length], list(inputs["input_b"])[:length])]}}
@@ -354,7 +434,14 @@ if __name__ == "__main__":
 
 def _mock_hls_header_text(spec: dict[str, Any], comment_language: str) -> str:
     top = str(spec.get("interfaces", {}).get("top_function") or spec.get("name") or "kernel")
-    return "#pragma once\n#include <ap_fixed.h>\n#include <ap_int.h>\n#include <hls_stream.h>\n\n" + f"// {_comment(comment_language, 'Vitis HLS top function declaration.', 'Vitis HLS 顶层函数声明。')}\nvoid {top}({_cpp_arguments(spec)});\n"
+    headers = ["ap_fixed.h", "ap_int.h"]
+    for header in required_pattern_headers(spec):
+        if header not in headers:
+            headers.append(header)
+    if "hls_stream.h" not in headers:
+        headers.append("hls_stream.h")
+    include_block = "".join(f"#include <{header}>\n" for header in headers)
+    return "#pragma once\n" + include_block + "\n" + f"// {_comment(comment_language, 'Vitis HLS top function declaration.', 'Vitis HLS 顶层函数声明。')}\nvoid {top}({_cpp_arguments(spec)});\n"
 
 
 def _mock_hls_source_text(spec: dict[str, Any], header_name: str, comment_language: str) -> str:
@@ -374,31 +461,101 @@ void {top}({_cpp_arguments(spec)}) {{
 
 
 def _mock_hls_helpers_text(spec: dict[str, Any], comment_language: str) -> str:
-    if _example_pattern(spec) != "dataflow":
+    pattern = _example_pattern(spec)
+    if pattern not in {"dataflow", "task_graph"}:
         return ""
     name = str(spec.get("name") or "kernel")
-    return f'''static void read_{name}(hls::stream<ap_uint<32> >& in_stream, hls::stream<ap_uint<32> >& mid_stream, int length) {{
+    arg_names = {
+        str(item.get("name"))
+        for item in spec.get("interfaces", {}).get("arguments", [])
+        if isinstance(item, dict) and item.get("name")
+    }
+    stream_name = "task_stream" if pattern == "task_graph" else "mid_stream"
+    result_name = "task_result_stream" if pattern == "task_graph" else "result_stream"
+    if pattern == "task_graph":
+        if {"input", "output", "length"}.issubset(arg_names):
+            return f'''static void load_{name}(const ap_uint<32>* input, hls::stream<ap_uint<32> >& {stream_name}, hls::stream<int>& count_stream, int length) {{
+  // {_comment(comment_language, 'Load stage captures the bounded transaction length before streaming memory data into the task actor.', '加载阶段先锁定有界事务长度，再把存储数据流送入 task actor。')}
+  count_stream.write(length);
+  for (int i = 0; i < length; ++i) {{
+    #pragma HLS PIPELINE II=1
+    {stream_name}.write(input[i]);
+  }}
+}}
+
+static void compute_{name}(hls::stream<ap_uint<32> >& {stream_name}, hls::stream<ap_uint<32> >& {result_name}, hls::stream<int>& count_stream) {{
+  // {_comment(comment_language, 'Compute actor consumes the streamed transaction count so hls::task remains stream-only.', '计算 actor 通过流式事务计数保持 hls::task 仅流参数约束。')}
+  int length = count_stream.read();
+  for (int i = 0; i < length; ++i) {{
+    #pragma HLS PIPELINE II=1 style=flp
+    ap_uint<32> value = {stream_name}.read();
+    {result_name}.write(value + 1);
+  }}
+}}
+
+static void store_{name}(hls::stream<ap_uint<32> >& {result_name}, ap_uint<32>* output, int length) {{
+  // {_comment(comment_language, 'Store stage drains the task result stream back to memory under the same bounded transaction length.', '回写阶段在相同有界事务长度下把 task 结果流写回存储。')}
+  for (int i = 0; i < length; ++i) {{
+    #pragma HLS PIPELINE II=1
+    output[i] = {result_name}.read();
+  }}
+}}'''
+        return f'''static void seed_{name}_counts(int length, hls::stream<int>& read_count_stream) {{
+  // {_comment(comment_language, 'Seed one bounded transaction count into the task graph so restart semantics stay explicit.', '将一次有界事务的计数写入 task graph，使重启语义保持显式。')}
+  read_count_stream.write(length);
+}}
+
+static void read_{name}(hls::stream<ap_uint<32> >& in_stream, hls::stream<ap_uint<32> >& {stream_name}, hls::stream<int>& read_count_stream, hls::stream<int>& compute_count_stream) {{
+  // {_comment(comment_language, 'Read actor consumes one seeded transaction count before streaming AXI tokens.', '读取 actor 先消费一次预置事务计数，再顺序吸收 AXI token。')}
+  int length = read_count_stream.read();
+  for (int i = 0; i < length; ++i) {{
+    #pragma HLS PIPELINE II=1 style=flp
+    {stream_name}.write(in_stream.read());
+  }}
+  compute_count_stream.write(length);
+}}
+
+static void compute_{name}(hls::stream<ap_uint<32> >& {stream_name}, hls::stream<ap_uint<32> >& {result_name}, hls::stream<int>& compute_count_stream, hls::stream<int>& write_count_stream) {{
+  // {_comment(comment_language, 'Compute actor uses a streamed transaction count so Vitis 2022.2 hls::task stays stream-only.', '计算 actor 通过流式事务计数保持 Vitis 2022.2 的 hls::task 仅流参数约束。')}
+  int length = compute_count_stream.read();
+  for (int i = 0; i < length; ++i) {{
+    #pragma HLS PIPELINE II=1 style=flp
+    ap_uint<32> value = {stream_name}.read();
+    {result_name}.write(value + 1);
+  }}
+  write_count_stream.write(length);
+}}
+
+static void write_{name}(hls::stream<ap_uint<32> >& {result_name}, hls::stream<ap_uint<32> >& out_stream, hls::stream<int>& write_count_stream) {{
+  // {_comment(comment_language, 'Write actor consumes the streamed transaction count before draining result tokens.', '写出 actor 先消费流式事务计数，再按边界取走结果 token。')}
+  int length = write_count_stream.read();
+  for (int i = 0; i < length; ++i) {{
+    #pragma HLS PIPELINE II=1 style=flp
+    out_stream.write({result_name}.read());
+  }}
+}}'''
+    return f'''static void read_{name}(hls::stream<ap_uint<32> >& in_stream, hls::stream<ap_uint<32> >& {stream_name}, int length) {{
   // {_comment(comment_language, 'Read stage isolates external AXI-Stream input from compute latency.', '读取阶段将外部 AXI-Stream 输入与计算延迟解耦。')}
   for (int i = 0; i < length; ++i) {{
     #pragma HLS PIPELINE II=1
-    mid_stream.write(in_stream.read());
+    {stream_name}.write(in_stream.read());
   }}
 }}
 
-static void compute_{name}(hls::stream<ap_uint<32> >& mid_stream, hls::stream<ap_uint<32> >& result_stream, int length) {{
+static void compute_{name}(hls::stream<ap_uint<32> >& {stream_name}, hls::stream<ap_uint<32> >& {result_name}, int length) {{
   // {_comment(comment_language, 'Compute stage owns the token transform so DATAFLOW can overlap stages.', '计算阶段独立负责 token 变换，便于 DATAFLOW 重叠执行。')}
   for (int i = 0; i < length; ++i) {{
     #pragma HLS PIPELINE II=1
-    ap_uint<32> value = mid_stream.read();
-    result_stream.write(value + 1);
+    ap_uint<32> value = {stream_name}.read();
+    {result_name}.write(value + 1);
   }}
 }}
 
-static void write_{name}(hls::stream<ap_uint<32> >& result_stream, hls::stream<ap_uint<32> >& out_stream, int length) {{
+static void write_{name}(hls::stream<ap_uint<32> >& {result_name}, hls::stream<ap_uint<32> >& out_stream, int length) {{
   // {_comment(comment_language, 'Write stage preserves one output token for each input token.', '写出阶段确保每个输入 token 对应一个输出 token。')}
   for (int i = 0; i < length; ++i) {{
     #pragma HLS PIPELINE II=1
-    out_stream.write(result_stream.read());
+    out_stream.write({result_name}.read());
   }}
 }}'''
 
@@ -412,8 +569,12 @@ def _mock_hls_testbench_text(spec: dict[str, Any], vectors: list[dict[str, Any]]
         body = _mock_multi_m_axi_cases(spec, top, vectors, comment_language)
     elif {"input", "output", "scale", "length"}.issubset(arg_names):
         body = _mock_vector_scale_cases(spec, top, vectors, comment_language)
+    elif {"input", "output", "length"}.issubset(arg_names):
+        body = _mock_input_output_cases(spec, top, vectors, comment_language)
     elif {"in_stream", "out_stream", "length"}.issubset(arg_names):
-        body = _mock_axis_cases(top, vectors, comment_language)
+        body = _mock_task_graph_axis_cases(top, vectors, comment_language) if _example_pattern(spec) == "task_graph" else _mock_axis_cases(top, vectors, comment_language)
+    elif {"in_stream", "out_stream"}.issubset(arg_names):
+        body = _mock_directio_unit_cases(top, vectors, comment_language) if _example_pattern(spec) == "directio_freerun" else f"  {top}(in_stream, out_stream);\n"
     else:
         body = f"  {top}();\n"
     return f'''#include <iostream>
@@ -453,6 +614,9 @@ def _mock_hls_cfg_text(spec: dict[str, Any], files: list[dict[str, Any]]) -> str
     part = (spec.get("workflow") or {}).get("part") or spec.get("part")
     if part:
         lines.append(f"part={part}")
+    interface_profile = spec.get("interface_profile") if isinstance(spec.get("interface_profile"), dict) else {}
+    if interface_profile.get("burst_support") is True and interface_profile.get("max_burst_len"):
+        lines.extend(["", "[interface]", f"m_axi_max_read_burst_length={int(interface_profile['max_burst_len'])}"])
     return "\n".join(lines) + "\n"
 
 
@@ -466,20 +630,21 @@ def _cpp_arguments(spec: dict[str, Any]) -> str:
 
 def _hls_pragmas(spec: dict[str, Any]) -> str:
     lines = []
+    pattern = _example_pattern(spec)
     for item in spec.get("interfaces", {}).get("arguments", []):
         if not isinstance(item, dict) or not item.get("name"):
             continue
         interface = str(item.get("interface") or "s_axilite")
         if interface == "m_axi":
             lines.append(f"#pragma HLS INTERFACE m_axi port={item['name']} bundle={item.get('bundle', 'gmem')} depth={_m_axi_depth(spec, item)}")
-        elif interface in {"axis", "ap_fifo"}:
+        elif interface in {"axis", "ap_fifo", "ap_none"}:
             lines.append(f"#pragma HLS INTERFACE {interface} port={item['name']}")
         else:
             lines.append(f"#pragma HLS INTERFACE s_axilite port={item['name']}")
     lines.append(f"#pragma HLS INTERFACE {spec.get('interfaces', {}).get('control', 's_axilite')} port=return")
-    if _example_pattern(spec) == "dataflow":
+    if pattern in {"dataflow", "task_graph", "streamofblocks"}:
         lines.append("#pragma HLS DATAFLOW")
-    if spec.get("pipeline_required", True) and _example_pattern(spec) != "dataflow":
+    if spec.get("pipeline_required", True) and pattern not in {"dataflow", "task_graph", "streamofblocks"}:
         lines.append("#pragma HLS PIPELINE II=1")
     return "\n".join(f"  {line}" for line in lines)
 
@@ -501,9 +666,65 @@ def _mock_hls_body(spec: dict[str, Any]) -> str:
         if isinstance(item, dict) and item.get("name")
     }
     arg_names = set(arguments)
+    pattern = _example_pattern(spec)
     if {"input_a", "input_b", "output", "length"}.issubset(arg_names):
+        if pattern == "tiled_gemm":
+            value_type = _argument_storage_type(arguments["input_a"])
+            return f"""  {value_type} tile_a[4];
+  {value_type} tile_b[4];
+  #pragma HLS ARRAY_PARTITION variable=tile_a complete dim=1
+  #pragma HLS ARRAY_PARTITION variable=tile_b complete dim=1
+  for (int base = 0; base < length; base += 4) {{
+    int chunk = (length - base < 4) ? (length - base) : 4;
+    for (int j = 0; j < 4; ++j) {{
+      #pragma HLS UNROLL
+      tile_a[j] = (j < chunk) ? input_a[base + j] : {value_type}(0);
+      tile_b[j] = (j < chunk) ? input_b[base + j] : {value_type}(0);
+    }}
+    for (int j = 0; j < 4; ++j) {{
+      #pragma HLS UNROLL
+      if (j < chunk) {{
+        output[base + j] = tile_a[j] * tile_b[j];
+      }}
+    }}
+  }}"""
+        if pattern == "vector_lane":
+            value_type = _argument_storage_type(arguments["input_a"])
+            return f"""  {value_type} lane_buf_a[4];
+  {value_type} lane_buf_b[4];
+  #pragma HLS ARRAY_PARTITION variable=lane_buf_a complete dim=1
+  #pragma HLS ARRAY_PARTITION variable=lane_buf_b complete dim=1
+  for (int base = 0; base < length; base += 4) {{
+    int chunk = (length - base < 4) ? (length - base) : 4;
+    for (int j = 0; j < 4; ++j) {{
+      #pragma HLS UNROLL factor=4
+      lane_buf_a[j] = (j < chunk) ? input_a[base + j] : {value_type}(0);
+      lane_buf_b[j] = (j < chunk) ? input_b[base + j] : {value_type}(0);
+    }}
+    for (int j = 0; j < 4; ++j) {{
+      #pragma HLS UNROLL factor=4
+      if (j < chunk) {{
+        output[base + j] = lane_buf_a[j] + lane_buf_b[j];
+      }}
+    }}
+  }}"""
+        if pattern == "fence_ordering":
+            return """  for (int i = 0; i < length; ++i) {
+    ap_uint<32> ordered_writeback = input_a[i] + input_b[i];
+    output[i] = ordered_writeback;
+  }"""
         return "  for (int i = 0; i < length; ++i) {\n    output[i] = input_a[i] + input_b[i];\n  }"
     if {"input", "output", "length"}.issubset(arg_names):
+        if pattern == "task_graph":
+            return f"""  hls::stream<ap_uint<32> > task_stream;
+  hls::stream<ap_uint<32> > task_result_stream;
+  hls::stream<int> task_count_stream;
+  #pragma HLS STREAM variable=task_stream depth=16
+  #pragma HLS STREAM variable=task_result_stream depth=16
+  #pragma HLS STREAM variable=task_count_stream depth=2
+  load_{str(spec.get("name") or "kernel")}(input, task_stream, task_count_stream, length);
+  hls::task compute_stage(compute_{str(spec.get("name") or "kernel")}, task_stream, task_result_stream, task_count_stream);
+  store_{str(spec.get("name") or "kernel")}(task_result_stream, output, length);"""
         if "scale" in arg_names:
             if _example_pattern(spec) == "array_partition":
                 value_type = _argument_storage_type(arguments["input"])
@@ -545,18 +766,75 @@ def _mock_hls_body(spec: dict[str, Any]) -> str:
       }}
     }}
   }}"""
+            if pattern == "axi4_burst":
+                return "  for (int i = 0; i < length; ++i) {\n    output[i] = input[i] * scale;\n  }"
             return "  for (int i = 0; i < length; ++i) {\n    output[i] = input[i] * scale;\n  }"
+        if pattern == "line_buffer_stencil":
+            value_type = _argument_storage_type(arguments["input"])
+            return f"""  {value_type} line_buf[3];
+  #pragma HLS ARRAY_PARTITION variable=line_buf complete dim=1
+  for (int i = 0; i < length; ++i) {{
+    line_buf[0] = input[(i == 0) ? 0 : (i - 1)];
+    line_buf[1] = input[i];
+    line_buf[2] = input[(i + 1 < length) ? (i + 1) : (length - 1)];
+    output[i] = line_buf[0] + line_buf[1] + line_buf[2];
+  }}"""
+        if pattern == "reduction_tree":
+            return """  ap_uint<32> tree_accum = 0;
+  for (int i = 0; i < length; i += 4) {
+    #pragma HLS UNROLL factor=4
+    ap_uint<32> partial0 = (i + 0 < length) ? input[i + 0] : ap_uint<32>(0);
+    ap_uint<32> partial1 = (i + 1 < length) ? input[i + 1] : ap_uint<32>(0);
+    ap_uint<32> partial2 = (i + 2 < length) ? input[i + 2] : ap_uint<32>(0);
+    ap_uint<32> partial3 = (i + 3 < length) ? input[i + 3] : ap_uint<32>(0);
+    tree_accum += (partial0 + partial1) + (partial2 + partial3);
+  }
+  output[0] = tree_accum;"""
         return "  for (int i = 0; i < length; ++i) {\n    output[i] = input[i];\n  }"
     if {"in_stream", "out_stream"}.issubset(arg_names):
-        if _example_pattern(spec) == "dataflow" and "length" in arg_names:
+        if pattern in {"dataflow", "task_graph"} and "length" in arg_names:
             name = str(spec.get("name") or "kernel")
-            return f"""  hls::stream<ap_uint<32> > mid_stream;
-  hls::stream<ap_uint<32> > result_stream;
-  #pragma HLS STREAM variable=mid_stream depth=16
-  #pragma HLS STREAM variable=result_stream depth=16
-  read_{name}(in_stream, mid_stream, length);
-  compute_{name}(mid_stream, result_stream, length);
-  write_{name}(result_stream, out_stream, length);"""
+            stream_name = "task_stream" if pattern == "task_graph" else "mid_stream"
+            result_name = "task_result_stream" if pattern == "task_graph" else "result_stream"
+            if pattern == "task_graph":
+                return f"""  hls::stream<ap_uint<32> > {stream_name};
+  hls::stream<ap_uint<32> > {result_name};
+  hls::stream<int> read_count_stream;
+  hls::stream<int> compute_count_stream;
+  hls::stream<int> write_count_stream;
+  #pragma HLS STREAM variable={stream_name} depth=16
+  #pragma HLS STREAM variable={result_name} depth=16
+  #pragma HLS STREAM variable=read_count_stream depth=2
+  #pragma HLS STREAM variable=compute_count_stream depth=2
+  #pragma HLS STREAM variable=write_count_stream depth=2
+  seed_{name}_counts(length, read_count_stream);
+  hls::task read_stage(read_{name}, in_stream, {stream_name}, read_count_stream, compute_count_stream);
+  hls::task compute_stage(compute_{name}, {stream_name}, {result_name}, compute_count_stream, write_count_stream);
+  hls::task write_stage(write_{name}, {result_name}, out_stream, write_count_stream);"""
+            return f"""  hls::stream<ap_uint<32> > {stream_name};
+  hls::stream<ap_uint<32> > {result_name};
+  #pragma HLS STREAM variable={stream_name} depth=16
+  #pragma HLS STREAM variable={result_name} depth=16
+  read_{name}(in_stream, {stream_name}, length);
+  compute_{name}({stream_name}, {result_name}, length);
+  write_{name}({result_name}, out_stream, length);"""
+        if pattern == "streamofblocks" and "length" in arg_names:
+            return """  ap_uint<32> block_buf[4];
+  #pragma HLS ARRAY_PARTITION variable=block_buf complete dim=1
+  for (int base = 0; base < length; base += 4) {
+    #pragma HLS PIPELINE II=1
+    int chunk = (length - base < 4) ? (length - base) : 4;
+    for (int j = 0; j < 4; ++j) {
+      #pragma HLS UNROLL factor=4
+      block_buf[j] = (j < chunk) ? in_stream.read() : ap_uint<32>(0);
+    }
+    for (int j = 0; j < 4; ++j) {
+      #pragma HLS UNROLL factor=4
+      if (j < chunk) {
+        out_stream.write(block_buf[j] + 1);
+      }
+    }
+  }"""
         if "length" in arg_names:
             return "  for (int i = 0; i < length; ++i) {\n    ap_uint<32> value = in_stream.read();\n    out_stream.write(value + 1);\n  }"
         return "  if (!in_stream.empty()) {\n    ap_uint<32> value = in_stream.read();\n    out_stream.write(value + 1);\n  }"
@@ -607,6 +885,48 @@ def _mock_vector_scale_cases(spec: dict[str, Any], top: str, vectors: list[dict[
     }}
     std::cout << "{REFERENCE_RESULT_TAG} {{\\"case_id\\":\\"{case["id"]}\\",\\"status\\":\\"" << (pass ? "PASS" : "FAIL") << "\\",\\"outputs\\":{{\\"output\\":[";
     for (int i = 0; i < {length}; ++i) {{
+      if (i != 0) std::cout << ",";
+      std::cout << (double)output[i];
+    }}
+    std::cout << "]}},\\"checkpoints\\":{{\\"length\\":{length},\\"first_output\\":" << (double)output[0] << "}}}}\\n";
+    if (!pass) failures++;
+  }}''')
+    return "\n".join(blocks)
+
+
+def _mock_input_output_cases(spec: dict[str, Any], top: str, vectors: list[dict[str, Any]], comment_language: str) -> str:
+    arguments = {
+        str(item.get("name")): item
+        for item in spec.get("interfaces", {}).get("arguments", [])
+        if isinstance(item, dict) and item.get("name")
+    }
+    interface_depth = max(_m_axi_depth(spec, arguments.get("input", {})), _m_axi_depth(spec, arguments.get("output", {})))
+    input_type = _argument_storage_type(arguments.get("input", {}))
+    output_type = _argument_storage_type(arguments.get("output", {}))
+    blocks: list[str] = []
+    for case in vectors:
+        inputs = case.get("inputs", {})
+        values = [float(item) for item in inputs.get("input", [])]
+        expected = [float(item) for item in case.get("expected_outputs", {}).get("output", [])]
+        length = int(inputs.get("length", len(values)))
+        array_depth = max(1, interface_depth, len(values), max(1, len(expected)), length)
+        values_text = ", ".join(_literal_number(item) for item in values) or "0"
+        expected_text = ", ".join(_literal_number(item) for item in expected) or "0"
+        observed_bound = max(1, len(expected))
+        blocks.append(f'''  {{
+    // {_comment(comment_language, f'Run vector case {case["id"]} and compare the observed output.', f'执行向量用例 {case["id"]} 并比较真实输出。')}
+    {input_type} input[{array_depth}] = {{{values_text}}};
+    {output_type} output[{array_depth}] = {{}};
+    const double expected[{observed_bound}] = {{{expected_text}}};
+    {top}(input, output, {length});
+    bool pass = true;
+    for (int i = 0; i < {observed_bound}; ++i) {{
+      if ((double)output[i] != expected[i]) {{
+        pass = false;
+      }}
+    }}
+    std::cout << "{REFERENCE_RESULT_TAG} {{\\"case_id\\":\\"{case["id"]}\\",\\"status\\":\\"" << (pass ? "PASS" : "FAIL") << "\\",\\"outputs\\":{{\\"output\\":[";
+    for (int i = 0; i < {observed_bound}; ++i) {{
       if (i != 0) std::cout << ",";
       std::cout << (double)output[i];
     }}
@@ -725,6 +1045,100 @@ def _mock_axis_cases(top: str, vectors: list[dict[str, Any]], comment_language: 
       std::cout << observed[i];
     }}
     std::cout << "]}},\\"checkpoints\\":{{\\"length\\":{length},\\"first_output\\":" << observed[0] << "}}}}\\n";
+    if (!pass) failures++;
+  }}''')
+    return "\n".join(blocks)
+
+
+def _mock_task_graph_axis_cases(top: str, vectors: list[dict[str, Any]], comment_language: str) -> str:
+    all_values: list[int] = []
+    case_records: list[dict[str, Any]] = []
+    offset = 0
+    for case in vectors:
+        inputs = case.get("inputs", {})
+        values = [int(item) for item in inputs.get("in_stream", [])]
+        expected = [int(item) for item in case.get("expected_outputs", {}).get("out_stream", [])]
+        length = int(inputs.get("length", len(values)))
+        all_values.extend(values)
+        case_records.append({"id": case["id"], "length": length, "offset": offset, "expected": expected})
+        offset += length
+    total_length = offset
+    writes = "\n".join(f"  in_stream.write(ap_uint<32>({value}));" for value in all_values)
+    case_blocks: list[str] = []
+    for record in case_records:
+        expected_text = ", ".join(str(item) for item in record["expected"]) or "0"
+        start = int(record["offset"])
+        length = int(record["length"])
+        case_blocks.append(f'''  {{
+    // {_comment(comment_language, f'Validate task-graph slice {record["id"]} after one combined kernel transaction.', f'在一次合并 kernel 事务后校验 task-graph 分段 {record["id"]}。')}
+    const unsigned expected[{max(1, len(record["expected"]))}] = {{{expected_text}}};
+    bool pass = true;
+    for (int i = 0; i < {length}; ++i) {{
+      if (observed[{start} + i] != expected[i]) {{
+        pass = false;
+      }}
+    }}
+    std::cout << "{REFERENCE_RESULT_TAG} {{\\"case_id\\":\\"{record["id"]}\\",\\"status\\":\\"" << (pass ? "PASS" : "FAIL") << "\\",\\"outputs\\":{{\\"out_stream\\":[";
+    for (int i = 0; i < {length}; ++i) {{
+      if (i != 0) std::cout << ",";
+      std::cout << observed[{start} + i];
+    }}
+    std::cout << "]}},\\"checkpoints\\":{{\\"length\\":{length},\\"first_output\\":" << observed[{start}] << "}}}}\\n";
+    if (!pass) failures++;
+  }}''')
+    return f'''  // {_comment(comment_language, 'Task-graph cosim uses one top-level invocation so the task actor restart contract stays explicit.', 'task-graph cosim 只做一次顶层调用，以保持 task actor 的重启契约显式可控。')}
+  hls::stream<ap_uint<32> > in_stream;
+  hls::stream<ap_uint<32> > out_stream;
+{writes}
+  unsigned observed[{max(1, total_length)}] = {{}};
+  bool stream_underflow = false;
+  {top}(in_stream, out_stream, {total_length});
+  for (int i = 0; i < {total_length}; ++i) {{
+    if (out_stream.empty()) {{
+      stream_underflow = true;
+      observed[i] = 0;
+    }} else {{
+      observed[i] = (unsigned)out_stream.read();
+    }}
+  }}
+{chr(10).join(case_blocks)}'''
+
+
+def _mock_directio_unit_cases(top: str, vectors: list[dict[str, Any]], comment_language: str) -> str:
+    blocks: list[str] = []
+    for case in vectors:
+        inputs = case.get("inputs", {})
+        values = [int(item) for item in inputs.get("in_stream", [])]
+        expected = [int(item) for item in case.get("expected_outputs", {}).get("out_stream", [])]
+        writes = "\n".join(f"    in_stream.write(ap_uint<32>({value}));" for value in values)
+        expected_text = ", ".join(str(item) for item in expected) or "0"
+        token_count = len(values)
+        blocks.append(f'''  {{
+    // {_comment(comment_language, f'Run free-running direct-I/O case {case["id"]} by invoking the kernel once per token.', f'逐 token 调用 free-running direct-I/O 内核以执行用例 {case["id"]}。')}
+    hls::stream<ap_uint<32> > in_stream;
+    hls::stream<ap_uint<32> > out_stream;
+{writes}
+    const unsigned expected[{max(1, len(expected))}] = {{{expected_text}}};
+    unsigned observed[{max(1, token_count)}] = {{}};
+    bool pass = true;
+    for (int i = 0; i < {token_count}; ++i) {{
+      {top}(in_stream, out_stream);
+      if (out_stream.empty()) {{
+        pass = false;
+        observed[i] = 0;
+      }} else {{
+        observed[i] = (unsigned)out_stream.read();
+      }}
+      if (observed[i] != expected[i]) {{
+        pass = false;
+      }}
+    }}
+    std::cout << "{REFERENCE_RESULT_TAG} {{\\"case_id\\":\\"{case["id"]}\\",\\"status\\":\\"" << (pass ? "PASS" : "FAIL") << "\\",\\"outputs\\":{{\\"out_stream\\":[";
+    for (int i = 0; i < {token_count}; ++i) {{
+      if (i != 0) std::cout << ",";
+      std::cout << observed[i];
+    }}
+    std::cout << "]}},\\"checkpoints\\":{{\\"token_count\\":{token_count},\\"first_output\\":" << observed[0] << "}}}}\\n";
     if (!pass) failures++;
   }}''')
     return "\n".join(blocks)

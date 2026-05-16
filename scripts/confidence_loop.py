@@ -10,6 +10,7 @@ import os
 import re
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -50,6 +51,9 @@ def main(argv: list[str] | None = None) -> int:
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser(description="Run Erie HLS Generator local and optional remote confidence gates.")
     parser.add_argument("--server", help="Optional erie-remote-ssh server for real remote Vitis validation.")
+    parser.add_argument("--build-server", help="Optional split-topology build server for real remote Vitis validation.")
+    parser.add_argument("--validate-server", help="Optional split-topology validation server for real remote Vitis validation.")
+    parser.add_argument("--vitis-version", help="Explicit remote Vitis version to use for remote matrix validation.")
     parser.add_argument("--readiness", default="cosim", choices=("static", "compile", "execute", "implement", "cosim"))
     parser.add_argument("--example-spec", action="append", help="Example spec to use for optional remote validation. Can be repeated.")
     parser.add_argument("--skip-smoke", action="store_true")
@@ -73,16 +77,28 @@ def main(argv: list[str] | None = None) -> int:
     gates["copyright_term_scan"] = _copyright_term_scan()
     gates["release_sensitivity_scan"] = _release_sensitivity_scan()
     gates["forbidden_reference_names"] = _forbidden_reference_name_scan()
+    example_specs = _example_spec_names()
     if gates["skill_dependencies"]["status"] == "passed":
         examples_gate, example_specs = _validate_examples(run_root)
     else:
-        example_specs = _example_spec_names()
         examples_gate = {"status": "skipped", "reason": "blocked_dependency", "results": []}
     gates["example_mock_validation"] = examples_gate
     remote_results: list[dict[str, Any]] = []
-    remote_requested = bool(args.server and not args.skip_remote)
-    if remote_requested:
-        gates["remote_vitis_acceptance"] = _run_remote_acceptance(args.server, args.readiness, args.example_spec or ["hls_partition_vector_scale_spec.json"])
+    split_remote_requested = bool(args.build_server and args.validate_server and not args.skip_remote)
+    remote_requested = bool((args.server or split_remote_requested) and not args.skip_remote)
+    if split_remote_requested:
+        selected_remote_specs = args.example_spec or example_specs
+        gates["remote_vitis_acceptance"] = _run_split_remote_acceptance(
+            args.build_server,
+            args.validate_server,
+            args.readiness,
+            selected_remote_specs,
+            vitis_version=args.vitis_version,
+        )
+        remote_results = gates["remote_vitis_acceptance"].get("results", [])
+    elif remote_requested:
+        selected_remote_specs = args.example_spec or example_specs
+        gates["remote_vitis_acceptance"] = _run_remote_acceptance(args.server, args.readiness, selected_remote_specs, vitis_version=args.vitis_version)
         remote_results = gates["remote_vitis_acceptance"]["results"]
 
     confidence_status, confidence_scope, residual_risks, returncode = _confidence_outcome(
@@ -185,10 +201,16 @@ def _release_sensitivity_scan(*, root: Path | None = None) -> dict[str, Any]:
     roots = [scan_root]
     if root is None:
         release_dir = repo_root() / "dist" / f"erie-hls-generator-v{__version__}"
+        release_zip = repo_root() / "dist" / f"erie-hls-generator-v{__version__}.zip"
         if release_dir.exists():
             roots.append(release_dir)
+        if release_zip.exists():
+            roots.append(release_zip)
     matches: list[str] = []
     for active_root in roots:
+        if active_root.is_file() and active_root.suffix.lower() == ".zip":
+            matches.extend(_scan_release_zip(active_root))
+            continue
         for path in [active_root, *active_root.rglob("*")]:
             if path != active_root and any(part in SKIP_SCAN_DIRS for part in path.relative_to(active_root).parts):
                 continue
@@ -207,6 +229,26 @@ def _release_sensitivity_scan(*, root: Path | None = None) -> dict[str, Any]:
         "roots": [str(item) for item in roots],
         "matches": matches,
     }
+
+
+def _scan_release_zip(archive_path: Path) -> list[str]:
+    matches: list[str] = []
+    with zipfile.ZipFile(archive_path) as archive:
+        for name in archive.namelist():
+            rel_name = name.rstrip("/")
+            if not rel_name:
+                continue
+            rel_path = rel_name.replace("\\", "/")
+            for pattern in RELEASE_SENSITIVITY_PATTERNS:
+                if pattern.search(rel_path):
+                    matches.append(f"path:{archive_path.name}:{rel_path}:{pattern.pattern}")
+            if Path(rel_path).suffix.lower() not in TEXT_SCAN_EXTENSIONS or rel_name.endswith("/"):
+                continue
+            text = archive.read(name).decode("utf-8", errors="replace")
+            for pattern in RELEASE_SENSITIVITY_PATTERNS:
+                if pattern.search(text):
+                    matches.append(f"content:{archive_path.name}:{rel_path}:{pattern.pattern}")
+    return matches
 
 
 def _relative_match_path(line: str) -> str:
@@ -260,7 +302,7 @@ def _run_remote_command(command: list[str]) -> dict[str, Any]:
     return payload
 
 
-def _run_remote_acceptance(server: str, readiness: str, example_specs: list[str]) -> dict[str, Any]:
+def _run_remote_acceptance(server: str, readiness: str, example_specs: list[str], *, vitis_version: str | None = None) -> dict[str, Any]:
     link_payload = _run_remote_command(
         [
             sys.executable,
@@ -272,36 +314,105 @@ def _run_remote_acceptance(server: str, readiness: str, example_specs: list[str]
             "--json",
         ]
     )
-    vitis_results = [_run_remote(server, readiness, spec_name) for spec_name in example_specs]
+    if link_payload.get("status") != "passed":
+        return {
+            "status": "failed",
+            "server": server,
+            "vitis_version": vitis_version,
+            "link": link_payload,
+            "results": [],
+        }
+    vitis_results = [_run_remote(server, readiness, spec_name, vitis_version=vitis_version) for spec_name in example_specs]
     passed = link_payload.get("status") == "passed" and all(item.get("status") == "passed" and item.get("remote_artifacts_retained") is True for item in vitis_results)
     return {
         "status": "passed" if passed else "failed",
         "server": server,
+        "vitis_version": vitis_version,
         "link": link_payload,
         "results": vitis_results,
     }
 
 
-def _run_remote(server: str, readiness: str, spec_name: str) -> dict[str, Any]:
-    payload = _run_remote_command(
-        [
-            sys.executable,
-            "scripts/remote_vitis_acceptance.py",
-            "--mode",
-            "vitis",
-            "--server",
-            server,
-            "--readiness",
-            readiness,
-            "--example-spec",
-            spec_name,
-            "--comment-language",
-            "zh",
-            "--json",
-        ]
-    )
+def _run_remote(server: str, readiness: str, spec_name: str, *, vitis_version: str | None = None) -> dict[str, Any]:
+    command = [
+        sys.executable,
+        "scripts/remote_vitis_acceptance.py",
+        "--mode",
+        "vitis",
+        "--server",
+        server,
+        "--readiness",
+        readiness,
+        "--example-spec",
+        spec_name,
+        "--comment-language",
+        "zh",
+        "--json",
+    ]
+    if vitis_version:
+        command.extend(["--vitis-version", vitis_version])
+    payload = _run_remote_command(command)
     payload["example_spec"] = spec_name
     return payload
+
+
+def _run_split_remote(build_server: str, validate_server: str, readiness: str, spec_name: str, *, vitis_version: str | None = None) -> dict[str, Any]:
+    command = [
+        sys.executable,
+        "scripts/remote_vitis_acceptance.py",
+        "--mode",
+        "vitis",
+        "--build-server",
+        build_server,
+        "--validate-server",
+        validate_server,
+        "--readiness",
+        readiness,
+        "--example-spec",
+        spec_name,
+        "--comment-language",
+        "zh",
+        "--json",
+    ]
+    if vitis_version:
+        command.extend(["--vitis-version", vitis_version])
+    payload = _run_remote_command(command)
+    payload["example_spec"] = spec_name
+    return payload
+
+
+def _run_split_remote_acceptance(build_server: str, validate_server: str, readiness: str, example_specs: list[str], *, vitis_version: str | None = None) -> dict[str, Any]:
+    if not example_specs:
+        return {
+            "status": "failed",
+            "topology": "split_build_validate",
+            "build_server": build_server,
+            "validate_server": validate_server,
+            "vitis_version": vitis_version,
+            "results": [],
+        }
+    first_result = _run_split_remote(build_server, validate_server, readiness, example_specs[0], vitis_version=vitis_version)
+    if first_result.get("status") != "passed":
+        return {
+            "status": "failed",
+            "topology": "split_build_validate",
+            "build_server": build_server,
+            "validate_server": validate_server,
+            "vitis_version": vitis_version,
+            "results": [],
+            "first_result": first_result,
+        }
+    remaining = [_run_split_remote(build_server, validate_server, readiness, spec_name, vitis_version=vitis_version) for spec_name in example_specs[1:]]
+    results = [first_result, *remaining]
+    passed = all(item.get("status") == "passed" and item.get("remote_artifacts_retained") is True for item in results)
+    return {
+        "status": "passed" if passed else "failed",
+        "topology": "split_build_validate",
+        "build_server": build_server,
+        "validate_server": validate_server,
+        "vitis_version": vitis_version,
+        "results": results,
+    }
 
 
 def _confidence_outcome(

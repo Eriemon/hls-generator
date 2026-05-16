@@ -1,0 +1,80 @@
+{
+  "name": "template_vector_lane_kernel",
+  "target": "hls",
+  "design_requirements": {
+    "target": "hls",
+    "pipeline_required": true,
+    "streamability": "streamable",
+    "interface_family": "axi4",
+    "interface_profile": {
+      "axi4_variant": "axi4_full",
+      "role": "master",
+      "read_write_mode": "read_write",
+      "data_width": 32,
+      "addr_width": 32,
+      "id_width": 1,
+      "burst_support": false,
+      "clock_reset_domain": {
+        "clock": "i_axi_aclk",
+        "reset": "i_axi_arstn"
+      }
+    },
+    "confirmed_by_user": true,
+    "confirmation_notes": "Lane width and pack intent have been confirmed."
+  },
+  "streamability": "streamable",
+  "interface_family": "axi4",
+  "interface_profile": {
+    "axi4_variant": "axi4_full",
+    "role": "master",
+    "read_write_mode": "read_write",
+    "data_width": 32,
+    "addr_width": 32,
+    "id_width": 1,
+    "burst_support": false,
+    "clock_reset_domain": {
+      "clock": "i_axi_aclk",
+      "reset": "i_axi_arstn"
+    }
+  },
+  "pipeline_required": true,
+  "codegen_plan_required": true,
+  "description": "Template for a packed-lane kernel.",
+  "interfaces": {
+    "top_function": "template_vector_lane_kernel",
+    "arguments": [
+      {"name": "input_a", "type": "const ap_uint<32> *", "direction": "input", "interface": "m_axi", "bundle": "gmem_a", "depth": 1024},
+      {"name": "input_b", "type": "const ap_uint<32> *", "direction": "input", "interface": "m_axi", "bundle": "gmem_b", "depth": 1024},
+      {"name": "output", "type": "ap_uint<32> *", "direction": "output", "interface": "m_axi", "bundle": "gmem_out", "depth": 1024},
+      {"name": "length", "type": "int", "direction": "input", "interface": "s_axilite"}
+    ],
+    "control": "s_axilite"
+  },
+  "behavior": ["Replace these sample semantics with the confirmed packed-lane behavior."],
+  "clock": {"period_ns": 8.0, "uncertainty_ns": 0.8},
+  "reset": {"strategy": "tool_default"},
+  "constraints": ["Only use hls_vector.h when the lane mapping is explicit."],
+  "outputs": [
+    {"path": "src/template_vector_lane_kernel.h", "kind": "header", "language": "cpp"},
+    {"path": "src/template_vector_lane_kernel.cpp", "kind": "source", "language": "cpp"},
+    {"path": "tb/template_vector_lane_kernel_tb.cpp", "kind": "testbench", "language": "cpp"},
+    {"path": "hls_config.cfg", "kind": "config", "language": "ini"}
+  ],
+  "notes": [],
+  "subfunctions": [],
+  "workflow": {},
+  "performance": {"target_ii": 1, "lane_width": 4},
+  "hls_profile": {
+    "example_pattern": "vector_lane",
+    "allowed_libraries": ["ap_int.h", "hls_vector.h"],
+    "required_headers": ["hls_vector.h"],
+    "required_pragmas": ["#pragma HLS UNROLL factor=4"],
+    "required_metadata_fields": ["lane_width", "pack_intent"],
+    "metadata": {
+      "lane_width": 4,
+      "pack_intent": "pack adjacent samples into fixed-width lanes"
+    },
+    "forbidden_combinations": [],
+    "required_cfg_entries": ["clock=8.0"]
+  }
+}

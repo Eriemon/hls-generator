@@ -7,6 +7,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from .patterns import ADVANCED_LIBRARY_HEADERS, canonical_pattern_name, required_pattern_headers
+
 DEFAULT_FORBIDDEN_FEATURES = (
     "std::vector",
     "new",
@@ -28,10 +30,15 @@ def validate_hls_profile(profile: dict[str, Any], root: Path, spec: dict[str, An
     source_text = _source_text(root)
     cfg_text = _cfg_text(root)
     issues: list[dict[str, Any]] = []
+    issues.extend(_check_required_metadata(profile))
+    issues.extend(_check_headers(profile, source_text))
+    issues.extend(_check_allowed_libraries(profile, source_text))
     issues.extend(_check_forbidden_features(profile, source_text))
     issues.extend(_check_interface_modes(profile, source_text))
     issues.extend(_check_required_pragmas(profile, source_text, spec))
+    issues.extend(_check_pattern_semantics(profile, source_text))
     issues.extend(_check_static_arrays(profile, source_text))
+    issues.extend(_check_forbidden_combinations(profile, source_text))
     issues.extend(_check_cfg(profile, cfg_text))
     return issues
 
@@ -105,15 +112,65 @@ def _check_interface_modes(profile: dict[str, Any], source_text: str) -> list[di
 
 
 def _check_required_pragmas(profile: dict[str, Any], source_text: str, spec: dict[str, Any]) -> list[dict[str, Any]]:
-    if profile.get("require_interface_pragmas", True) is False:
-        return []
     issues: list[dict[str, Any]] = []
+    for pragma in profile.get("required_pragmas", []) or []:
+        token = str(pragma)
+        if token and token not in source_text:
+            issues.append(_issue("error", f"HLS profile violation: required pragma {token!r} was not found."))
+    if profile.get("require_interface_pragmas", True) is False:
+        return issues
     for argument in spec.get("interfaces", {}).get("arguments", []) or []:
         if not isinstance(argument, dict) or not argument.get("name"):
             continue
         name = str(argument["name"])
         if not re.search(rf"#pragma\s+HLS\s+INTERFACE[^\n]*\bport\s*=\s*{re.escape(name)}\b", source_text):
             issues.append(_issue("error", f"HLS profile violation: missing interface pragma for argument {name!r}."))
+    return issues
+
+
+def _check_required_metadata(profile: dict[str, Any]) -> list[dict[str, Any]]:
+    metadata = profile.get("metadata") if isinstance(profile.get("metadata"), dict) else {}
+    issues: list[dict[str, Any]] = []
+    for field in profile.get("required_metadata_fields", []) or []:
+        key = str(field)
+        if metadata.get(key) in (None, "", [], {}):
+            issues.append(_issue("error", f"HLS profile violation: missing metadata field {key!r}."))
+    return issues
+
+
+def _check_pattern_semantics(profile: dict[str, Any], source_text: str) -> list[dict[str, Any]]:
+    pattern = canonical_pattern_name(profile)
+    if pattern == "task_graph":
+        issues: list[dict[str, Any]] = []
+        if "hls::task" not in source_text:
+            issues.append(_issue("error", "HLS profile violation: task_graph pattern must instantiate hls::task explicitly."))
+        if "style=flp" not in source_text and "style=frp" not in source_text:
+            issues.append(_issue("error", "HLS profile violation: task_graph task actors must use a flushing or free-running pipeline style."))
+        return issues
+    return []
+
+
+def _check_headers(profile: dict[str, Any], source_text: str) -> list[dict[str, Any]]:
+    required_headers = required_pattern_headers(profile)
+    issues: list[dict[str, Any]] = []
+    for header in required_headers:
+        if f"#include <{header}>" not in source_text and f'#include "{header}"' not in source_text:
+            issues.append(_issue("error", f"HLS profile violation: required header {header!r} was not found."))
+    return issues
+
+
+def _check_allowed_libraries(profile: dict[str, Any], source_text: str) -> list[dict[str, Any]]:
+    allowed = {str(item) for item in profile.get("allowed_libraries", []) or []}
+    required = set(required_pattern_headers(profile))
+    allowed.update(required)
+    if not allowed:
+        return []
+    issues: list[dict[str, Any]] = []
+    for header in ADVANCED_LIBRARY_HEADERS:
+        if f"#include <{header}>" not in source_text and f'#include "{header}"' not in source_text:
+            continue
+        if header not in allowed:
+            issues.append(_issue("error", f"HLS profile violation: advanced header {header!r} is not allowed for this pattern."))
     return issues
 
 
@@ -125,12 +182,29 @@ def _check_static_arrays(profile: dict[str, Any], source_text: str) -> list[dict
     return []
 
 
+def _check_forbidden_combinations(profile: dict[str, Any], source_text: str) -> list[dict[str, Any]]:
+    issues: list[dict[str, Any]] = []
+    for item in profile.get("forbidden_combinations", []) or []:
+        if not isinstance(item, dict):
+            continue
+        markers = [str(marker) for marker in item.get("all_of", []) or [] if str(marker)]
+        if markers and all(marker in source_text for marker in markers):
+            issues.append(_issue("error", str(item.get("message") or "HLS profile violation: forbidden combination was found.")))
+    return issues
+
+
 def _check_cfg(profile: dict[str, Any], cfg_text: str) -> list[dict[str, Any]]:
     if profile.get("require_syn_file", True) is False:
-        return []
-    if not re.search(r"(?m)^\s*syn\.file\s*=", cfg_text):
-        return [_issue("error", "HLS profile violation: cfg is missing syn.file.")]
-    return []
+        issues: list[dict[str, Any]] = []
+    else:
+        issues = []
+        if not re.search(r"(?m)^\s*syn\.file\s*=", cfg_text):
+            issues.append(_issue("error", "HLS profile violation: cfg is missing syn.file."))
+    for entry in profile.get("required_cfg_entries", []) or []:
+        token = str(entry)
+        if token and token not in cfg_text:
+            issues.append(_issue("error", f"HLS profile violation: cfg is missing required entry {token!r}."))
+    return issues
 
 
 def _pragma_mode(line: str) -> str:
