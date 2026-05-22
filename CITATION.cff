@@ -10,7 +10,7 @@ authors:
   - family-names: "Li"
     given-names: "He"
     affiliation: "Southeast University"
-abstract: "HLS Generator is a Codex-ready agent skill package for structured AMD/Xilinx Vitis HLS workflows, including requirement confirmation, staged generation, deterministic runtime helpers, and validation evidence."
+abstract: "HLS Generator is a Codex-ready agent skill package for structured AMD/Xilinx Vitis HLS and FPGA design workflows, including requirement confirmation, staged generation, deterministic runtime helpers, FPGA-oriented HLS design support, and validation evidence."
 keywords:
   - agent skill
   - Codex

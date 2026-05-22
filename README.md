@@ -19,10 +19,10 @@
 <h1 align="center">HLS Generator</h1>
 
 <p align="center">
-  A Codex-ready agent skill for structured AMD/Xilinx Vitis HLS workflows.
+  A Codex-ready agent skill for structured AMD/Xilinx Vitis HLS and FPGA design workflows.
 </p>
 
-HLS Generator turns an AI coding agent into a more disciplined HLS engineering assistant. It provides trigger metadata, procedural instructions, reference material, deterministic runtime helpers, examples, and validation gates for moving from confirmed hardware intent to Vitis-ready HLS artifacts.
+HLS Generator turns an AI coding agent into a more disciplined HLS and FPGA engineering assistant. It provides trigger metadata, procedural instructions, reference material, deterministic runtime helpers, examples, and validation gates for moving from confirmed hardware intent to Vitis-ready HLS artifacts and FPGA-oriented HLS design implementations.
 
 This repository is primarily an **agent skill package**. The Python CLI is included as the deterministic execution layer, but the main interface is the skill surface an agent can load and follow.
 
