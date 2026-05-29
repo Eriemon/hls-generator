@@ -1,0 +1,186 @@
+{
+  "name": "fft_power_spectrum",
+  "target": "hls",
+  "design_requirements": {
+    "target": "hls",
+    "pipeline_required": true,
+    "streamability": "streamable",
+    "interface_family": "axi4",
+    "interface_profile": {
+      "axi4_variant": "axi4_full",
+      "role": "master",
+      "read_write_mode": "read_write",
+      "data_width": 32,
+      "addr_width": 32,
+      "id_width": 1,
+      "burst_support": false,
+      "clock_reset_domain": {
+        "clock": "ap_clk",
+        "reset": "ap_rst_n"
+      }
+    },
+    "confirmed_by_user": true,
+    "confirmation_notes": "FFT power-spectrum flow and tolerance have been confirmed."
+  },
+  "streamability": "streamable",
+  "interface_family": "axi4",
+  "interface_profile": {
+    "axi4_variant": "axi4_full",
+    "role": "master",
+    "read_write_mode": "read_write",
+    "data_width": 32,
+    "addr_width": 32,
+    "id_width": 1,
+    "burst_support": false,
+    "clock_reset_domain": {
+      "clock": "ap_clk",
+      "reset": "ap_rst_n"
+    }
+  },
+  "pipeline_required": true,
+  "codegen_plan_required": true,
+  "description": "Template for a power-spectrum FFT kernel.",
+  "interfaces": {
+    "top_function": "fft_power_spectrum_kernel",
+    "arguments": [
+      {
+        "name": "input",
+        "type": "const ap_uint<32> *",
+        "direction": "input",
+        "interface": "m_axi",
+        "bundle": "gmem0",
+        "depth": 256
+      },
+      {
+        "name": "output",
+        "type": "ap_uint<32> *",
+        "direction": "output",
+        "interface": "m_axi",
+        "bundle": "gmem1",
+        "depth": 256
+      },
+      {
+        "name": "length",
+        "type": "int",
+        "direction": "input",
+        "interface": "s_axilite"
+      }
+    ],
+    "control": "s_axilite"
+  },
+  "behavior": [
+    "Keep the window-power-spectrum intent explicit in comments and validation notes."
+  ],
+  "clock": {
+    "period_ns": 8.0,
+    "uncertainty_ns": 0.8
+  },
+  "reset": {
+    "strategy": "tool_default"
+  },
+  "constraints": [
+    "Do not erase the real-input or window assumptions from the asset."
+  ],
+  "outputs": [
+    {
+      "path": "src/fft_power_spectrum_kernel.h",
+      "kind": "header",
+      "language": "cpp"
+    },
+    {
+      "path": "src/fft_power_spectrum_kernel.cpp",
+      "kind": "source",
+      "language": "cpp"
+    },
+    {
+      "path": "tb/fft_power_spectrum_kernel_tb.cpp",
+      "kind": "testbench",
+      "language": "cpp"
+    },
+    {
+      "path": "hls_config.cfg",
+      "kind": "config",
+      "language": "ini"
+    }
+  ],
+  "notes": [],
+  "subfunctions": [],
+  "workflow": {
+    "board_acceptance": {
+      "profile": "u55c_m_axi_host",
+      "host_template": "unary_memory_host",
+      "target_family": "fft"
+    },
+    "mock_vectors": [
+      {
+        "id": "case_nominal",
+        "inputs": {
+          "input": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "length": 4
+        },
+        "expected_outputs": {
+          "output": [
+            2,
+            3,
+            4,
+            5
+          ]
+        }
+      },
+      {
+        "id": "case_boundary",
+        "inputs": {
+          "input": [
+            0,
+            7
+          ],
+          "length": 2
+        },
+        "expected_outputs": {
+          "output": [
+            1,
+            8
+          ]
+        }
+      }
+    ]
+  },
+  "performance": {
+    "target_ii": 1
+  },
+  "hls_profile": {
+    "example_pattern": "fft",
+    "allowed_libraries": [
+      "ap_int.h"
+    ],
+    "required_headers": [
+      "ap_int.h"
+    ],
+    "required_pragmas": [
+      "#pragma HLS PIPELINE II=1"
+    ],
+    "required_metadata_fields": [
+      "point_count",
+      "scaling_strategy",
+      "twiddle_representation",
+      "complex_data_mode",
+      "error_tolerance"
+    ],
+    "metadata": {
+      "point_count": 64,
+      "scaling_strategy": "window_then_power",
+      "twiddle_representation": "q1_15_table",
+      "complex_data_mode": "real_input_hann",
+      "error_tolerance": "0.004"
+    },
+    "forbidden_combinations": [],
+    "required_cfg_entries": [
+      "clock=8.0"
+    ]
+  }
+}

@@ -4,19 +4,18 @@
     "default_workflow_config": "integration/default_workflow_config.json",
     "workflow_state_file": "workflow-state.json",
     "examples_dir": "assets/examples",
-    "smoke_root": "_smoke_runs",
+    "smoke_root": "reports/_smoke_runs",
     "generated_roots": [
-      "_smoke_runs",
       "reports"
     ],
     "protected_roots": [
       "agents",
       "assets",
+      "evals",
       "integration",
       "references",
       "runtime",
-      "scripts",
-      "smoke"
+      "scripts"
     ],
     "protected_files": [
       "DESIGN_GOALS.md",
@@ -69,7 +68,7 @@
   },
   "remote_validation": {
     "erie_skill_dir": "${home}/.codex/skills/erie-remote-ssh",
-    "erie_settings_path": "${erie_skill_dir}/config/defaults.json",
+    "erie_settings_path": "${erie_skill_dir}/assets/defaults.json",
     "local_run_root": "reports/remote-validation",
     "remote_tmp_dir": ".hls-generator-remote-validation",
     "directory_contract": {
@@ -121,7 +120,7 @@
       "blocking": true,
       "required_files": [
         "scripts/remote_ssh.py",
-        "config/defaults.json"
+        "assets/defaults.json|config/defaults.json"
       ]
     },
     {

@@ -11,7 +11,7 @@
 <p align="center">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-1f6feb"></a>
   <a href="pyproject.toml"><img alt="Python" src="https://img.shields.io/badge/python-3.10%2B-2f81f7"></a>
-  <img alt="Version" src="https://img.shields.io/badge/version-v0.2.0-7c3aed">
+  <img alt="Version" src="https://img.shields.io/badge/version-v0.2.1-7c3aed">
   <a href="SKILL.md"><img alt="Agent Skill" src="https://img.shields.io/badge/agent-skill-16a34a"></a>
   <a href="references/vitis-hls-2024-2-script-guide.md"><img alt="Target" src="https://img.shields.io/badge/target-Vitis%20HLS-f59e0b"></a>
 </p>
@@ -50,11 +50,11 @@ HLS Generator 用来把 AI 编程代理变成更可靠的 HLS 工程助手。它
   <img src="docs/assets/workflow-cn.svg" alt="HLS Generator 工作流" width="100%">
 </p>
 
-## v0.2.0 重点更新
+## v0.2.1 重点更新
 
-- 新增 board acceptance、验证板 host 模板以及远程板卡/平台上传指南，补强端到端验证链路。
-- 扩展示例与模板覆盖，加入 2D block transform、host-kernel split、minimal Vitis pipeline、array partition/reshape、fixed-point 和 multi-`m_axi` 场景。
-- 引入 comment policy、route contract、remote directory 等辅助模块，以及仓库级验证脚本，收紧运行时与发布治理。
+- 扩展 HLS 模板与 example corpus，加入 CORDIC、FFT、FIR、prefix、RLE、线性代数与面向板卡的结构化 spec。
+- 新增 validation-board host 模板，以及 remote recovery 与 confidence helpers，补强远程 Vitis acceptance 与 release 流程。
+- 将治理、验证、发布、curation 和 remote acceptance 辅助脚本集中到 `scripts/python/`，同时把 repo-local 验证资产继续留在公开仓库之外。
 
 ## 仓库结构
 
@@ -65,8 +65,10 @@ HLS Generator 用来把 AI 编程代理变成更可靠的 HLS 工程助手。它
 | `runtime/hls_generator/` | scaffold、prompt 渲染、抽取、验证、报告和 workflow 状态。 |
 | `integration/hls_adapter.py` | 面向宿主应用的稳定接口。 |
 | `assets/examples/` | stream、memory、dataflow、partition、reshape、fixed-point、multi-`m_axi` 等 HLS spec 示例。 |
+| `assets/templates/` | 常见 kernel 家族与面向板卡场景的可复用结构化 HLS JSON 模板。 |
 | `assets/validation-board/` | 远程验证所需的板端 host 模板与辅助载荷。 |
-| `references/` | Vitis HLS 策略、配置规则、工作流契约、集成说明和注释风格指南。 |
+| `references/` | Vitis HLS 策略、配置规则、工作流契约、集成说明、注释风格指南和模板家族目录。 |
+| `scripts/python/` | 公开 skill 仓库提供的 curation、release、governance、validation、inspection 与 remote acceptance 辅助脚本。 |
 
 ## 安装
 
@@ -101,6 +103,8 @@ python -m runtime.hls_generator prompt --target hls --spec .\reports\hls\spec.js
 ```powershell
 python -m runtime.hls_generator validate --target hls --spec .\reports\hls\spec.json --path .\reports\hls\generated --readiness static --no-external
 ```
+
+工作区私有的 smoke、单元和 confidence 验证资产放在公开仓库之外的 `tmp/validation/hls-generator/`。
 
 外部验证需要真实 Vitis HLS 环境。只有实际运行 `vitis-run` 或 `vitis_hls` 后，才可以声称 Vitis 验证通过。
 
@@ -145,8 +149,8 @@ Jiyuan Liu 和 He Li 隶属于东南大学电子科学与工程学院。
   author       = {Jiyuan Liu and He Li},
   title        = {{HLS Generator}: An Agent Skill for Vitis HLS Workflows},
   year         = {2026},
-  version      = {0.2.0},
-  date         = {2026-05-22},
+  version      = {0.2.1},
+  date         = {2026-05-29},
   url          = {https://github.com/Eriemon/hls-generator},
   license      = {Apache-2.0},
   note         = {Agent skill package for structured AMD/Xilinx Vitis HLS workflows}

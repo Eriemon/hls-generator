@@ -147,6 +147,24 @@ def _check_pattern_semantics(profile: dict[str, Any], source_text: str) -> list[
         if "style=flp" not in source_text and "style=frp" not in source_text:
             issues.append(_issue("error", "HLS profile violation: task_graph task actors must use a flushing or free-running pipeline style."))
         return issues
+    if pattern == "rle_axis":
+        issues = []
+        lowered = source_text.lower()
+        if "ap_axiu<" not in source_text:
+            issues.append(_issue("error", "HLS profile violation: rle_axis pattern must use ap_axiu-based AXI-Stream payload types."))
+        if ".last" not in source_text and "tlast" not in lowered:
+            issues.append(_issue("error", "HLS profile violation: rle_axis pattern must model TLAST propagation explicitly."))
+        if ".keep" not in source_text or ".strb" not in source_text:
+            issues.append(_issue("error", "HLS profile violation: rle_axis pattern must initialize AXIS keep/strb fields explicitly."))
+        return issues
+    if pattern in {"fft", "cordic"}:
+        issues = []
+        metadata = profile.get("metadata") if isinstance(profile.get("metadata"), dict) else {}
+        if metadata.get("error_tolerance") not in (None, "", [], {}):
+            lowered = source_text.lower()
+            if "tolerance" not in lowered and "tol" not in lowered:
+                issues.append(_issue("error", f"HLS profile violation: {pattern} pattern must mention an explicit tolerance check in code or testbench text."))
+        return issues
     return []
 
 

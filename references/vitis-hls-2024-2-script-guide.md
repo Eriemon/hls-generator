@@ -2,7 +2,7 @@
 
 This reference records stable Vitis HLS scripting rules for this HLS-only skill. Load it when changing Vitis command execution, `.cfg` parsing, Tcl rendering, prompt rules, or validation policy.
 
-## Contents
+## Table of Contents
 
 - [Supported Script Surfaces](#supported-script-surfaces)
 - [Tcl Command Pattern](#tcl-command-pattern)

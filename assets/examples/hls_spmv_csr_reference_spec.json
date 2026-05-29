@@ -1,0 +1,188 @@
+{
+  "name": "spmv_csr_reference",
+  "target": "hls",
+  "design_requirements": {
+    "target": "hls",
+    "pipeline_required": true,
+    "streamability": "streamable",
+    "interface_family": "axi4",
+    "interface_profile": {
+      "axi4_variant": "axi4_full",
+      "role": "master",
+      "read_write_mode": "read_write",
+      "data_width": 32,
+      "addr_width": 32,
+      "id_width": 1,
+      "burst_support": false,
+      "clock_reset_domain": {
+        "clock": "ap_clk",
+        "reset": "ap_rst_n"
+      }
+    },
+    "confirmed_by_user": true,
+    "confirmation_notes": "Keep CSR SpMV as a reference-first example until sparse validation coverage grows."
+  },
+  "streamability": "streamable",
+  "interface_family": "axi4",
+  "interface_profile": {
+    "axi4_variant": "axi4_full",
+    "role": "master",
+    "read_write_mode": "read_write",
+    "data_width": 32,
+    "addr_width": 32,
+    "id_width": 1,
+    "burst_support": false,
+    "clock_reset_domain": {
+      "clock": "ap_clk",
+      "reset": "ap_rst_n"
+    }
+  },
+  "pipeline_required": true,
+  "codegen_plan_required": true,
+  "description": "Reference-first CSR SpMV example kept out of Tier 1 runtime pattern support.",
+  "interfaces": {
+    "top_function": "spmv_csr_reference_kernel",
+    "arguments": [
+      {
+        "name": "input_a",
+        "type": "const ap_uint<32> *",
+        "direction": "input",
+        "interface": "m_axi",
+        "bundle": "gmem_a",
+        "depth": 256
+      },
+      {
+        "name": "input_b",
+        "type": "const ap_uint<32> *",
+        "direction": "input",
+        "interface": "m_axi",
+        "bundle": "gmem_b",
+        "depth": 256
+      },
+      {
+        "name": "output",
+        "type": "ap_uint<32> *",
+        "direction": "output",
+        "interface": "m_axi",
+        "bundle": "gmem_out",
+        "depth": 256
+      },
+      {
+        "name": "length",
+        "type": "int",
+        "direction": "input",
+        "interface": "s_axilite"
+      }
+    ],
+    "control": "s_axilite"
+  },
+  "behavior": [
+    "Describe CSR row_ptr, col_idx, and value scheduling without claiming first-class runtime support."
+  ],
+  "clock": {
+    "period_ns": 8.0,
+    "uncertainty_ns": 0.8
+  },
+  "reset": {
+    "strategy": "tool_default"
+  },
+  "constraints": [
+    "Do not upgrade this example into default mock or provider behavior yet."
+  ],
+  "outputs": [
+    {
+      "path": "src/spmv_csr_reference_kernel.h",
+      "kind": "header",
+      "language": "cpp"
+    },
+    {
+      "path": "src/spmv_csr_reference_kernel.cpp",
+      "kind": "source",
+      "language": "cpp"
+    },
+    {
+      "path": "tb/spmv_csr_reference_kernel_tb.cpp",
+      "kind": "testbench",
+      "language": "cpp"
+    },
+    {
+      "path": "hls_config.cfg",
+      "kind": "config",
+      "language": "ini"
+    }
+  ],
+  "notes": [],
+  "subfunctions": [],
+  "workflow": {
+    "board_acceptance": {
+      "profile": "not_board_runnable",
+      "reason": "Curated template stays validation-focused and does not assume a board host harness."
+    },
+    "mock_vectors": [
+      {
+        "id": "case_nominal",
+        "inputs": {
+          "input_a": [
+            1,
+            2
+          ],
+          "input_b": [
+            3,
+            4
+          ],
+          "length": 2
+        },
+        "expected_outputs": {
+          "output": [
+            4,
+            6
+          ]
+        }
+      },
+      {
+        "id": "case_boundary",
+        "inputs": {
+          "input_a": [
+            0
+          ],
+          "input_b": [
+            5
+          ],
+          "length": 1
+        },
+        "expected_outputs": {
+          "output": [
+            5
+          ]
+        }
+      }
+    ]
+  },
+  "performance": {
+    "target_ii": 1
+  },
+  "hls_profile": {
+    "example_pattern": "spmv_csr",
+    "allowed_libraries": [
+      "ap_int.h"
+    ],
+    "required_headers": [
+      "ap_int.h"
+    ],
+    "required_pragmas": [
+      "#pragma HLS PIPELINE II=1"
+    ],
+    "required_metadata_fields": [
+      "representation",
+      "tier"
+    ],
+    "metadata": {
+      "representation": "csr",
+      "tier": "reference_first"
+    },
+    "forbidden_combinations": [],
+    "required_cfg_entries": [
+      "clock=8.0"
+    ]
+  }
+}

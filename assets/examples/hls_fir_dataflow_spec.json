@@ -1,0 +1,188 @@
+{
+  "name": "fir_dataflow",
+  "target": "hls",
+  "design_requirements": {
+    "target": "hls",
+    "pipeline_required": true,
+    "streamability": "streamable",
+    "interface_family": "axi4",
+    "interface_profile": {
+      "axi4_variant": "axi4_full",
+      "role": "master",
+      "read_write_mode": "read_write",
+      "data_width": 32,
+      "addr_width": 32,
+      "id_width": 1,
+      "burst_support": false,
+      "clock_reset_domain": {
+        "clock": "ap_clk",
+        "reset": "ap_rst_n"
+      }
+    },
+    "confirmed_by_user": true,
+    "confirmation_notes": "DATAFLOW FIR staging has been confirmed."
+  },
+  "streamability": "streamable",
+  "interface_family": "axi4",
+  "interface_profile": {
+    "axi4_variant": "axi4_full",
+    "role": "master",
+    "read_write_mode": "read_write",
+    "data_width": 32,
+    "addr_width": 32,
+    "id_width": 1,
+    "burst_support": false,
+    "clock_reset_domain": {
+      "clock": "ap_clk",
+      "reset": "ap_rst_n"
+    }
+  },
+  "pipeline_required": true,
+  "codegen_plan_required": true,
+  "description": "Template for a staged FIR dataflow kernel.",
+  "interfaces": {
+    "top_function": "fir_dataflow_kernel",
+    "arguments": [
+      {
+        "name": "input",
+        "type": "const ap_uint<32> *",
+        "direction": "input",
+        "interface": "m_axi",
+        "bundle": "gmem0",
+        "depth": 256
+      },
+      {
+        "name": "output",
+        "type": "ap_uint<32> *",
+        "direction": "output",
+        "interface": "m_axi",
+        "bundle": "gmem1",
+        "depth": 256
+      },
+      {
+        "name": "length",
+        "type": "int",
+        "direction": "input",
+        "interface": "s_axilite"
+      }
+    ],
+    "control": "s_axilite"
+  },
+  "behavior": [
+    "Keep read, FIR compute, and write stages explicit."
+  ],
+  "clock": {
+    "period_ns": 8.0,
+    "uncertainty_ns": 0.8
+  },
+  "reset": {
+    "strategy": "tool_default"
+  },
+  "constraints": [
+    "Do not claim DATAFLOW correctness without explicit stage-boundary comments."
+  ],
+  "outputs": [
+    {
+      "path": "src/fir_dataflow_kernel.h",
+      "kind": "header",
+      "language": "cpp"
+    },
+    {
+      "path": "src/fir_dataflow_kernel.cpp",
+      "kind": "source",
+      "language": "cpp"
+    },
+    {
+      "path": "tb/fir_dataflow_kernel_tb.cpp",
+      "kind": "testbench",
+      "language": "cpp"
+    },
+    {
+      "path": "hls_config.cfg",
+      "kind": "config",
+      "language": "ini"
+    }
+  ],
+  "notes": [],
+  "subfunctions": [],
+  "workflow": {
+    "board_acceptance": {
+      "profile": "not_board_runnable",
+      "reason": "Curated template stays validation-focused and does not assume a board host harness."
+    },
+    "mock_vectors": [
+      {
+        "id": "case_nominal",
+        "inputs": {
+          "input": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "length": 4
+        },
+        "expected_outputs": {
+          "output": [
+            2,
+            3,
+            4,
+            5
+          ]
+        }
+      },
+      {
+        "id": "case_boundary",
+        "inputs": {
+          "input": [
+            0,
+            7
+          ],
+          "length": 2
+        },
+        "expected_outputs": {
+          "output": [
+            1,
+            8
+          ]
+        }
+      }
+    ]
+  },
+  "performance": {
+    "target_ii": 1
+  },
+  "hls_profile": {
+    "example_pattern": "fir",
+    "allowed_libraries": [
+      "ap_int.h",
+      "hls_stream.h"
+    ],
+    "required_headers": [
+      "ap_int.h",
+      "hls_stream.h"
+    ],
+    "required_pragmas": [
+      "#pragma HLS DATAFLOW",
+      "#pragma HLS PIPELINE II=1"
+    ],
+    "required_metadata_fields": [
+      "tap_count",
+      "coefficient_symmetry",
+      "structure_style",
+      "interface_style",
+      "ii_target"
+    ],
+    "metadata": {
+      "tap_count": 16,
+      "coefficient_symmetry": "none",
+      "structure_style": "dataflow_staged",
+      "interface_style": "memory_mapped",
+      "ii_target": 1
+    },
+    "forbidden_combinations": [],
+    "required_cfg_entries": [
+      "clock=8.0"
+    ]
+  }
+}

@@ -1,6 +1,6 @@
 # Integration Guide
 
-## Contents
+## Table of Contents
 
 - [Local package boundary](#local-package-boundary)
 - [Stable facade](#stable-facade)
@@ -19,7 +19,6 @@ facade:
 - `integration/`
 - `assets/examples/`
 - `references/`
-- `smoke/`
 
 Do not rely on compatibility imports from the old mixed generator. The public
 integration surface is intentionally renamed.
@@ -58,7 +57,7 @@ invalid, it raises `SkillDependencyError` with an install-request payload. Hosts
 must ask the user before running `python -m runtime.hls_generator deps install
 --all`; after installation, ask the user to restart Codex.
 
-Remote SSH confidence checks must use `scripts/remote_vitis_acceptance.py`,
+Remote SSH confidence checks must use `scripts/python/remote/remote_vitis_acceptance.py`,
 which delegates all SSH discovery, checks, exec, and request execution to the
 configured `erie-remote-ssh` helper. Keep real server details in the erie
 server-list JSON, not in this skill.
@@ -108,7 +107,7 @@ validation fails with an actionable toolchain preflight error. Full workflows
 also write `remote_toolchain_request.json`; hosts should ask the user to choose
 an `erie-remote-ssh` server, run erie discovery/choices/check/workspace-check,
 run erie `scan-software`, and then call
-`scripts/remote_vitis_acceptance.py --mode vitis --server <erie-server>`. If
+`scripts/python/remote/remote_vitis_acceptance.py --mode vitis --server <erie-server>`. If
 multiple Vitis versions are detected, hosts must ask the user to choose one and
 rerun with `--vitis-version <version>`. Static validation can still run with
 `run_external=False` and `readiness="static"`.
@@ -128,5 +127,5 @@ config.
 
 Keep host-specific glue in `integration/`. Runtime edits should be limited to
 shared HLS generator behavior, validation, prompt contracts, or CLI changes.
-All generated run artifacts should live outside the skill source tree or in
-ignored smoke directories.
+All generated run artifacts should live outside the skill source tree. In the
+source repository, the governed validation output root is `reports/`.

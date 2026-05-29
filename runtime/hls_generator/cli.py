@@ -6,6 +6,7 @@ import argparse
 import json
 from pathlib import Path
 
+from . import __version__
 from .config import config_path, runtime_config, skill_dependencies_config, validate_runtime_config
 from .hls_profile import build_hls_optimizer_prompt
 from .prompt import COMMENT_LANGUAGE_CHOICES, PROMPT_BUDGETS, PROMPT_STAGES, render_prompt
@@ -28,7 +29,7 @@ from .workspace import require_configured_output_path, require_workspace_path
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="hls-gen", description="AMD-Xilinx/Vitis HLS-only generator CLI.")
-    parser.add_argument("--version", action="version", version="hls-gen 0.2.0")
+    parser.add_argument("--version", action="version", version=f"hls-gen {__version__}")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     scaffold = subparsers.add_parser("scaffold", help="Create a starter HLS spec.")

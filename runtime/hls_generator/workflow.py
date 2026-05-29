@@ -497,8 +497,8 @@ def _write_remote_toolchain_request(attempt_dir: Path, attempt_id: str, config: 
             "user_decision_required": "Select one enabled erie server id or name before any SSH execution.",
         },
         "hls_generator_remote_commands": [
-            "python .\\scripts\\remote_vitis_acceptance.py --mode link --server <erie-server> --json",
-            f"python .\\scripts\\remote_vitis_acceptance.py --mode vitis --server <erie-server> --readiness {readiness} --json",
+            "python .\\scripts\\python\\remote\\remote_vitis_acceptance.py --mode link --server <erie-server> --json",
+            f"python .\\scripts\\python\\remote\\remote_vitis_acceptance.py --mode vitis --server <erie-server> --readiness {readiness} --json",
         ],
         "remote_artifact_policy": {
             "default": "retain",

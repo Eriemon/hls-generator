@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "mode": "family_representative_plus_high_risk",
+  "statuses": [
+    "local-high-confidence",
+    "validator-ready",
+    "board-runnable",
+    "remote-confidence-ready",
+    "factual-high-confidence"
+  ],
+  "families": {
+    "fir": {
+      "representative": "hls_fir_pipeline_spec.json",
+      "high_risk": "hls_fir_axis_board_spec.json"
+    },
+    "fft": {
+      "representative": "hls_fft_fixed_point_spec.json",
+      "high_risk": "hls_fft_power_spectrum_spec.json"
+    },
+    "cordic": {
+      "representative": "hls_cordic_rotation_spec.json",
+      "high_risk": "hls_cordic_axis_board_spec.json"
+    },
+    "matmul": {
+      "representative": "hls_matmul_blocked_spec.json",
+      "high_risk": "hls_matmul_dataflow_spec.json"
+    },
+    "prefix_scan": {
+      "representative": "hls_prefix_basic_spec.json",
+      "high_risk": "hls_prefix_blocked_spec.json"
+    },
+    "rle_axis": {
+      "representative": "hls_rle_axis_encode_board_spec.json",
+      "high_risk": "hls_rle_axis_decode_board_spec.json"
+    }
+  }
+}

@@ -12,7 +12,7 @@ The final hardware-facing artifacts must be Vitis HLS source, headers, C++ testb
 - Do not provide ResearchAssistant or GUI Code Design host integration.
 - Do not support local RTL tools such as `iverilog`, `vvp`, or `yosys`.
 - Do not add broad user-facing documentation outside the standard Skill files, except this root design-goal record requested for engineering alignment.
-- Do not modify files outside this skill directory.
+- Do not modify files outside this repository, except that source-repo validation assets are expected to live under the repository-root `smoke/`, `tests/`, and `reports/` directories.
 
 ## AMD-Xilinx Target
 
@@ -27,7 +27,7 @@ The validator must prefer the first configured Vitis tool and then fall back thr
 
 ## Skill Design Pattern
 
-This skill follows the standard Skill structure: `SKILL.md` for concise routing and workflow instructions, `agents/openai.yaml` for UI metadata, `references/` for details loaded on demand, `assets/` for examples, `runtime/` for deterministic workflow code, `integration/` for stable local APIs, and `smoke/` for validation.
+This skill follows the standard Skill structure: `SKILL.md` for concise routing and workflow instructions, `agents/openai.yaml` for UI metadata, `references/` for details loaded on demand, `assets/` for examples, `runtime/` for deterministic workflow code, and `integration/` for stable local APIs. Source-repository validation now lives at the repository root in `smoke/`, `tests/`, and `reports/`.
 
 The design uses the local Skill-pattern reference reviewed during planning:
 

@@ -20,17 +20,21 @@ def skill_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
+def repo_root() -> Path:
+    return skill_root().parents[1]
+
+
 def config_path() -> Path:
     raw_override = os.environ.get(CONFIG_ENV_VAR)
     if raw_override:
         candidate = Path(raw_override)
         if not candidate.is_absolute():
-            candidate = skill_root() / candidate
+            candidate = repo_root() / candidate
         resolved = candidate.resolve()
         try:
-            resolved.relative_to(skill_root())
+            resolved.relative_to(repo_root())
         except ValueError as exc:
-            raise ValueError(f"{CONFIG_ENV_VAR} must point inside this skill root: {raw_override}") from exc
+            raise ValueError(f"{CONFIG_ENV_VAR} must point inside this repository: {raw_override}") from exc
         return resolved
     return Path(__file__).with_name(_DEFAULT_CONFIG_NAME).resolve()
 
@@ -93,8 +97,9 @@ def workflow_state_path() -> Path:
 
 def smoke_root_name() -> str:
     value = _path_config_value("smoke_root").replace("\\", "/")
-    if "/" in value or value in {".", ".."}:
-        raise ValueError("Runtime config paths.smoke_root must be a top-level directory name.")
+    path = Path(value)
+    if path.is_absolute() or value.startswith("~/") or any(part in {"", ".", ".."} for part in path.parts):
+        raise ValueError("Runtime config paths.smoke_root must be a relative workspace path without traversal.")
     return value
 
 
@@ -250,13 +255,12 @@ def skill_dependencies_config() -> list[dict[str, Any]]:
 
 def _resolve_erie_remote_skill_dir(config: dict[str, Any]) -> Path:
     configured = _expand_remote_value(_remote_required(config, "erie_skill_dir"))
-    settings_template = _remote_required(config, "erie_settings_path")
-    configured_settings = _expand_remote_value(settings_template, {"erie_skill_dir": str(configured)})
     if os.environ.get("HLS_GENERATOR_SKILLS_DIRS") is not None or os.environ.get("CODEX_HOME"):
         discovered = _discover_erie_remote_skill_dir()
         if discovered is not None:
             return discovered
-    if (configured / "scripts" / "remote_ssh.py").exists() and configured_settings.exists():
+    configured_settings = _erie_settings_candidates(config, configured)
+    if (configured / "scripts" / "remote_ssh.py").exists() and any(path.exists() for path in configured_settings):
         return configured
     discovered = _discover_erie_remote_skill_dir()
     if discovered is not None:
@@ -276,7 +280,28 @@ def _discover_erie_remote_skill_dir() -> Path | None:
 
 
 def _resolve_erie_settings_path(config: dict[str, Any]) -> Path:
-    return _expand_remote_value(_remote_required(config, "erie_settings_path"), {"erie_skill_dir": config["erie_skill_dir"]})
+    candidates = _erie_settings_candidates(config, Path(str(config["erie_skill_dir"])))
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
+
+def _erie_settings_candidates(config: dict[str, Any], erie_skill_dir: Path) -> list[Path]:
+    configured = _expand_remote_value(_remote_required(config, "erie_settings_path"), {"erie_skill_dir": str(erie_skill_dir)})
+    candidates = [
+        configured,
+        (erie_skill_dir / "assets" / "defaults.json").resolve(),
+        (erie_skill_dir / "config" / "defaults.json").resolve(),
+    ]
+    unique: list[Path] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate)
+        if key not in seen:
+            seen.add(key)
+            unique.append(candidate)
+    return unique
 
 
 def _path_config_value(key: str) -> str:

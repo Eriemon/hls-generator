@@ -1,6 +1,6 @@
 # Runtime Configuration
 
-## Contents
+## Table of Contents
 
 - [Path Policy](#path-policy)
 - [Vitis Tool Policy](#vitis-tool-policy)
@@ -15,19 +15,21 @@ Keep this file inside the skill root. To test an alternate config, set
 ## Path Policy
 
 `paths.generated_roots` lists the top-level directories where facade and CLI
-commands may create generated files when run from the skill root. The default
-roots are smoke runs and reports.
+commands may create generated files when run from a governed repository
+workspace. The default generated root is the repository-root `reports/`
+directory.
 
 `paths.protected_roots` and `paths.protected_files` list source and reference
 areas that generated artifacts must not overwrite. Keep runtime code,
-integration APIs, references, examples, smoke tests, `SKILL.md`, and
+integration APIs, references, examples, eval assets, `SKILL.md`, and
 `DESIGN_GOALS.md` protected. The `scripts/` directory is also protected because
 it contains executable skill support code, not generated output.
 
 `paths.default_workflow_config`, `paths.examples_dir`, `paths.smoke_root`, and
 `paths.workflow_state_file` define the workflow defaults file, example spec
-directory, smoke output root, and run-state filename. These values must stay
-relative to the skill root.
+directory, smoke output root, and run-state filename. `default_workflow_config`
+and `examples_dir` stay inside the skill root; `smoke_root` is a governed
+repository-workspace-relative output path and defaults to `reports/_smoke_runs`.
 
 When changing generated roots, update the ignore policy at the same time so
 temporary workflow outputs do not become tracked source files.
@@ -94,11 +96,12 @@ When `vitis-developer` is already installed, `deps install --all` skips
 `install_skipped`. The seven `vivado-*` skills remain required and are not
 satisfied by `vitis-developer`.
 
-Use these commands from the skill root:
+Use these commands from the skill root or another workspace. Choose an
+explicit writable output directory for generated request/spec artifacts:
 
 ```powershell
 python -m runtime.hls_generator deps check --json
-python -m runtime.hls_generator deps request --out .\reports\skill_dependency_request.json
+python -m runtime.hls_generator deps request --out <output-dir>\skill_dependency_request.json
 python -m runtime.hls_generator deps install --all
 ```
 
@@ -117,7 +120,9 @@ credentials into this skill. Server ids and names must come from the
 
 - `erie_skill_dir` points to the installed `erie-remote-ssh` skill.
 - `erie_settings_path` points to the erie settings JSON used for discovery,
-  list, check, workspace-check, exec, and request execution.
+  list, check, workspace-check, exec, and request execution. The current
+  preferred layout is `${erie_skill_dir}/assets/defaults.json`; legacy
+  `${erie_skill_dir}/config/defaults.json` remains supported for compatibility.
 - `local_run_root` is the generated local report root for remote validation
   plans, overlays, requests, and reports.
 - `directory_contract.project_root_dirname` is the governed remote project root
@@ -139,11 +144,11 @@ credentials into this skill. Server ids and names must come from the
   name. The shipped skill may leave this object empty; in that case remote
   acceptance must stop and ask the user to configure the missing values.
 
-Use `scripts/remote_vitis_acceptance.py --mode link --server <erie-server>` for
+Use `scripts/python/remote/remote_vitis_acceptance.py --mode link --server <erie-server>` for
 UC-style SSH helper link checks. This mode is read-only on the remote host and
 does not claim Vitis acceptance.
 
-Use `scripts/remote_vitis_acceptance.py --mode vitis --server <erie-server>
+Use `scripts/python/remote/remote_vitis_acceptance.py --mode vitis --server <erie-server>
 --profile <configured-profile> --readiness cosim` only with a server whose erie
 config is already validated and whose configured or previously saved profile
 exposes the expected Vitis tool. If no complete profile is available, the

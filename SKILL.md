@@ -24,31 +24,34 @@ Use this skill for local AMD-Xilinx/Vitis HLS C/C++ kernel generation. The bundl
 
 ## Local Commands
 
-Run the bundled smoke validator from this skill directory:
+For source-repository validation only, run the bundled smoke validator from the repository root:
 
 ```powershell
 python .\smoke\run_smoke.py
 ```
 
-Use the runtime CLI:
+Use the runtime CLI from the skill directory or another workspace. Pick an explicit writable output directory when you need generated specs, prompts, or validation JSON:
 
 ```powershell
 python -m runtime.hls_generator config --path
 python -m runtime.hls_generator deps check --json
-python -m runtime.hls_generator deps request --out .\reports\skill_dependency_request.json
-python -m runtime.hls_generator scaffold --target hls --name vector_scale --out .\reports\hls\spec.json
-python -m runtime.hls_generator prompt --target hls --spec .\reports\hls\spec.json --out .\reports\hls\prompt.md
-python -m runtime.hls_generator validate --target hls --spec .\reports\hls\spec.json --path .\reports\hls\generated --readiness static --no-external
+python -m runtime.hls_generator deps request --out <output-dir>\skill_dependency_request.json
+python -m runtime.hls_generator scaffold --target hls --name vector_scale --out <output-dir>\hls\spec.json
+python -m runtime.hls_generator prompt --target hls --spec <output-dir>\hls\spec.json --out <output-dir>\hls\prompt.md
+python -m runtime.hls_generator validate --target hls --spec <output-dir>\hls\spec.json --path <output-dir>\hls\generated --readiness static --no-external
 ```
 
 When local `vitis-run`/`vitis_hls` is missing, inspect the workflow's `remote_toolchain_request.json`, ask the user to choose a configured `erie-remote-ssh` build server and, when needed, a separate validation server, then use the remote acceptance helper:
 
 ```powershell
-python .\scripts\remote_vitis_acceptance.py --mode link --server <erie-server>
-python .\scripts\remote_vitis_acceptance.py --mode vitis --server <erie-server> --profile <configured-profile> --readiness <execute|implement|cosim>
-python .\scripts\remote_vitis_acceptance.py --mode vitis --build-server <erie-build-server> --validate-server <erie-validate-server> --vitis-version <shared-version> --readiness <execute|implement|cosim>
-python .\scripts\remote_vitis_acceptance.py --mode board --server <erie-server> --platform-name <platform-name> --remote-platform-root <remote-platform-root> --remote-xpfm <remote-xpfm> --example-spec <board-runnable-example> --comment-language <en|zh> --json
+python .\scripts\python\remote\remote_vitis_acceptance.py --mode link --server <erie-server>
+python .\scripts\python\remote\remote_vitis_acceptance.py --mode vitis --server <erie-server> --profile <configured-profile> --readiness <execute|implement|cosim>
+python .\scripts\python\remote\remote_vitis_acceptance.py --mode vitis --build-server <erie-build-server> --validate-server <erie-validate-server> --vitis-version <shared-version> --readiness <execute|implement|cosim>
+python .\scripts\python\remote\remote_vitis_acceptance.py --mode board --server <erie-server> --platform-name <platform-name> --remote-platform-root <remote-platform-root> --remote-xpfm <remote-xpfm> --example-spec <board-runnable-example> --comment-language <en|zh> --json
+python .\scripts\python\validation\confidence_loop.py --server <erie-server> --vitis-version <shared-version> --readiness cosim --remote-parallelism 3 --json-out ..\..\reports\confidence-loop\latest-remote.json
 ```
+
+`confidence_loop.py` defaults remote review to a single canonical smoke spec. Only use `--remote-coverage tier1` when you intentionally want the broader representative/high-risk matrix; otherwise do not turn routine template validation into a full remote sweep.
 
 Remote Vitis acceptance refreshes erie software scan data. If multiple Vitis
 versions are detected and no version has been saved for that server in
@@ -72,6 +75,7 @@ deleted after a successful run.
 
 ## Reference Loading
 
+- Load `references/hls-template-catalog.md` before changing curated template-corpus coverage, assetization status, errata tracking, or source-gap handling.
 - Load `references/integration.md` when wiring the local facade into another script.
 - Load `references/workflow-contracts.md` when handling run directories, statuses, resume behavior, or traces.
 - Load `references/configuration.md` before changing generated roots, protected paths, Vitis tool commands, or timeouts.
@@ -83,12 +87,16 @@ deleted after a successful run.
 - Load `references/hls-task-parallel-strategy.md` before changing task-level parallelism guidance, channel semantics, restart behavior, or stream/dataflow positioning.
 - Load `references/hls-stencil-reduction-gemm-patterns.md` before changing stencil/window, reduction-tree, or tiled-GEMM guidance and templates.
 - Load `references/hls-advanced-library-patterns.md` before changing hls_task, hls_streamofblocks, hls_directio, or hls_fence guidance and validation.
+- Load `references/hls-fir-template-family.md` before changing FIR pipeline, symmetric, AXIS, dataflow, or specialized FIR-family guidance and assets.
+- Load `references/hls-fft-cordic-template-family.md` before changing FFT/DFT scaling, twiddle, power-spectrum, CORDIC, or transform-family guidance and assets.
+- Load `references/hls-stream-codec-template-family.md` before changing RLE AXIS, stream-codec framing, TLAST policy, or reference-first compression guidance.
+- Load `references/hls-linear-algebra-template-family.md` before changing matmul, prefix scan, SpMV reference guidance, or linear-algebra family assets.
 - Load `references/hls-project-structure-patterns.md` before changing project structure patterns such as minimal Vitis kernel flow, host-kernel-package staging, kernel variant trees, or hotspot-file organization rules.
 - Load `references/hls-device-migration-strategy.md` before changing target-part migration guidance, QoR comparison rules, or floating-point/fixed-point portability advice.
 - Load `references/hls-library-policy.md` before changing HLS include choices, advanced HLS library usage, or generated library examples.
 - Load `references/hls-comment-style.md` before changing generated C/C++ comment language, comment coverage, or comment validation rules.
 - Load `references/remote-board-platform-upload.md` before handling uploaded remote U55C platform/xpfm payloads or when board validation is blocked on a missing platform package.
-- Load `references/hls-tutorial-derived-templates.md` before changing imported template families, 2D block-transform skeletons, or report-driven optimization cues distilled from the local reference corpus.
+- Load `references/hls-tutorial-derived-templates.md` before changing family-to-template mapping policy, 2D block-transform skeletons, or report-driven optimization cues distilled from the curated reference corpus.
 - Use `assets/examples/` for minimal HLS memory, burst, stencil, reduction, tiled-GEMM, lane-packed, task-graph, stream-of-blocks, free-running, fence-ordering, stream, partition, dataflow, multi-`m_axi`, and numeric-strategy specs.
 - Use `assets/templates/` for reusable HLS JSON skeletons that already include `design_requirements`, `interface_profile`, `performance`, `hls_profile`, and confirmation notes.
 
@@ -98,7 +106,7 @@ deleted after a successful run.
 - HLS-generated RTL/Verilog interface, export, cosim, and debug issues are in scope when they trace back to Vitis HLS code, pragmas, configuration, or reports.
 - Pure handwritten Verilog/SystemVerilog debug is not led by this skill; use vivado-debug, vivado-sim, vivado-analysis, or RTL-focused skills for those tasks.
 - Do not use local non-HLS hardware tools as validation substitutes.
-- Do not modify files outside this skill directory.
+- Do not modify files outside this repository, except for the governed source-repository validation directories `smoke/`, `tests/`, and `reports/`.
 - Keep path and Vitis-tool policy in `runtime/hls_generator/runtime_config.json`; update `references/configuration.md` when the policy changes.
 - Keep skill dependencies in `runtime/hls_generator/runtime_config.json`; missing required or recommended dependencies are blocking. Install only after the user confirms, then restart Codex so new skill metadata is loaded.
 - If `vitis-developer` is installed, dependency installation must not install `vitis-hls-synthesis` from FPGA-Agent-Skills; the remaining Vivado skills are still required.

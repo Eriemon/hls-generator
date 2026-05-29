@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, Iterator
 
-from .config import generated_roots, protected_write_targets, skill_root, workflow_state_path
+from .config import generated_roots, protected_write_targets, repo_root, skill_root, workflow_state_path
 from .spec import SpecError
 
 _WORKSPACE_ROOT_OVERRIDE: ContextVar[Path | None] = ContextVar("hls_generator_workspace_root", default=None)
@@ -84,7 +84,7 @@ def require_write_path(path: Path, *, purpose: str = "output path") -> Path:
 def require_configured_output_path(path: Path, *, purpose: str = "output path") -> Path:
     resolved = require_write_path(path, purpose=purpose)
     workspace = workspace_root()
-    if workspace != skill_root():
+    if workspace not in {skill_root(), repo_root()}:
         return resolved
     parts = resolved.relative_to(workspace).parts
     if not parts or parts[0] not in generated_roots():

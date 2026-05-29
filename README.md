@@ -11,7 +11,7 @@
 <p align="center">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-1f6feb"></a>
   <a href="pyproject.toml"><img alt="Python" src="https://img.shields.io/badge/python-3.10%2B-2f81f7"></a>
-  <img alt="Version" src="https://img.shields.io/badge/version-v0.2.0-7c3aed">
+  <img alt="Version" src="https://img.shields.io/badge/version-v0.2.1-7c3aed">
   <a href="SKILL.md"><img alt="Agent Skill" src="https://img.shields.io/badge/agent-skill-16a34a"></a>
   <a href="references/vitis-hls-2024-2-script-guide.md"><img alt="Target" src="https://img.shields.io/badge/target-Vitis%20HLS-f59e0b"></a>
 </p>
@@ -50,11 +50,11 @@ Use it when an agent needs to work on:
   <img src="docs/assets/workflow.svg" alt="HLS Generator workflow" width="100%">
 </p>
 
-## What's New In v0.2.0
+## What's New In v0.2.1
 
-- Adds board-acceptance support, validation-board host templates, and remote board/platform upload guidance for stronger end-to-end validation flows.
-- Expands reusable examples and templates with 2D block transform, host-kernel split, minimal Vitis pipeline, array partition/reshape, fixed-point, and multi-`m_axi` coverage.
-- Introduces comment-policy, route-contract, and remote-directory helpers plus repo-local validation scripts to tighten release and runtime governance.
+- Adds a broader HLS template and example corpus, including CORDIC, FFT, FIR, prefix, RLE, linear-algebra, and board-oriented structured specs.
+- Adds validation-board host templates plus remote recovery and confidence helpers for stronger remote Vitis acceptance and release workflows.
+- Moves governance, validation, release, curation, and remote acceptance helpers under `scripts/python/`, while keeping repo-local validation assets out of the public source tree.
 
 ## Repository Map
 
@@ -65,8 +65,10 @@ Use it when an agent needs to work on:
 | `runtime/hls_generator/` | Deterministic scaffolding, prompt rendering, extraction, validation, reports, and workflow state. |
 | `integration/hls_adapter.py` | Stable host-facing facade for workflow, prompt, and validation calls. |
 | `assets/examples/` | Reusable structured HLS specs for stream, memory, dataflow, partition, reshape, fixed-point, and multi-`m_axi` cases. |
+| `assets/templates/` | Reusable structured HLS JSON templates for common kernel families and board-facing variants. |
 | `assets/validation-board/` | Board-side host templates and payload helpers for remote validation runs. |
-| `references/` | Vitis HLS policies, configuration rules, workflow contracts, integration notes, and comment style guidance. |
+| `references/` | Vitis HLS policies, configuration rules, workflow contracts, integration notes, comment style guidance, and family catalogs. |
+| `scripts/python/` | Curated release, governance, validation, inspection, and remote acceptance helpers exposed by the public skill repository. |
 
 ## Install
 
@@ -101,6 +103,8 @@ Static validation without external AMD/Xilinx tools:
 ```powershell
 python -m runtime.hls_generator validate --target hls --spec .\reports\hls\spec.json --path .\reports\hls\generated --readiness static --no-external
 ```
+
+Workspace-private smoke, unit, and confidence validation assets live outside the public repository under `tmp/validation/hls-generator/`.
 
 External validation requires a real Vitis HLS installation. This project does not claim Vitis acceptance unless `vitis-run` or `vitis_hls` actually runs.
 
@@ -147,8 +151,8 @@ If this skill helps your research, teaching, or engineering workflow, please cit
   author       = {Jiyuan Liu and He Li},
   title        = {{HLS Generator}: An Agent Skill for Vitis HLS Workflows},
   year         = {2026},
-  version      = {0.2.0},
-  date         = {2026-05-22},
+  version      = {0.2.1},
+  date         = {2026-05-29},
   url          = {https://github.com/Eriemon/hls-generator},
   license      = {Apache-2.0},
   note         = {Agent skill package for structured AMD/Xilinx Vitis HLS workflows}

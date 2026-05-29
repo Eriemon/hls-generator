@@ -259,6 +259,51 @@ def _mock_vectors(spec: dict[str, Any]) -> list[dict[str, Any]]:
         return configured
     pattern = _example_pattern(spec)
     arguments = {str(item.get("name")): item for item in spec.get("interfaces", {}).get("arguments", []) if isinstance(item, dict) and item.get("name")}
+    if pattern in {"fir", "fft", "cordic", "prefix_scan"} and {"input", "output", "length"}.issubset(arguments):
+        return [
+            {
+                "id": "case_nominal",
+                "inputs": {"input": [1, 2, 3, 4], "length": 4},
+                "expected_outputs": {"output": [2, 3, 4, 5]},
+                "checkpoints": {"length": 4, "first_output": 2},
+            },
+            {
+                "id": "case_boundary",
+                "inputs": {"input": [0, 7], "length": 2},
+                "expected_outputs": {"output": [1, 8]},
+                "checkpoints": {"length": 2, "first_output": 1},
+            },
+        ]
+    if pattern == "matmul" and {"input_a", "input_b", "output", "length"}.issubset(arguments):
+        return [
+            {
+                "id": "case_nominal",
+                "inputs": {"input_a": [1, 2, 3], "input_b": [4, 5, 6], "length": 3},
+                "expected_outputs": {"output": [5, 7, 9]},
+                "checkpoints": {"length": 3, "first_output": 5},
+            },
+            {
+                "id": "case_boundary",
+                "inputs": {"input_a": [9, 0], "input_b": [1, 7], "length": 2},
+                "expected_outputs": {"output": [10, 7]},
+                "checkpoints": {"length": 2, "first_output": 10},
+            },
+        ]
+    if pattern == "rle_axis" and {"in_stream", "out_stream", "length"}.issubset(arguments):
+        return [
+            {
+                "id": "case_nominal",
+                "inputs": {"in_stream": [1, 1, 2], "length": 3},
+                "expected_outputs": {"out_stream": [2, 2, 3]},
+                "checkpoints": {"length": 3, "first_output": 2},
+            },
+            {
+                "id": "case_boundary",
+                "inputs": {"in_stream": [0, 15], "length": 2},
+                "expected_outputs": {"out_stream": [1, 16]},
+                "checkpoints": {"length": 2, "first_output": 1},
+            },
+        ]
     if pattern == "line_buffer_stencil":
         return [
             {
@@ -479,13 +524,15 @@ def _mock_hls_source_text(spec: dict[str, Any], header_name: str, comment_langua
     top = str(spec.get("interfaces", {}).get("top_function") or spec.get("name") or "kernel")
     helpers = _mock_hls_helpers_text(spec, comment_language)
     helper_block = helpers + "\n" if helpers else ""
+    tolerance_block = _mock_tolerance_marker(spec, comment_language, indent="  ")
+    tolerance_text = f"{tolerance_block}\n" if tolerance_block else ""
     return f'''#include "{header_name}"
 
 {helper_block}
 void {top}({_cpp_arguments(spec)}) {{
   // {_comment(comment_language, 'Port protocols and pipeline constraints follow the confirmed HLS spec.', '端口协议和流水线约束由确认后的 HLS spec 驱动。')}
 {_hls_pragmas(spec)}
-  // {_comment(comment_language, 'Core computation stays synthesizable and aligned with the Python oracle.', '核心计算保持可综合并与 Python oracle 对齐。')}
+{tolerance_text}  // {_comment(comment_language, 'Core computation stays synthesizable and aligned with the Python oracle.', '核心计算保持可综合并与 Python oracle 对齐。')}
 {_mock_hls_body(spec)}
 }}
 '''
@@ -493,14 +540,60 @@ void {top}({_cpp_arguments(spec)}) {{
 
 def _mock_hls_helpers_text(spec: dict[str, Any], comment_language: str) -> str:
     pattern = _example_pattern(spec)
-    if pattern not in {"dataflow", "task_graph"}:
-        return ""
     name = str(spec.get("name") or "kernel")
     arg_names = {
         str(item.get("name"))
         for item in spec.get("interfaces", {}).get("arguments", [])
         if isinstance(item, dict) and item.get("name")
     }
+    if pattern == "matmul" and _requires_dataflow_pragma(spec) and {"input_a", "input_b", "output", "length"}.issubset(arg_names):
+        return f'''static void load_matmul_a(const ap_uint<32>* input_a, hls::stream<ap_uint<32> >& a_stream, int length) {{
+  // {_comment(comment_language, 'Load the first matrix operand into a dedicated dataflow stream.', '将第一路矩阵操作数加载到独立 dataflow stream。')}
+  for (int i = 0; i < length; ++i) {{
+    #pragma HLS PIPELINE II=1
+    a_stream.write(input_a[i]);
+  }}
+}}
+
+static void load_matmul_b(const ap_uint<32>* input_b, hls::stream<ap_uint<32> >& b_stream, int length) {{
+  // {_comment(comment_language, 'Load the second matrix operand into a dedicated dataflow stream.', '将第二路矩阵操作数加载到独立 dataflow stream。')}
+  for (int i = 0; i < length; ++i) {{
+    #pragma HLS PIPELINE II=1
+    b_stream.write(input_b[i]);
+  }}
+}}
+
+static void compute_matmul_tile(hls::stream<ap_uint<32> >& a_stream, hls::stream<ap_uint<32> >& b_stream, hls::stream<ap_uint<32> >& out_stream, int length) {{
+  // {_comment(comment_language, 'Compute stage keeps the blocked tile buffers local while DATAFLOW overlaps load and store.', '计算阶段保持分块 tile buffer 为局部资源，同时让 DATAFLOW 与加载、回写重叠。')}
+  for (int base = 0; base < length; base += 4) {{
+    ap_uint<32> tile_a[4];
+    ap_uint<32> tile_b[4];
+    #pragma HLS ARRAY_PARTITION variable=tile_a complete dim=1
+    #pragma HLS ARRAY_PARTITION variable=tile_b complete dim=1
+    int chunk = (length - base < 4) ? (length - base) : 4;
+    for (int j = 0; j < 4; ++j) {{
+      #pragma HLS UNROLL
+      tile_a[j] = (j < chunk) ? a_stream.read() : ap_uint<32>(0);
+      tile_b[j] = (j < chunk) ? b_stream.read() : ap_uint<32>(0);
+    }}
+    for (int j = 0; j < 4; ++j) {{
+      #pragma HLS UNROLL
+      if (j < chunk) {{
+        out_stream.write(tile_a[j] + tile_b[j]);
+      }}
+    }}
+  }}
+}}
+
+static void store_matmul(hls::stream<ap_uint<32> >& out_stream, ap_uint<32>* output, int length) {{
+  // {_comment(comment_language, 'Store the computed tile outputs back to memory.', '将计算得到的 tile 输出回写到存储。')}
+  for (int i = 0; i < length; ++i) {{
+    #pragma HLS PIPELINE II=1
+    output[i] = out_stream.read();
+  }}
+}}'''
+    if pattern not in {"dataflow", "task_graph"}:
+        return ""
     stream_name = "task_stream" if pattern == "task_graph" else "mid_stream"
     result_name = "task_result_stream" if pattern == "task_graph" else "result_stream"
     if pattern == "dataflow" and {"input", "output", "rows", "cols"}.issubset(arg_names):
@@ -642,6 +735,8 @@ def _mock_hls_testbench_text(spec: dict[str, Any], vectors: list[dict[str, Any]]
     arg_names = {str(item.get("name")) for item in spec.get("interfaces", {}).get("arguments", []) if isinstance(item, dict)}
     hash_comment = f"  // {VECTOR_HASH_TAG} {vector_hash}\n" if vector_hash else ""
     case_comments = "\n".join(f'  // {item["id"]} PASS FAIL' for item in vectors)
+    tolerance_comment = _mock_tolerance_marker(spec, comment_language, indent="  ")
+    tolerance_text = f"{tolerance_comment}\n" if tolerance_comment else ""
     if {"input_a", "input_b", "output", "length"}.issubset(arg_names):
         body = _mock_multi_m_axi_cases(spec, top, vectors, comment_language)
     elif {"input", "output", "scale", "length"}.issubset(arg_names):
@@ -651,7 +746,12 @@ def _mock_hls_testbench_text(spec: dict[str, Any], vectors: list[dict[str, Any]]
     elif {"input", "output", "length"}.issubset(arg_names):
         body = _mock_input_output_cases(spec, top, vectors, comment_language)
     elif {"in_stream", "out_stream", "length"}.issubset(arg_names):
-        body = _mock_task_graph_axis_cases(top, vectors, comment_language) if _example_pattern(spec) == "task_graph" else _mock_axis_cases(top, vectors, comment_language)
+        if _example_pattern(spec) == "task_graph":
+            body = _mock_task_graph_axis_cases(top, vectors, comment_language)
+        elif _example_pattern(spec) == "rle_axis":
+            body = _mock_rle_axis_cases(spec, top, vectors, comment_language)
+        else:
+            body = _mock_axis_cases(top, vectors, comment_language)
     elif {"in_stream", "out_stream"}.issubset(arg_names):
         body = _mock_directio_unit_cases(top, vectors, comment_language) if _example_pattern(spec) == "directio_freerun" else f"  {top}(in_stream, out_stream);\n"
     else:
@@ -660,7 +760,7 @@ def _mock_hls_testbench_text(spec: dict[str, Any], vectors: list[dict[str, Any]]
 #include "../src/{top}.h"
 
 int main() {{
-{hash_comment}{case_comments}
+{hash_comment}{tolerance_text}{case_comments}
   int failures = 0;
 {body}
   if (failures != 0) {{
@@ -723,9 +823,31 @@ def _hls_pragmas(spec: dict[str, Any]) -> str:
     lines.append(f"#pragma HLS INTERFACE {spec.get('interfaces', {}).get('control', 's_axilite')} port=return")
     if pattern in {"dataflow", "task_graph", "streamofblocks"}:
         lines.append("#pragma HLS DATAFLOW")
-    if spec.get("pipeline_required", True) and pattern not in {"dataflow", "task_graph", "streamofblocks"}:
+    if spec.get("pipeline_required", True) and pattern not in {"dataflow", "task_graph", "streamofblocks"} and not _requires_dataflow_pragma(spec):
         lines.append("#pragma HLS PIPELINE II=1")
+    seen_keys = {_pragma_identity(line) for line in lines}
+    for pragma in _required_pragmas(spec):
+        if "variable=" in pragma:
+            continue
+        pragma_key = _pragma_identity(pragma)
+        if pragma_key in seen_keys:
+            continue
+        if pragma not in lines:
+            lines.append(pragma)
+            seen_keys.add(pragma_key)
     return "\n".join(f"  {line}" for line in lines)
+
+
+def _pragma_identity(pragma: str) -> tuple[str, str] | tuple[str, str, str]:
+    normalized = " ".join(str(pragma).strip().split())
+    match = re.match(r"#pragma\s+HLS\s+INTERFACE\s+(\S+)\s+port=([A-Za-z_][A-Za-z0-9_]*)", normalized)
+    if match:
+        return ("interface", match.group(2))
+    if normalized.startswith("#pragma HLS PIPELINE"):
+        return ("pipeline", normalized)
+    if normalized.startswith("#pragma HLS DATAFLOW"):
+        return ("dataflow", normalized)
+    return ("pragma", normalized)
 
 
 def _m_axi_depth(spec: dict[str, Any], argument: dict[str, Any]) -> int:
@@ -747,6 +869,37 @@ def _mock_hls_body(spec: dict[str, Any]) -> str:
     arg_names = set(arguments)
     pattern = _example_pattern(spec)
     if {"input_a", "input_b", "output", "length"}.issubset(arg_names):
+        if pattern == "matmul" and _requires_dataflow_pragma(spec):
+            return """  hls::stream<ap_uint<32> > a_stream;
+  hls::stream<ap_uint<32> > b_stream;
+  hls::stream<ap_uint<32> > out_stream;
+  #pragma HLS STREAM variable=a_stream depth=16
+  #pragma HLS STREAM variable=b_stream depth=16
+  #pragma HLS STREAM variable=out_stream depth=16
+  load_matmul_a(input_a, a_stream, length);
+  load_matmul_b(input_b, b_stream, length);
+  compute_matmul_tile(a_stream, b_stream, out_stream, length);
+  store_matmul(out_stream, output, length);"""
+        if pattern == "matmul" and (_requires_dataflow_pragma(spec) or _requires_partition_pragma(spec, "tile_a") or _requires_partition_pragma(spec, "tile_b")):
+            value_type = _argument_storage_type(arguments["input_a"])
+            return f"""  {value_type} tile_a[4];
+  {value_type} tile_b[4];
+  #pragma HLS ARRAY_PARTITION variable=tile_a complete dim=1
+  #pragma HLS ARRAY_PARTITION variable=tile_b complete dim=1
+  for (int base = 0; base < length; base += 4) {{
+    int chunk = (length - base < 4) ? (length - base) : 4;
+    for (int j = 0; j < 4; ++j) {{
+      #pragma HLS UNROLL
+      tile_a[j] = (j < chunk) ? input_a[base + j] : {value_type}(0);
+      tile_b[j] = (j < chunk) ? input_b[base + j] : {value_type}(0);
+    }}
+    for (int j = 0; j < 4; ++j) {{
+      #pragma HLS UNROLL
+      if (j < chunk) {{
+        output[base + j] = tile_a[j] + tile_b[j];
+      }}
+    }}
+  }}"""
         if pattern == "tiled_gemm":
             value_type = _argument_storage_type(arguments["input_a"])
             return f"""  {value_type} tile_a[4];
@@ -794,6 +947,68 @@ def _mock_hls_body(spec: dict[str, Any]) -> str:
   }"""
         return "  for (int i = 0; i < length; ++i) {\n    output[i] = input_a[i] + input_b[i];\n  }"
     if {"input", "output", "length"}.issubset(arg_names):
+        if _board_source_spec(spec) and pattern in {"fir", "cordic"}:
+            return """  hls::stream<ap_uint<32> > load_stream;
+  hls::stream<ap_uint<32> > result_stream;
+  #pragma HLS STREAM variable=load_stream depth=16
+  #pragma HLS STREAM variable=result_stream depth=16
+  for (int i = 0; i < length; ++i) {
+    #pragma HLS PIPELINE II=1
+    load_stream.write(input[i]);
+  }
+  for (int i = 0; i < length; ++i) {
+    #pragma HLS PIPELINE II=1
+    ap_uint<32> token = load_stream.read();
+    result_stream.write(token + 1);
+  }
+  for (int i = 0; i < length; ++i) {
+    #pragma HLS PIPELINE II=1
+    output[i] = result_stream.read();
+  }"""
+        if _board_source_spec(spec) and pattern == "rle_axis":
+            return """  // Wrapper byte-packet type contract keeps the memory-to-stream ingress reviewable.
+  struct axis_byte_t {
+    ap_uint<8> data;
+    ap_uint<1> last;
+    ap_uint<1> keep;
+    ap_uint<1> strb;
+  };
+  // Wrapper word-packet type contract keeps the stream-to-memory egress reviewable.
+  struct axis_word_t {
+    ap_uint<16> data;
+    ap_uint<1> last;
+    ap_uint<2> keep;
+    ap_uint<2> strb;
+  };
+  // AXIS compatibility note: this wrapper mirrors ap_axiu<8,0,0,0> and ap_axiu<16,0,0,0> keep/strb/last handling at the memory boundary.
+  hls::stream<axis_byte_t> in_stream;
+  hls::stream<axis_word_t> out_stream;
+  #pragma HLS STREAM variable=in_stream depth=16
+  #pragma HLS STREAM variable=out_stream depth=16
+  for (int i = 0; i < length; ++i) {
+    #pragma HLS PIPELINE II=1
+    axis_byte_t in_pkt;
+    in_pkt.data = input[i];
+    in_pkt.keep = -1;
+    in_pkt.strb = -1;
+    in_pkt.last = (i == length - 1) ? 1 : 0;
+    in_stream.write(in_pkt);
+  }
+  for (int i = 0; i < length; ++i) {
+    #pragma HLS PIPELINE II=1
+    axis_byte_t in_pkt = in_stream.read();
+    axis_word_t out_pkt;
+    out_pkt.data = in_pkt.data + 1;
+    out_pkt.keep = -1;
+    out_pkt.strb = -1;
+    out_pkt.last = in_pkt.last;
+    out_stream.write(out_pkt);
+  }
+  for (int i = 0; i < length; ++i) {
+    #pragma HLS PIPELINE II=1
+    axis_word_t out_pkt = out_stream.read();
+    output[i] = out_pkt.data;
+  }"""
         if pattern == "task_graph":
             return f"""  hls::stream<ap_uint<32> > task_stream;
   hls::stream<ap_uint<32> > task_result_stream;
@@ -871,7 +1086,13 @@ def _mock_hls_body(spec: dict[str, Any]) -> str:
   output[0] = tree_accum;"""
         if pattern == "host_kernel_split":
             return "  for (int i = 0; i < length; ++i) {\n    output[i] = input[i] + 1;\n  }"
-        return "  for (int i = 0; i < length; ++i) {\n    output[i] = input[i];\n  }"
+        if pattern == "fft":
+            return """  ap_uint<32> twiddle[4] = {1, 1, 1, 1};
+  #pragma HLS ARRAY_PARTITION variable=twiddle complete dim=1
+  for (int i = 0; i < length; ++i) {
+    output[i] = input[i] + twiddle[i & 3];
+  }"""
+        return "  for (int i = 0; i < length; ++i) {\n    output[i] = input[i] + 1;\n  }"
     if pattern == "dataflow" and {"input", "output", "rows", "cols"}.issubset(arg_names):
         return """  hls::stream<ap_uint<32> > read_stream;
   hls::stream<ap_uint<32> > row_stream;
@@ -887,6 +1108,19 @@ def _mock_hls_body(spec: dict[str, Any]) -> str:
   col_pass(reorder_stream, col_stream, rows, cols);
   write_block(col_stream, output, rows, cols);"""
     if {"in_stream", "out_stream"}.issubset(arg_names):
+        if pattern == "rle_axis" and "length" in arg_names:
+            in_payload = _stream_payload_type(arguments["in_stream"])
+            out_payload = _stream_payload_type(arguments["out_stream"])
+            return f"""  for (int i = 0; i < length; ++i) {{
+    #pragma HLS PIPELINE II=1
+    {in_payload} in_pkt = in_stream.read();
+    {out_payload} out_pkt;
+    out_pkt.data = in_pkt.data + 1;
+    out_pkt.keep = -1;
+    out_pkt.strb = -1;
+    out_pkt.last = (i == length - 1) ? 1 : 0;
+    out_stream.write(out_pkt);
+  }}"""
         if pattern in {"dataflow", "task_graph"} and "length" in arg_names:
             name = str(spec.get("name") or "kernel")
             stream_name = "task_stream" if pattern == "task_graph" else "mid_stream"
@@ -941,6 +1175,50 @@ def _example_pattern(spec: dict[str, Any]) -> str:
     workflow = spec.get("workflow") if isinstance(spec.get("workflow"), dict) else {}
     pattern = profile.get("example_pattern") or workflow.get("example_pattern") or ""
     return str(pattern).strip().lower().replace("-", "_")
+
+
+def _board_source_spec(spec: dict[str, Any]) -> str:
+    workflow = spec.get("workflow") if isinstance(spec.get("workflow"), dict) else {}
+    board = workflow.get("board_acceptance") if isinstance(workflow.get("board_acceptance"), dict) else {}
+    return str(board.get("source_spec") or "").strip()
+
+
+def _required_pragmas(spec: dict[str, Any]) -> list[str]:
+    profile = spec.get("hls_profile") if isinstance(spec.get("hls_profile"), dict) else {}
+    return [str(item) for item in profile.get("required_pragmas", []) or [] if str(item).strip()]
+
+
+def _requires_dataflow_pragma(spec: dict[str, Any]) -> bool:
+    return any("DATAFLOW" in pragma for pragma in _required_pragmas(spec))
+
+
+def _requires_partition_pragma(spec: dict[str, Any], variable: str) -> bool:
+    token = f"variable={variable}"
+    return any("ARRAY_PARTITION" in pragma and token in pragma for pragma in _required_pragmas(spec))
+
+
+def _mock_tolerance_marker(spec: dict[str, Any], comment_language: str, *, indent: str = "") -> str:
+    profile = spec.get("hls_profile") if isinstance(spec.get("hls_profile"), dict) else {}
+    metadata = profile.get("metadata") if isinstance(profile.get("metadata"), dict) else {}
+    tolerance = metadata.get("error_tolerance")
+    if _example_pattern(spec) not in {"fft", "cordic"} or tolerance in (None, "", [], {}):
+        return ""
+    if comment_language == "zh":
+        return f"{indent}// tolerance: 当前模板保留显式误差门限 {tolerance}，供 FFT/CORDIC 自检使用。"
+    return f"{indent}// tolerance: keep the explicit numeric error threshold {tolerance} visible for FFT/CORDIC self-checks."
+
+
+def _stream_payload_type(argument: dict[str, Any]) -> str:
+    raw_type = str(argument.get("type") or "hls::stream<ap_uint<32> >&")
+    cleaned = raw_type.replace("const ", "").replace("&", "").strip()
+    if "<" not in cleaned or ">" not in cleaned:
+        return "ap_uint<32>"
+    return cleaned[cleaned.find("<") + 1 : cleaned.rfind(">")].strip()
+
+
+def _stream_storage_type(argument: dict[str, Any]) -> str:
+    raw_type = str(argument.get("type") or "hls::stream<ap_uint<32> >&")
+    return raw_type.replace("const ", "").replace("&", "").strip()
 
 
 def _mock_vector_scale_cases(spec: dict[str, Any], top: str, vectors: list[dict[str, Any]], comment_language: str) -> str:
@@ -1177,6 +1455,77 @@ def _mock_axis_cases(top: str, vectors: list[dict[str, Any]], comment_language: 
       if (observed[i] != expected[i]) {{
         pass = false;
       }}
+    }}
+    std::cout << "{REFERENCE_RESULT_TAG} {{\\"case_id\\":\\"{case["id"]}\\",\\"status\\":\\"" << (pass ? "PASS" : "FAIL") << "\\",\\"outputs\\":{{\\"out_stream\\":[";
+    for (int i = 0; i < {length}; ++i) {{
+      if (i != 0) std::cout << ",";
+      std::cout << observed[i];
+    }}
+    std::cout << "]}},\\"checkpoints\\":{{\\"length\\":{length},\\"first_output\\":" << observed[0] << "}}}}\\n";
+    if (!pass) failures++;
+  }}''')
+    return "\n".join(blocks)
+
+
+def _mock_rle_axis_cases(spec: dict[str, Any], top: str, vectors: list[dict[str, Any]], comment_language: str) -> str:
+    arguments = {
+        str(item.get("name")): item
+        for item in spec.get("interfaces", {}).get("arguments", [])
+        if isinstance(item, dict) and item.get("name")
+    }
+    in_stream_type = _stream_storage_type(arguments.get("in_stream", {}))
+    out_stream_type = _stream_storage_type(arguments.get("out_stream", {}))
+    blocks: list[str] = []
+    for case in vectors:
+        inputs = case.get("inputs", {})
+        values = [int(item) for item in inputs.get("in_stream", [])]
+        expected = [int(item) for item in case.get("expected_outputs", {}).get("out_stream", [])]
+        length = int(inputs.get("length", len(values)))
+        expected_text = ", ".join(str(item) for item in expected) or "0"
+        writes: list[str] = []
+        for index, value in enumerate(values):
+            last_value = 1 if index == max(0, length - 1) else 0
+            writes.extend(
+                [
+                    f"    {_stream_payload_type(arguments.get('in_stream', {}))} in_pkt_{index};",
+                    f"    in_pkt_{index}.data = {value};",
+                    f"    in_pkt_{index}.keep = -1;",
+                    f"    in_pkt_{index}.strb = -1;",
+                    f"    in_pkt_{index}.last = {last_value};",
+                    f"    in_stream.write(in_pkt_{index});",
+                ]
+            )
+        write_block = "\n".join(writes)
+        blocks.append(f'''  {{
+    // {_comment(comment_language, f'Run AXIS RLE case {case["id"]} and compare payload plus frame markers.', f'执行 AXIS RLE 用例 {case["id"]} 并比较数据与帧边界标记。')}
+    {in_stream_type} in_stream;
+    {out_stream_type} out_stream;
+{write_block}
+    const unsigned expected[{max(1, len(expected))}] = {{{expected_text}}};
+    unsigned observed[{max(1, length)}] = {{}};
+    bool last_seen = false;
+    {top}(in_stream, out_stream, {length});
+    bool pass = true;
+    for (int i = 0; i < {length}; ++i) {{
+      if (out_stream.empty()) {{
+        pass = false;
+        observed[i] = 0;
+      }} else {{
+        auto out_pkt = out_stream.read();
+        observed[i] = (unsigned)out_pkt.data;
+        if (out_pkt.keep == 0 || out_pkt.strb == 0) {{
+          pass = false;
+        }}
+        if (out_pkt.last != 0) {{
+          last_seen = true;
+        }}
+      }}
+      if (observed[i] != expected[i]) {{
+        pass = false;
+      }}
+    }}
+    if (!last_seen) {{
+      pass = false;
     }}
     std::cout << "{REFERENCE_RESULT_TAG} {{\\"case_id\\":\\"{case["id"]}\\",\\"status\\":\\"" << (pass ? "PASS" : "FAIL") << "\\",\\"outputs\\":{{\\"out_stream\\":[";
     for (int i = 0; i < {length}; ++i) {{

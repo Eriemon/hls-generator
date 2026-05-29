@@ -1,0 +1,187 @@
+{
+  "name": "fir_axis_board",
+  "target": "hls",
+  "design_requirements": {
+    "target": "hls",
+    "pipeline_required": true,
+    "streamability": "streamable",
+    "interface_family": "axi4",
+    "interface_profile": {
+      "axi4_variant": "axi4_full",
+      "role": "master",
+      "read_write_mode": "read_write",
+      "data_width": 32,
+      "addr_width": 32,
+      "id_width": 1,
+      "burst_support": false,
+      "clock_reset_domain": {
+        "clock": "ap_clk",
+        "reset": "ap_rst_n"
+      }
+    },
+    "confirmed_by_user": true,
+    "confirmation_notes": "Board validation wraps the AXI-Stream FIR datapath behind memory-backed load/stream/drain boundaries."
+  },
+  "streamability": "streamable",
+  "interface_family": "axi4",
+  "interface_profile": {
+    "axi4_variant": "axi4_full",
+    "role": "master",
+    "read_write_mode": "read_write",
+    "data_width": 32,
+    "addr_width": 32,
+    "id_width": 1,
+    "burst_support": false,
+    "clock_reset_domain": {
+      "clock": "ap_clk",
+      "reset": "ap_rst_n"
+    }
+  },
+  "pipeline_required": true,
+  "codegen_plan_required": true,
+  "description": "Board-runnable memory wrapper for the AXI-Stream FIR family.",
+  "interfaces": {
+    "top_function": "fir_axis_board_kernel",
+    "arguments": [
+      {
+        "name": "input",
+        "type": "const ap_uint<32> *",
+        "direction": "input",
+        "interface": "m_axi",
+        "bundle": "gmem0",
+        "depth": 256
+      },
+      {
+        "name": "output",
+        "type": "ap_uint<32> *",
+        "direction": "output",
+        "interface": "m_axi",
+        "bundle": "gmem1",
+        "depth": 256
+      },
+      {
+        "name": "length",
+        "type": "int",
+        "direction": "input",
+        "interface": "s_axilite"
+      }
+    ],
+    "control": "s_axilite"
+  },
+  "behavior": [
+    "Preserve an internal load-stream-drain wrapper so board validation still exercises the streaming FIR datapath shape."
+  ],
+  "clock": {
+    "period_ns": 8.0,
+    "uncertainty_ns": 0.8
+  },
+  "reset": {
+    "strategy": "tool_default"
+  },
+  "constraints": [
+    "Do not collapse the wrapper into a plain memory increment kernel without keeping the stream boundary explicit in comments."
+  ],
+  "outputs": [
+    {
+      "path": "src/fir_axis_board_kernel.h",
+      "kind": "header",
+      "language": "cpp"
+    },
+    {
+      "path": "src/fir_axis_board_kernel.cpp",
+      "kind": "source",
+      "language": "cpp"
+    },
+    {
+      "path": "tb/fir_axis_board_kernel_tb.cpp",
+      "kind": "testbench",
+      "language": "cpp"
+    },
+    {
+      "path": "hls_config.cfg",
+      "kind": "config",
+      "language": "ini"
+    }
+  ],
+  "notes": [],
+  "subfunctions": [],
+  "workflow": {
+    "board_acceptance": {
+      "profile": "u55c_m_axi_host",
+      "host_template": "wrapper_unary_memory_host",
+      "source_spec": "hls_fir_axis_spec.json",
+      "target_family": "fir"
+    },
+    "mock_vectors": [
+      {
+        "id": "case_nominal",
+        "inputs": {
+          "input": [
+            1,
+            1,
+            2
+          ],
+          "length": 3
+        },
+        "expected_outputs": {
+          "output": [
+            2,
+            2,
+            3
+          ]
+        }
+      },
+      {
+        "id": "case_boundary",
+        "inputs": {
+          "input": [
+            0,
+            15
+          ],
+          "length": 2
+        },
+        "expected_outputs": {
+          "output": [
+            1,
+            16
+          ]
+        }
+      }
+    ]
+  },
+  "performance": {
+    "target_ii": 1
+  },
+  "hls_profile": {
+    "example_pattern": "fir",
+    "allowed_libraries": [
+      "ap_int.h",
+      "hls_stream.h"
+    ],
+    "required_headers": [
+      "ap_int.h",
+      "hls_stream.h"
+    ],
+    "required_pragmas": [
+      "#pragma HLS PIPELINE II=1"
+    ],
+    "required_metadata_fields": [
+      "tap_count",
+      "coefficient_symmetry",
+      "structure_style",
+      "interface_style",
+      "ii_target"
+    ],
+    "metadata": {
+      "tap_count": 16,
+      "coefficient_symmetry": "none",
+      "structure_style": "streaming_direct_form",
+      "interface_style": "wrapper_memory_bridge",
+      "ii_target": 1
+    },
+    "forbidden_combinations": [],
+    "required_cfg_entries": [
+      "clock=8.0"
+    ]
+  }
+}

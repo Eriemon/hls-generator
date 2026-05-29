@@ -1,0 +1,175 @@
+{
+  "name": "cordic_axis",
+  "target": "hls",
+  "design_requirements": {
+    "target": "hls",
+    "pipeline_required": true,
+    "streamability": "streamable",
+    "interface_family": "axi_stream",
+    "interface_profile": {
+      "keep_ready": true,
+      "keep_last": true,
+      "data_width": 32,
+      "clock_reset_domain": {
+        "clock": "ap_clk",
+        "reset": "ap_rst_n"
+      }
+    },
+    "confirmed_by_user": true,
+    "confirmation_notes": "AXIS CORDIC streaming surface has been confirmed."
+  },
+  "streamability": "streamable",
+  "interface_family": "axi_stream",
+  "interface_profile": {
+    "keep_ready": true,
+    "keep_last": true,
+    "data_width": 32,
+    "clock_reset_domain": {
+      "clock": "ap_clk",
+      "reset": "ap_rst_n"
+    }
+  },
+  "pipeline_required": true,
+  "codegen_plan_required": true,
+  "description": "Template for an AXI-Stream CORDIC kernel.",
+  "interfaces": {
+    "top_function": "cordic_axis_kernel",
+    "arguments": [
+      {
+        "name": "in_stream",
+        "type": "hls::stream<ap_uint<32> >&",
+        "direction": "input",
+        "interface": "axis"
+      },
+      {
+        "name": "out_stream",
+        "type": "hls::stream<ap_uint<32> >&",
+        "direction": "output",
+        "interface": "axis"
+      },
+      {
+        "name": "length",
+        "type": "int",
+        "direction": "input",
+        "interface": "s_axilite"
+      }
+    ],
+    "control": "s_axilite"
+  },
+  "behavior": [
+    "Preserve stream framing and tolerance-aware trig expectations."
+  ],
+  "clock": {
+    "period_ns": 8.0,
+    "uncertainty_ns": 0.8
+  },
+  "reset": {
+    "strategy": "tool_default"
+  },
+  "constraints": [
+    "Keep AXIS boundaries explicit."
+  ],
+  "outputs": [
+    {
+      "path": "src/cordic_axis_kernel.h",
+      "kind": "header",
+      "language": "cpp"
+    },
+    {
+      "path": "src/cordic_axis_kernel.cpp",
+      "kind": "source",
+      "language": "cpp"
+    },
+    {
+      "path": "tb/cordic_axis_kernel_tb.cpp",
+      "kind": "testbench",
+      "language": "cpp"
+    },
+    {
+      "path": "hls_config.cfg",
+      "kind": "config",
+      "language": "ini"
+    }
+  ],
+  "notes": [],
+  "subfunctions": [],
+  "workflow": {
+    "board_acceptance": {
+      "profile": "not_board_runnable",
+      "reason": "Curated template stays validation-focused and does not assume a board host harness."
+    },
+    "mock_vectors": [
+      {
+        "id": "case_nominal",
+        "inputs": {
+          "in_stream": [
+            1,
+            1,
+            2
+          ],
+          "length": 3
+        },
+        "expected_outputs": {
+          "out_stream": [
+            2,
+            2,
+            3
+          ]
+        }
+      },
+      {
+        "id": "case_boundary",
+        "inputs": {
+          "in_stream": [
+            0,
+            15
+          ],
+          "length": 2
+        },
+        "expected_outputs": {
+          "out_stream": [
+            1,
+            16
+          ]
+        }
+      }
+    ]
+  },
+  "performance": {
+    "target_ii": 1
+  },
+  "hls_profile": {
+    "example_pattern": "cordic",
+    "allowed_libraries": [
+      "ap_int.h",
+      "ap_fixed.h",
+      "hls_stream.h"
+    ],
+    "required_headers": [
+      "ap_int.h",
+      "ap_fixed.h",
+      "hls_stream.h"
+    ],
+    "required_pragmas": [
+      "#pragma HLS PIPELINE II=1"
+    ],
+    "required_metadata_fields": [
+      "cordic_mode",
+      "iteration_count",
+      "angle_range",
+      "fixed_point_format",
+      "error_tolerance"
+    ],
+    "metadata": {
+      "cordic_mode": "sincos",
+      "iteration_count": 16,
+      "angle_range": "[-pi, pi]",
+      "fixed_point_format": "ap_fixed<24,4>",
+      "error_tolerance": "0.004"
+    },
+    "forbidden_combinations": [],
+    "required_cfg_entries": [
+      "clock=8.0"
+    ]
+  }
+}

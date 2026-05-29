@@ -7,7 +7,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from runtime.hls_generator.config import generated_roots, protected_files, protected_roots, skill_config_path, skill_dependencies_config, skill_root
+from runtime.hls_generator.config import protected_files, protected_roots, skill_config_path, skill_dependencies_config, skill_root
 from runtime.hls_generator.prompt import render_prompt
 from runtime.hls_generator.requirements import apply_requirement_defaults, build_codegen_plan, build_requirements_payload, validate_requirement_confirmation
 from runtime.hls_generator.skill_dependencies import require_skill_dependencies
@@ -15,7 +15,7 @@ from runtime.hls_generator.spec import normalize_spec, read_spec, write_spec
 from runtime.hls_generator.user_config import resolve_comment_language
 from runtime.hls_generator.validation import validate_generated
 from runtime.hls_generator.workflow import run_workflow
-from runtime.hls_generator.workspace import use_workspace_root
+from runtime.hls_generator.workspace import require_configured_output_path, require_workspace_path, use_workspace_root
 
 DEFAULT_CONFIG_PATH = skill_config_path("default_workflow_config")
 SKILL_ROOT = skill_root()
@@ -211,7 +211,7 @@ def validate_hls_artifacts(
     )
     report = validate_generated(
         resolved_spec,
-        _resolve_skill_input_path(artifacts_path, purpose="artifacts path", must_exist=True),
+        _resolve_workspace_input_path(artifacts_path, purpose="artifacts path", must_exist=True),
         target="hls",
         run_external=run_external,
         readiness=readiness,
@@ -317,15 +317,24 @@ def _resolve_skill_input_path(path: str | Path, *, purpose: str, must_exist: boo
 
 
 def _resolve_generated_path(path: str | Path, *, purpose: str, must_exist: bool = False) -> Path:
-    resolved = _resolve_skill_input_path(path, purpose=purpose, must_exist=must_exist)
-    rel_parts = resolved.relative_to(SKILL_ROOT).parts
+    resolved = require_configured_output_path(Path(path), purpose=purpose)
+    if must_exist and not resolved.exists():
+        raise ValueError(f"{purpose} does not exist: {path}")
+    try:
+        rel_parts = resolved.relative_to(SKILL_ROOT).parts
+    except ValueError:
+        return resolved
     if not rel_parts:
         raise ValueError(f"{purpose} must not be the skill root.")
     first = rel_parts[0]
     configured_protected = protected_roots() | protected_files()
-    configured_generated = generated_roots()
     if first in configured_protected:
         raise ValueError(f"{purpose} must not write into protected skill source path {first!r}.")
-    if first not in configured_generated:
-        raise ValueError(f"{purpose} must be under one of: {', '.join(sorted(configured_generated))}.")
     return resolved
+
+
+def _resolve_workspace_input_path(path: str | Path, *, purpose: str, must_exist: bool) -> Path:
+    try:
+        return require_workspace_path(Path(path), purpose=purpose, must_exist=must_exist)
+    except Exception as exc:
+        raise ValueError(str(exc)) from exc

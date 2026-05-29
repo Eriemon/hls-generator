@@ -1,0 +1,158 @@
+{
+  "name": "matmul_dataflow_template",
+  "target": "hls",
+  "design_requirements": {
+    "target": "hls",
+    "pipeline_required": true,
+    "streamability": "streamable",
+    "interface_family": "axi4",
+    "interface_profile": {
+      "axi4_variant": "axi4_full",
+      "role": "master",
+      "read_write_mode": "read_write",
+      "data_width": 32,
+      "addr_width": 32,
+      "id_width": 1,
+      "burst_support": false,
+      "clock_reset_domain": {
+        "clock": "ap_clk",
+        "reset": "ap_rst_n"
+      }
+    },
+    "confirmed_by_user": true,
+    "confirmation_notes": "Matmul load-compute-store schedule has been confirmed."
+  },
+  "streamability": "streamable",
+  "interface_family": "axi4",
+  "interface_profile": {
+    "axi4_variant": "axi4_full",
+    "role": "master",
+    "read_write_mode": "read_write",
+    "data_width": 32,
+    "addr_width": 32,
+    "id_width": 1,
+    "burst_support": false,
+    "clock_reset_domain": {
+      "clock": "ap_clk",
+      "reset": "ap_rst_n"
+    }
+  },
+  "pipeline_required": true,
+  "codegen_plan_required": true,
+  "description": "Template for a load-compute-store matrix multiply kernel.",
+  "interfaces": {
+    "top_function": "matmul_dataflow_kernel",
+    "arguments": [
+      {
+        "name": "input_a",
+        "type": "const ap_uint<32> *",
+        "direction": "input",
+        "interface": "m_axi",
+        "bundle": "gmem_a",
+        "depth": 256
+      },
+      {
+        "name": "input_b",
+        "type": "const ap_uint<32> *",
+        "direction": "input",
+        "interface": "m_axi",
+        "bundle": "gmem_b",
+        "depth": 256
+      },
+      {
+        "name": "output",
+        "type": "ap_uint<32> *",
+        "direction": "output",
+        "interface": "m_axi",
+        "bundle": "gmem_out",
+        "depth": 256
+      },
+      {
+        "name": "length",
+        "type": "int",
+        "direction": "input",
+        "interface": "s_axilite"
+      }
+    ],
+    "control": "s_axilite"
+  },
+  "behavior": [
+    "Keep read, compute, and write stages explicit in comments and pragmas."
+  ],
+  "clock": {
+    "period_ns": 8.0,
+    "uncertainty_ns": 0.8
+  },
+  "reset": {
+    "strategy": "tool_default"
+  },
+  "constraints": [
+    "Do not claim DATAFLOW without named stage boundaries."
+  ],
+  "outputs": [
+    {
+      "path": "src/matmul_dataflow_kernel.h",
+      "kind": "header",
+      "language": "cpp"
+    },
+    {
+      "path": "src/matmul_dataflow_kernel.cpp",
+      "kind": "source",
+      "language": "cpp"
+    },
+    {
+      "path": "tb/matmul_dataflow_kernel_tb.cpp",
+      "kind": "testbench",
+      "language": "cpp"
+    },
+    {
+      "path": "hls_config.cfg",
+      "kind": "config",
+      "language": "ini"
+    }
+  ],
+  "notes": [],
+  "subfunctions": [],
+  "workflow": {
+    "board_acceptance": {
+      "profile": "not_board_runnable",
+      "reason": "Curated template stays validation-focused and does not assume a board host harness."
+    }
+  },
+  "performance": {
+    "target_ii": 1
+  },
+  "hls_profile": {
+    "example_pattern": "matmul",
+    "allowed_libraries": [
+      "ap_int.h",
+      "hls_stream.h"
+    ],
+    "required_headers": [
+      "ap_int.h",
+      "hls_stream.h"
+    ],
+    "required_pragmas": [
+      "#pragma HLS DATAFLOW",
+      "#pragma HLS ARRAY_PARTITION variable=tile_a complete dim=1"
+    ],
+    "required_metadata_fields": [
+      "tile_shape",
+      "layout",
+      "accumulator_type",
+      "memory_schedule",
+      "ii_target"
+    ],
+    "metadata": {
+      "tile_shape": "4x4x4",
+      "layout": "row_major",
+      "accumulator_type": "ap_int<40>",
+      "memory_schedule": "load_compute_store",
+      "ii_target": 1
+    },
+    "forbidden_combinations": [],
+    "required_cfg_entries": [
+      "clock=8.0"
+    ]
+  }
+}

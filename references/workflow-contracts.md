@@ -1,6 +1,6 @@
 # Workflow Contracts
 
-## Contents
+## Table of Contents
 
 - [Run directory](#run-directory)
 - [Fixed stages](#fixed-stages)

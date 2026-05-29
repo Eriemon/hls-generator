@@ -1,0 +1,187 @@
+{
+  "name": "prefix_blocked",
+  "target": "hls",
+  "design_requirements": {
+    "target": "hls",
+    "pipeline_required": true,
+    "streamability": "streamable",
+    "interface_family": "axi4",
+    "interface_profile": {
+      "axi4_variant": "axi4_full",
+      "role": "master",
+      "read_write_mode": "read_write",
+      "data_width": 32,
+      "addr_width": 32,
+      "id_width": 1,
+      "burst_support": false,
+      "clock_reset_domain": {
+        "clock": "ap_clk",
+        "reset": "ap_rst_n"
+      }
+    },
+    "confirmed_by_user": true,
+    "confirmation_notes": "Blocked prefix-scan offset propagation has been confirmed."
+  },
+  "streamability": "streamable",
+  "interface_family": "axi4",
+  "interface_profile": {
+    "axi4_variant": "axi4_full",
+    "role": "master",
+    "read_write_mode": "read_write",
+    "data_width": 32,
+    "addr_width": 32,
+    "id_width": 1,
+    "burst_support": false,
+    "clock_reset_domain": {
+      "clock": "ap_clk",
+      "reset": "ap_rst_n"
+    }
+  },
+  "pipeline_required": true,
+  "codegen_plan_required": true,
+  "description": "Template for a blocked prefix-scan kernel.",
+  "interfaces": {
+    "top_function": "prefix_blocked_kernel",
+    "arguments": [
+      {
+        "name": "input",
+        "type": "const ap_uint<32> *",
+        "direction": "input",
+        "interface": "m_axi",
+        "bundle": "gmem0",
+        "depth": 256
+      },
+      {
+        "name": "output",
+        "type": "ap_uint<32> *",
+        "direction": "output",
+        "interface": "m_axi",
+        "bundle": "gmem1",
+        "depth": 256
+      },
+      {
+        "name": "length",
+        "type": "int",
+        "direction": "input",
+        "interface": "s_axilite"
+      }
+    ],
+    "control": "s_axilite"
+  },
+  "behavior": [
+    "Keep local scan and block-offset propagation explicit."
+  ],
+  "clock": {
+    "period_ns": 8.0,
+    "uncertainty_ns": 0.8
+  },
+  "reset": {
+    "strategy": "tool_default"
+  },
+  "constraints": [
+    "Do not hide block-offset correctness assumptions."
+  ],
+  "outputs": [
+    {
+      "path": "src/prefix_blocked_kernel.h",
+      "kind": "header",
+      "language": "cpp"
+    },
+    {
+      "path": "src/prefix_blocked_kernel.cpp",
+      "kind": "source",
+      "language": "cpp"
+    },
+    {
+      "path": "tb/prefix_blocked_kernel_tb.cpp",
+      "kind": "testbench",
+      "language": "cpp"
+    },
+    {
+      "path": "hls_config.cfg",
+      "kind": "config",
+      "language": "ini"
+    }
+  ],
+  "notes": [],
+  "subfunctions": [],
+  "workflow": {
+    "board_acceptance": {
+      "profile": "u55c_m_axi_host",
+      "host_template": "unary_memory_host",
+      "target_family": "prefix_scan"
+    },
+    "mock_vectors": [
+      {
+        "id": "case_nominal",
+        "inputs": {
+          "input": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "length": 4
+        },
+        "expected_outputs": {
+          "output": [
+            2,
+            3,
+            4,
+            5
+          ]
+        }
+      },
+      {
+        "id": "case_boundary",
+        "inputs": {
+          "input": [
+            0,
+            7
+          ],
+          "length": 2
+        },
+        "expected_outputs": {
+          "output": [
+            1,
+            8
+          ]
+        }
+      }
+    ]
+  },
+  "performance": {
+    "target_ii": 1
+  },
+  "hls_profile": {
+    "example_pattern": "prefix_scan",
+    "allowed_libraries": [
+      "ap_int.h"
+    ],
+    "required_headers": [
+      "ap_int.h"
+    ],
+    "required_pragmas": [
+      "#pragma HLS PIPELINE II=1",
+      "#pragma HLS UNROLL factor=4"
+    ],
+    "required_metadata_fields": [
+      "block_size",
+      "scan_mode",
+      "offset_propagation",
+      "latency_strategy",
+      "boundary_policy"
+    ],
+    "metadata": {
+      "block_size": 16,
+      "scan_mode": "inclusive",
+      "offset_propagation": "block_offsets",
+      "latency_strategy": "blocked_parallel",
+      "boundary_policy": "clamp_length"
+    },
+    "forbidden_combinations": [],
+    "required_cfg_entries": [
+      "clock=8.0"
+    ]
+  }
+}

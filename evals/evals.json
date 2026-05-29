@@ -33,7 +33,7 @@
       "required_terms": [
         {
           "file": "SKILL.md",
-          "terms": ["Do not generate handwritten Verilog", "Do not modify files outside this skill directory."]
+          "terms": ["Do not generate handwritten Verilog", "Do not modify files outside this repository"]
         },
         {
           "file": "references/hls-project-structure-patterns.md",
@@ -47,29 +47,33 @@
       "with_skill_expected_pass": true,
       "without_skill_expected_pass": false,
       "without_skill_reason": "A baseline evaluation does not assume repo-specific pytest gating.",
-      "required_files": ["scripts/confidence_loop.py"],
+      "required_files": ["scripts/python/validation/confidence_loop.py"],
       "required_terms": [
         {
-          "file": "scripts/confidence_loop.py",
+          "file": "scripts/python/validation/confidence_loop.py",
           "terms": ["\"pytest\"", "\"-q\"", "\"tests\""]
         }
       ]
     },
     {
-      "id": "route-contract-9950x",
-      "title": "Remote route contract targets the 9950X host",
+      "id": "route-contract-threadfpga",
+      "title": "Remote route contract targets the active ThreadFPGA host",
       "with_skill_expected_pass": true,
       "without_skill_expected_pass": false,
       "without_skill_reason": "The baseline path does not know the AGENTS-managed route table.",
-      "required_files": ["../../AGENTS.md", "scripts/confidence_loop.py"],
+      "required_files": ["../../AGENTS.md", "scripts/python/validation/confidence_loop.py", "scripts/python/validation/confidence_remote.py"],
       "required_terms": [
         {
           "file": "../../AGENTS.md",
           "terms": ["`remote-hls-validation`: primary `server_6`", "U55C 硬件指纹证据"]
         },
         {
-          "file": "scripts/confidence_loop.py",
-          "terms": ["route_contract", "validate_remote_route_target"]
+          "file": "scripts/python/validation/confidence_loop.py",
+          "terms": ["route_contract", "_route_contract_gate"]
+        },
+        {
+          "file": "scripts/python/validation/confidence_remote.py",
+          "terms": ["load_remote_route_contract", "validate_remote_route_target"]
         }
       ]
     },
@@ -79,10 +83,10 @@
       "with_skill_expected_pass": true,
       "without_skill_expected_pass": false,
       "without_skill_reason": "Without the skill, there is no repo-local board-acceptance CLI contract.",
-      "required_files": ["scripts/remote_vitis_acceptance.py", "assets/validation-board/README.md"],
+      "required_files": ["scripts/python/remote/remote_vitis_acceptance.py", "assets/validation-board/README.md"],
       "required_terms": [
         {
-          "file": "scripts/remote_vitis_acceptance.py",
+          "file": "scripts/python/remote/remote_vitis_acceptance.py",
           "terms": ["choices=(\"link\", \"vitis\", \"board\")", "HLS_BOARD_STATUS", "_run_board_mode"]
         }
       ]
@@ -121,9 +125,9 @@
       "without_skill_reason": "A baseline setup may check for comment presence without enforcing placement or hardware-intent semantics.",
       "required_files": [
         "runtime/hls_generator/comment_policy.py",
-        "tests/test_comment_policy.py",
+        "../../tests/test_comment_policy.py",
         "references/hls-comment-style.md",
-        "smoke/run_smoke.py"
+        "../../smoke/run_smoke.py"
       ],
       "required_terms": [
         {
@@ -131,7 +135,7 @@
           "terms": ["typed_hls_comment_placement", "generic generated line", "function contract", "HLS pragma intent"]
         },
         {
-          "file": "tests/test_comment_policy.py",
+          "file": "../../tests/test_comment_policy.py",
           "terms": ["generic_and_misplaced_comments_are_blocking_errors", "uncommented_trivial_closing_lines"]
         },
         {
@@ -139,7 +143,7 @@
           "terms": ["typed comment placement", "Generic", "Trivial lines"]
         },
         {
-          "file": "smoke/run_smoke.py",
+          "file": "../../smoke/run_smoke.py",
           "terms": ["_run_comment_policy_checks", "comment_policy", "generic generated line"]
         }
       ]
@@ -150,14 +154,14 @@
       "with_skill_expected_pass": true,
       "without_skill_expected_pass": false,
       "without_skill_reason": "A baseline setup does not ship repo-local eval cases.",
-      "required_files": ["evals/evals.json", "scripts/evaluate_skill.py"],
+      "required_files": ["evals/evals.json", "scripts/python/evaluation/evaluate_skill.py"],
       "required_terms": [
         {
           "file": "evals/evals.json",
           "terms": ["Tool Wrapper", "Generator", "Reviewer", "Inversion", "Pipeline"]
         },
         {
-          "file": "scripts/evaluate_skill.py",
+          "file": "scripts/python/evaluation/evaluate_skill.py",
           "terms": ["pass_rate_delta", "with-skill", "without-skill"]
         }
       ]

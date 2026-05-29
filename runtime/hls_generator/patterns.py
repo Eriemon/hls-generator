@@ -6,6 +6,96 @@ from typing import Any
 
 
 PATTERN_RULES: dict[str, dict[str, Any]] = {
+    "fir": {
+        "label": "FIR filter family",
+        "metadata_fields": {
+            "tap_count": "Confirm the tap count before generating the FIR kernel.",
+            "coefficient_symmetry": "Confirm whether the FIR coefficients are symmetric, antisymmetric, or unconstrained.",
+            "structure_style": "Confirm the FIR structure style such as direct form, transposed, or systolic.",
+            "interface_style": "Confirm whether the FIR surface is memory-mapped, AXI-Stream, or another interface style.",
+            "ii_target": "Confirm the II target for the FIR sample loop before generation.",
+        },
+        "prompt_rules": [
+            "For FIR patterns, make tap count, coefficient symmetry, structure style, interface style, and II target explicit before choosing PIPELINE, UNROLL, or DATAFLOW pragmas.",
+            "Do not switch between direct-form, transposed, symmetric, or AXI-Stream FIR structures unless the confirmed metadata supports that structure choice.",
+            "Explain how the confirmed tap count, symmetry, and II target shape the local buffer, multiply-accumulate schedule, and stream or memory interface behavior.",
+        ],
+    },
+    "fft": {
+        "label": "FFT/DFT transform family",
+        "metadata_fields": {
+            "point_count": "Confirm the point count before generating the FFT or DFT kernel.",
+            "scaling_strategy": "Confirm the scaling strategy such as per-stage scale, block floating point, or none.",
+            "twiddle_representation": "Confirm the twiddle representation such as lookup table, fixed-point format, or generated constants.",
+            "complex_data_mode": "Confirm the complex input/output representation such as packed IQ, split real-imag arrays, or real-input transform mode.",
+            "error_tolerance": "Confirm the acceptable FFT numerical error tolerance or comparison threshold.",
+        },
+        "prompt_rules": [
+            "For FFT and DFT patterns, keep point count, scaling strategy, twiddle representation, complex data mode, and error tolerance explicit in the generated comments and testbench.",
+            "Do not mix block-floating, per-stage scaling, or fixed-point twiddle policies; choose one scaling strategy and keep the error tolerance reviewable.",
+            "Explain how twiddle storage, stage scheduling, and complex-data packing follow from the confirmed FFT metadata instead of inventing a transform structure ad hoc.",
+        ],
+    },
+    "cordic": {
+        "label": "CORDIC iterative math family",
+        "metadata_fields": {
+            "cordic_mode": "Confirm the CORDIC mode such as rotation, vectoring, or sincos generation.",
+            "iteration_count": "Confirm the CORDIC iteration count before generation.",
+            "angle_range": "Confirm the supported input angle range or quadrant normalization contract.",
+            "fixed_point_format": "Confirm the fixed-point width and integer-bit format used by the CORDIC datapath.",
+            "error_tolerance": "Confirm the acceptable CORDIC numerical error tolerance.",
+        },
+        "prompt_rules": [
+            "For CORDIC patterns, make mode, iteration count, angle range, fixed-point format, and error tolerance explicit before generating lookup constants or shift-add loops.",
+            "Do not claim a CORDIC design is valid across quadrants or angle ranges unless the confirmed angle-range contract explains the normalization or sign-correction strategy.",
+            "Explain how the confirmed iteration count and fixed-point format trade off resource usage, latency, and numerical error tolerance.",
+        ],
+    },
+    "matmul": {
+        "label": "matrix multiply family",
+        "metadata_fields": {
+            "tile_shape": "Confirm the matrix tile shape or blocking geometry before generation.",
+            "layout": "Confirm the matrix layout or packing convention used by the compute kernel.",
+            "accumulator_type": "Confirm the accumulation type and growth policy for the matrix compute path.",
+            "memory_schedule": "Confirm the memory schedule such as naive, blocked, or load-compute-store dataflow.",
+            "ii_target": "Confirm the II target for the matrix inner loop or tile loop.",
+        },
+        "prompt_rules": [
+            "For matrix multiply patterns, keep tile shape, layout, accumulator type, memory schedule, and II target explicit before choosing partition or dataflow pragmas.",
+            "Do not mix blocked local-buffer, partitioned tile, and load-compute-store dataflow strategies without a confirmed memory schedule and tile geometry.",
+            "Explain how the confirmed tile shape, layout, and accumulator type constrain local buffering, loop order, and matrix interface depth values.",
+        ],
+    },
+    "prefix_scan": {
+        "label": "prefix scan family",
+        "metadata_fields": {
+            "block_size": "Confirm the block size used by the prefix-scan schedule.",
+            "scan_mode": "Confirm whether the prefix scan is inclusive, exclusive, segmented, or another scan mode.",
+            "offset_propagation": "Confirm how block offsets or carry values propagate between scan segments.",
+            "latency_strategy": "Confirm the latency strategy such as sequential chain or blocked parallel scan.",
+            "boundary_policy": "Confirm the boundary policy for empty, short, or partial scan ranges.",
+        },
+        "prompt_rules": [
+            "For prefix-scan patterns, keep scan mode, block size, offset propagation, latency strategy, and boundary policy explicit before restructuring the accumulation chain.",
+            "Do not claim a blocked scan is correct unless the offset propagation contract between blocks is explicit and covered by the testbench.",
+            "Explain how the confirmed block size and latency strategy shorten or preserve loop-carried dependencies without hiding boundary behavior.",
+        ],
+    },
+    "rle_axis": {
+        "label": "AXI-Stream run-length codec family",
+        "metadata_fields": {
+            "frame_boundary_mode": "Confirm the frame boundary mode for AXI-Stream packets before generation.",
+            "tlast_policy": "Confirm the TLAST policy for the final encoded or decoded symbol.",
+            "run_length_limit": "Confirm the maximum run-length value before splitting or rejecting a run.",
+            "empty_frame_policy": "Confirm the empty-frame policy instead of guessing how AXI-Stream represents it.",
+            "ii_target": "Confirm the II target for the stream processing loop.",
+        },
+        "prompt_rules": [
+            "For RLE AXI-Stream patterns, keep frame boundary mode, TLAST policy, run-length limit, empty-frame policy, and II target explicit before generating stream control logic.",
+            "Do not hide TLAST, TKEEP, or TSTRB handling behind generic AXIS language; explain how the final symbol or pair preserves the frame boundary contract.",
+            "Explain how the confirmed run-length limit and empty-frame policy shape split-run behavior, pending output rules, and stream backpressure assumptions.",
+        ],
+    },
     "minimal_vitis_pipeline": {
         "label": "minimal Vitis kernel compile/link structure",
         "metadata_fields": {

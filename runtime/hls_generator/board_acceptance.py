@@ -14,6 +14,10 @@ HOST_TEMPLATE_FILENAMES = {
     "vector_increment_host": "vector_increment_host.cpp.tpl",
     "binary_add_host": "binary_add_host.cpp.tpl",
     "matrix_unary_host": "matrix_unary_host.cpp.tpl",
+    "unary_memory_host": "unary_memory_host.cpp.tpl",
+    "binary_memory_host": "binary_memory_host.cpp.tpl",
+    "matrix_memory_host": "matrix_memory_host.cpp.tpl",
+    "wrapper_unary_memory_host": "wrapper_unary_memory_host.cpp.tpl",
 }
 
 
@@ -25,6 +29,11 @@ def board_acceptance_config(spec: dict[str, Any]) -> dict[str, Any]:
 
 def board_acceptance_profile(spec: dict[str, Any]) -> str:
     return str(board_acceptance_config(spec).get("profile") or "").strip()
+
+
+def board_acceptance_target_family(spec: dict[str, Any]) -> str:
+    config = board_acceptance_config(spec)
+    return str(config.get("target_family") or "").strip()
 
 
 def is_board_runnable(spec: dict[str, Any]) -> bool:
@@ -54,6 +63,8 @@ def partition_example_specs_by_board_acceptance(examples_dir: Path) -> dict[str,
     invalid_specs: list[dict[str, Any]] = []
     for path in sorted(examples_dir.glob("*.json")):
         spec = json.loads(path.read_text(encoding="utf-8"))
+        if str(spec.get("target") or "").strip().lower() != "hls":
+            continue
         config = board_acceptance_config(spec)
         profile = board_acceptance_profile(spec)
         errors = validate_board_acceptance_config(spec)

@@ -256,7 +256,10 @@ def _missing_required_files(skill_path: str, required_files: list[str]) -> list[
     root = Path(skill_path)
     missing: list[str] = []
     for rel in required_files:
-        if not (root / rel).exists():
+        candidates = [item.strip() for item in rel.split("|") if item.strip()]
+        if not candidates:
+            continue
+        if not any((root / candidate).exists() for candidate in candidates):
             missing.append(rel)
     return missing
 

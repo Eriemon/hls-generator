@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hls-generator-skill"
-version = "0.2.0"
+version = "0.2.1"
 description = "Agent-usable Codex skill for AMD/Xilinx Vitis HLS generation and FPGA design workflows."
 readme = "README.md"
 requires-python = ">=3.10"

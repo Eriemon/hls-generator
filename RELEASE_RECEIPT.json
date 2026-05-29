@@ -1,8 +1,8 @@
 {
   "skill_name": "erie-hls-generator",
-  "version": "v0.2.0",
+  "version": "v0.2.1",
   "source_path": "skills/erie-hls-generator",
-  "generated_at": "2026-05-22T13:53:54",
+  "generated_at": "2026-05-28T21:39:38",
   "current_branch": "master",
   "local_branches": [
     "master",
@@ -29,40 +29,63 @@
         "placeholders": [
           "<REDACTED_LOCAL_PATH>"
         ],
-        "sha256": "156918e80c0a58b83ca33697defd57bc716da495ab8091094566dbf314bc4621"
-      },
-      {
-        "path": "scripts/remote_vitis_acceptance.py",
-        "rules": [
-          "local_path"
-        ],
-        "placeholders": [
-          "<REDACTED_LOCAL_PATH>"
-        ],
-        "sha256": "cf97ba409997b083293ec4f9be65e27ad309d2eb998dbe2ebf46905f47c86e5a"
-      },
-      {
-        "path": "tests/test_remote_vitis_acceptance.py",
-        "rules": [
-          "local_path"
-        ],
-        "placeholders": [
-          "<REDACTED_LOCAL_PATH>"
-        ],
-        "sha256": "6519790a3d15c616d91942505b8e1a2ec7a70ca6bd11654feaaa0f209babfe72"
-      },
-      {
-        "path": "tests/test_user_config.py",
-        "rules": [
-          "local_path"
-        ],
-        "placeholders": [
-          "<REDACTED_LOCAL_PATH>"
-        ],
-        "sha256": "9aebc6db90df763281e02d4ccebbd87663f13c56cb82fa10fda3cff605586fc2"
+        "sha256": "e913faae32460546c0f5ab593fd00fa5e4ab6284b956880d90e3d653e8f88f20"
       }
     ],
     "receipt_required": true
+  },
+  "release_content_policy": {
+    "policy_version": "2026-05-26-v2",
+    "top_level_file_mode": "allow-nonforbidden-files",
+    "allowed_top_level_files": [
+      "README.md",
+      "SKILL.md",
+      "VERSION"
+    ],
+    "allowed_top_level_dirs": [
+      "agents",
+      "assets",
+      "config",
+      "evals",
+      "integration",
+      "references",
+      "runtime",
+      "scripts"
+    ],
+    "forbidden_exact_names": [
+      ".mypy_cache",
+      ".pytest_cache",
+      ".ruff_cache",
+      "__pycache__",
+      "_smoke_runs",
+      "reports",
+      "runs",
+      "test",
+      "tests"
+    ],
+    "forbidden_prefixes": [
+      "smoke"
+    ],
+    "forbidden_suffixes": [
+      ".pyc",
+      ".pyo"
+    ],
+    "included_file_count": 177,
+    "included_top_level_entries": [
+      ".gitignore",
+      "DESIGN_GOALS.md",
+      "SKILL.md",
+      "agents",
+      "assets",
+      "evals",
+      "integration",
+      "references",
+      "runtime",
+      "scripts"
+    ],
+    "unexpected_top_level_entries": [],
+    "forbidden_source_paths": [],
+    "forbidden_release_paths": []
   },
   "files": [
     {
@@ -90,6 +113,26 @@
       "sha256": "6e11fc2766c5f2b704224b12267074fadbc74787d01542cbafb3af14e5c7da1c"
     },
     {
+      "path": "assets/examples/hls_cordic_axis_board_spec.json",
+      "sha256": "6596c2261414cfb5fb7effa7e84775c5bef9212b93838eb01afaa597c8e5a847"
+    },
+    {
+      "path": "assets/examples/hls_cordic_axis_spec.json",
+      "sha256": "b034d5b328731dcd09056e1b59bba298346053fc5ecdb588564712dad5f818d4"
+    },
+    {
+      "path": "assets/examples/hls_cordic_rotation_spec.json",
+      "sha256": "a56cd7d6649b3cc9879d1a163c179b79e015aedc06c976e9415ec8af7ea9b417"
+    },
+    {
+      "path": "assets/examples/hls_cordic_sincos_spec.json",
+      "sha256": "0009cf095bbb92c23790bf78e4d1cf22cdd5c1e250436a76090fbf8432702636"
+    },
+    {
+      "path": "assets/examples/hls_cordic_vectoring_spec.json",
+      "sha256": "b16e29d0eea64bb3be421c1605961145bc10f0523a7e0ac5921137d2f8119074"
+    },
+    {
       "path": "assets/examples/hls_dataflow_axis_spec.json",
       "sha256": "98aa91cd1b007cfe094d3a0b9648ae1437cec7a43f5b980a8e0db4ad949e654e"
     },
@@ -100,6 +143,38 @@
     {
       "path": "assets/examples/hls_fence_ordering_spec.json",
       "sha256": "e214a42ed0201ddc73d76e61ecd844d2668e48cbca535f8ed3ee2d7db424b96a"
+    },
+    {
+      "path": "assets/examples/hls_fft_fixed_point_spec.json",
+      "sha256": "97b6fd25a3b33c61fd11ab196e74d0d62298aa54bd91b69e2f3b4e98f1668bbb"
+    },
+    {
+      "path": "assets/examples/hls_fft_power_spectrum_spec.json",
+      "sha256": "5eb5f50106916cb0cc38719ece4059f417bf77a8115475f8c442c6dd0bdc189e"
+    },
+    {
+      "path": "assets/examples/hls_fft_scaled_spec.json",
+      "sha256": "bb4ad3fa7485b27002b0da894fc1aed9da3915c68c619af84c70b7ff5b54d042"
+    },
+    {
+      "path": "assets/examples/hls_fir_axis_board_spec.json",
+      "sha256": "2225a0d41873e12ab91c74dbbb2cab70dcafda9b845041d195380a0d5840241f"
+    },
+    {
+      "path": "assets/examples/hls_fir_axis_spec.json",
+      "sha256": "8c7e6848bd96db1767f8a05dab44e5938a444501c15e9bf50e00a31641a2aae1"
+    },
+    {
+      "path": "assets/examples/hls_fir_dataflow_spec.json",
+      "sha256": "8a53f53182552f9453fd2e5ddc79d85f81f05f2f07d200e49770260b3baf85bf"
+    },
+    {
+      "path": "assets/examples/hls_fir_pipeline_spec.json",
+      "sha256": "8106a4cfc473a2210fc9426443f1947452264e441aaa32c510ef03af6509bd4c"
+    },
+    {
+      "path": "assets/examples/hls_fir_symmetric_spec.json",
+      "sha256": "4a09ae809a2de350af26a7ec36297f8a6e930a1bbaca7d71e60ee04a9b1ec3dc"
     },
     {
       "path": "assets/examples/hls_fixed_point_scale_spec.json",
@@ -114,6 +189,22 @@
       "sha256": "09bc57f465ae1d5e4c13fcdba6d0183cedb595689f5351e8b4c0dbf68da6c99e"
     },
     {
+      "path": "assets/examples/hls_lz77_reference_spec.json",
+      "sha256": "9b91fd2520bb9dd52ef1556d4c0d8e058593b767a0cf4f49f7f95e65c17d82ec"
+    },
+    {
+      "path": "assets/examples/hls_matmul_blocked_spec.json",
+      "sha256": "cfc0262e57b0afa693a65742b31354489616459a261e96dc4650478c99ff8a6d"
+    },
+    {
+      "path": "assets/examples/hls_matmul_dataflow_spec.json",
+      "sha256": "3e70a4b87ffcf4e4f0cf981bcafa6da4ef4d75659de9e20d5779167bc7632c20"
+    },
+    {
+      "path": "assets/examples/hls_matmul_partitioned_spec.json",
+      "sha256": "594578e624194448b95ef34e3d1dddf2508a1f073ee8a6a6647c252c900fee29"
+    },
+    {
       "path": "assets/examples/hls_minimal_vitis_pipeline_spec.json",
       "sha256": "3b844bb1fb6beda5148efc094b7616f5b16d13f5da0724c95acbb0fdb6a5785b"
     },
@@ -126,8 +217,36 @@
       "sha256": "74d2f8d90644fd4917501b371bcd36ce69667fbf5c50e81ed6f3cbc667f3ed71"
     },
     {
+      "path": "assets/examples/hls_prefix_basic_spec.json",
+      "sha256": "987c805eff80abde4d41246cef9d9c4535661ca33bdeb6885cbf1455bc17a837"
+    },
+    {
+      "path": "assets/examples/hls_prefix_blocked_spec.json",
+      "sha256": "ee28a566b63df471e7cd87199bceba7e39c85f0c0073eedf97f347236efe73d5"
+    },
+    {
       "path": "assets/examples/hls_reduction_tree_sum_spec.json",
       "sha256": "a0f362cbd81e284c270515b0629faccdc63467928fbf0798e75caee50a3e1adf"
+    },
+    {
+      "path": "assets/examples/hls_rle_axis_decode_board_spec.json",
+      "sha256": "9d0a73b053035e20dcb0a4f963c5d90175d3d2fe536bbe7cead03e9a5471a5f4"
+    },
+    {
+      "path": "assets/examples/hls_rle_axis_decode_spec.json",
+      "sha256": "d40194e237a792dd8f6bff134812938df9278f46bea0816115414d7cecb52b7f"
+    },
+    {
+      "path": "assets/examples/hls_rle_axis_encode_board_spec.json",
+      "sha256": "1109ae5300d1998a5ae2d960bfa223b6580dbfec6d49807ac8c3ae9992854e84"
+    },
+    {
+      "path": "assets/examples/hls_rle_axis_encode_spec.json",
+      "sha256": "e2a55b190022963d3680fd3ba9d461c8dda93340e49b97f479f0f4c3b848f634"
+    },
+    {
+      "path": "assets/examples/hls_spmv_csr_reference_spec.json",
+      "sha256": "bae5923e6bb1fed3be8df295fdcf2762e49515e299e250b98a1e85c043584b24"
     },
     {
       "path": "assets/examples/hls_streamofblocks_axis_spec.json",
@@ -154,6 +273,10 @@
       "sha256": "9cb3b558ddd841182dbddfdf69e3ec2424d2f350eb910983fd0b26b4c1552f2a"
     },
     {
+      "path": "assets/examples/tier1_board_coverage_matrix.json",
+      "sha256": "9d492aa30280525de05a1ed06acf9d195eadf11fbe4dcc982dcc24f4e627c2e9"
+    },
+    {
       "path": "assets/templates/hls_array_partition_template.json",
       "sha256": "41eeb6dee595fe64e096126ba15a75ec1d2d135c6be1b978cc2a574507f4a5b1"
     },
@@ -164,6 +287,22 @@
     {
       "path": "assets/templates/hls_axi4_burst_template.json",
       "sha256": "7f5ccc16de60a3c100b16e5d8456ed5190fb72da54a726269f902b789e840f5e"
+    },
+    {
+      "path": "assets/templates/hls_cordic_axis_template.json",
+      "sha256": "78c141769e53bf924a1d2d94cb13b9becb3363b6d2aa4752ed84e0d808e3d743"
+    },
+    {
+      "path": "assets/templates/hls_cordic_rotation_template.json",
+      "sha256": "feb9f5ccba6128e1b2d49b714395f14043efce00fc3542b0b48387c3a3556c4a"
+    },
+    {
+      "path": "assets/templates/hls_cordic_sincos_template.json",
+      "sha256": "d0f7af0d887cb8b9f368bf871b1d09b986c59668736321c371592a6c84d5c933"
+    },
+    {
+      "path": "assets/templates/hls_cordic_vectoring_template.json",
+      "sha256": "872d261f448903153bae4482bf3b2efeba69d9b3bbb625065c32905e93664baf"
     },
     {
       "path": "assets/templates/hls_dataflow_template.json",
@@ -178,6 +317,34 @@
       "sha256": "72ae664bba117482211c0bf35867e8b4a25ffaed07272aa6a323273ffd9d84c2"
     },
     {
+      "path": "assets/templates/hls_fft_fixed_point_template.json",
+      "sha256": "04ea7cef013eed889324f8514b0717ae6b3a0c4f49d43af19b7ef005f13ab97e"
+    },
+    {
+      "path": "assets/templates/hls_fft_power_spectrum_template.json",
+      "sha256": "c0bd1ef687cace3d22ff5fd42dd7ce1cba694dc0bc1901a01ce32659def6eec0"
+    },
+    {
+      "path": "assets/templates/hls_fft_scaled_template.json",
+      "sha256": "52cde0f4914be5ebdd89b56ec5509f5be0d757633948ead3071120fae990249f"
+    },
+    {
+      "path": "assets/templates/hls_fir_axis_template.json",
+      "sha256": "d0cca86eaf6a90535843f78578ff06c2edee0a53c5a75950491861e7181cf04d"
+    },
+    {
+      "path": "assets/templates/hls_fir_dataflow_template.json",
+      "sha256": "f4139d7bf1614d71e8b9422da55735a34def8c7b84e0acdfa5d7bd671ac16bf7"
+    },
+    {
+      "path": "assets/templates/hls_fir_pipeline_template.json",
+      "sha256": "e9bf43d05dbfa10dd4a4b232980887a04decc0331720bc4ee83bb249d42495a0"
+    },
+    {
+      "path": "assets/templates/hls_fir_symmetric_template.json",
+      "sha256": "9c32de759cdd1118ee0dffc371f766aa869900e9e2bb5fe6a3a5fba93fa28d9a"
+    },
+    {
       "path": "assets/templates/hls_fixed_point_template.json",
       "sha256": "f7a785050e5d72df8fa119e24b2f2382748dfa7fac49ec630373d8e1ee7244fc"
     },
@@ -190,6 +357,18 @@
       "sha256": "baff5617cf1874a56245e8b5162a58b64c62230643be75702a128cd0f94a1898"
     },
     {
+      "path": "assets/templates/hls_matmul_blocked_template.json",
+      "sha256": "24c8a11d95f25f5011ba429ec4cb14a73c0e6bd5488f755544095c5eff9e1218"
+    },
+    {
+      "path": "assets/templates/hls_matmul_dataflow_template.json",
+      "sha256": "664dbc315822ee205b865d9a4a703aafa105de2f080d83aab81bd95b9fa5d7cd"
+    },
+    {
+      "path": "assets/templates/hls_matmul_partitioned_template.json",
+      "sha256": "7701af8a2915d11e91b60fe772c9bce6c0419319e0699ad7254c4a7c27f2aaff"
+    },
+    {
       "path": "assets/templates/hls_minimal_vitis_pipeline_template.json",
       "sha256": "882cc3a5b51c60a541427ad4db88111cb71e597644050c061c5a6eb503df561c"
     },
@@ -198,8 +377,24 @@
       "sha256": "abe7722cca62b2327ac1298bbe118f947197a739bd0aa765ece9cddc8a26c895"
     },
     {
+      "path": "assets/templates/hls_prefix_basic_template.json",
+      "sha256": "5d98eef7c44eab25f896c282ff0f3f55467e7ec46bb60cc7abc27e21cf44a026"
+    },
+    {
+      "path": "assets/templates/hls_prefix_blocked_template.json",
+      "sha256": "352227f08dfe94569143b31012bb49b4037677ff75058013ccdeda6f0fa7da59"
+    },
+    {
       "path": "assets/templates/hls_reduction_tree_template.json",
       "sha256": "ed67f0af1bc07fa7ec816a10bc497e9ca30e7607cf8cfd5f0f19ad6def910752"
+    },
+    {
+      "path": "assets/templates/hls_rle_axis_decode_template.json",
+      "sha256": "c43df78fda04afd3281c940c3fb67277869191899bc852201e6365e7c2ffa70d"
+    },
+    {
+      "path": "assets/templates/hls_rle_axis_encode_template.json",
+      "sha256": "a354644c7861143a866259e203eb4a13604335eef5f37f9c3ad2afe44575109d"
     },
     {
       "path": "assets/templates/hls_streamofblocks_template.json",
@@ -222,8 +417,20 @@
       "sha256": "a67c0fd82ed5c7c4a6d81e28652088f0752e69641a8da7103b742e9081394eb3"
     },
     {
+      "path": "assets/validation-board/hosts/binary_memory_host.cpp.tpl",
+      "sha256": "0822e3bb04d71f1f2835b80f771be101fd7309c9f2f13e74dbcad9c5be096599"
+    },
+    {
+      "path": "assets/validation-board/hosts/matrix_memory_host.cpp.tpl",
+      "sha256": "89ac7b380749ca9208b66500f1e13cd1cd85bac0fd74f04e04785a330b87918d"
+    },
+    {
       "path": "assets/validation-board/hosts/matrix_unary_host.cpp.tpl",
       "sha256": "96e576b58a3765cc451091e9592aade2394a409857339357c1e226dbd3b6c3ea"
+    },
+    {
+      "path": "assets/validation-board/hosts/unary_memory_host.cpp.tpl",
+      "sha256": "d29b0ea3437c4bd7550ff670523a6e05764bf499ff6dddd865f487ea64aecd46"
     },
     {
       "path": "assets/validation-board/hosts/vector_increment_host.cpp.tpl",
@@ -234,16 +441,20 @@
       "sha256": "584a403d2d6f5572ea9a98202156ca863ba58e160b0b8999c3ad8abb01f12d4c"
     },
     {
+      "path": "assets/validation-board/hosts/wrapper_unary_memory_host.cpp.tpl",
+      "sha256": "79b705765496f7df1b8c96af555d4f56dffbd085c76ba22b98cb41e8c7f7fef7"
+    },
+    {
       "path": "assets/validation-board/README.md",
-      "sha256": "2f1c24205e24fb9070478a837cd66d1f5bda3b6d22b14cce5b974328ba724980"
+      "sha256": "afcceb75627cd4c23c5333df428d89fcbf1140953a260717eff6353ce5c20adb"
     },
     {
       "path": "DESIGN_GOALS.md",
-      "sha256": "cdf34df374356c8c0a7eb5fa37ea7af4e67c36110722790418d7cafa3e337659"
+      "sha256": "b453e9599e5b87fbe81467eaa8e33f1fbbc209bfdc2f0071a3c1c6c3d0c0f5f5"
     },
     {
       "path": "evals/evals.json",
-      "sha256": "c54afc6514bbdd4996266976424ba58e98a1eccb45f762ec5500f70d3e5f0b94"
+      "sha256": "3aa8a9b8d6aa18bdf0fbab1b052e25c101c0d6c6861ef84fa77488978e430467"
     },
     {
       "path": "integration/__init__.py",
@@ -255,11 +466,11 @@
     },
     {
       "path": "integration/hls_adapter.py",
-      "sha256": "77fc3eb1d5fad297719ca538fc580b3d41d8aca5b695274ee4a508b269b2a9bc"
+      "sha256": "8c2ada063e1dbe51466e837a9496ddc1f832e732472bbe4cbf9e9d73337dce45"
     },
     {
       "path": "references/configuration.md",
-      "sha256": "3beb538c8becbf58fe06f6dfeca53605b77a3966cac0028b27a285b7011a31f8"
+      "sha256": "badc2ba3fd0c7e70a26d0cfc6ddad1163e4c77c081e5d33203b23825537dee76"
     },
     {
       "path": "references/hls-advanced-library-patterns.md",
@@ -274,8 +485,20 @@
       "sha256": "51f06b10157ac64702d9f72defd5dd2b0009bc41e0d00808a8a36762c60625d4"
     },
     {
+      "path": "references/hls-fft-cordic-template-family.md",
+      "sha256": "fd1c28a7fbccc4cba88b5433ceae24eef61bc0e8d11103eefbae237f009de4a0"
+    },
+    {
+      "path": "references/hls-fir-template-family.md",
+      "sha256": "6880041a19473d180def66817676dbfa64226a90994ee24a8411c70b60aa26c4"
+    },
+    {
       "path": "references/hls-library-policy.md",
       "sha256": "af1fb53a8647f6ab08c46694c1871ef017d25775773e24099c572136b346415e"
+    },
+    {
+      "path": "references/hls-linear-algebra-template-family.md",
+      "sha256": "eecd28dac3914e2bef1e629cbaebd48b1e7281e3432dfc454abc398079dee920"
     },
     {
       "path": "references/hls-memory-burst-and-layout.md",
@@ -302,28 +525,40 @@
       "sha256": "245bf89e6a347aa87cec6b194e3b9133e1f2d82ded186f1847ac8314a8c72a66"
     },
     {
+      "path": "references/hls-stream-codec-template-family.md",
+      "sha256": "967ea64b1391cf84256ef48aa19ffb7d9e8bc4ab534e9439b9398910befc1861"
+    },
+    {
       "path": "references/hls-task-parallel-strategy.md",
       "sha256": "bc3ca8d11f86aba2885666dde25aaff7a0fb3919edf53329198663f4cebaeeda"
     },
     {
+      "path": "references/hls-template-catalog.md",
+      "sha256": "7787aeff098a6c928f9a5e67f3010a9ec6a4d68425fd617e46ea02b0f3aa23ca"
+    },
+    {
       "path": "references/hls-tutorial-derived-templates.md",
-      "sha256": "d6fcb883d4c02c687cf242e360971d733899d9086611a116a506b7afa42e39a9"
+      "sha256": "dc88a4dda2c0d7fd8426f59e9f195e7623cd057bcf27b91bd71d79f45b149bd3"
     },
     {
       "path": "references/integration.md",
-      "sha256": "9048e4581b44066c3dd157650ef15ba6b007944ec4210e5465faf725ece83fbb"
+      "sha256": "b097967706b1779e9dd95c405b6b6b44b2955a185faa1e64b0e9a25d81c17e97"
+    },
+    {
+      "path": "references/ref-opt-catalog.md",
+      "sha256": "172a56c057dd225ae67b18317cd46bf84765e6bb3ed94be99f8c705a3a306d9b"
     },
     {
       "path": "references/remote-board-platform-upload.md",
-      "sha256": "156918e80c0a58b83ca33697defd57bc716da495ab8091094566dbf314bc4621"
+      "sha256": "e913faae32460546c0f5ab593fd00fa5e4ab6284b956880d90e3d653e8f88f20"
     },
     {
       "path": "references/vitis-hls-2024-2-script-guide.md",
-      "sha256": "e0e398dcc259b6912db81f46eeb99329bf7cccd85139cd042e1b121a97c2b835"
+      "sha256": "f2d5575c41bbb87e452cfccdc57487a3f08aff536ad7b849c4efd04146e52ca4"
     },
     {
       "path": "references/workflow-contracts.md",
-      "sha256": "3e0586a261ac8a0cebe61a1e0824512372205cf0da5cbc44c0962d8a91f501a8"
+      "sha256": "8f88d419bb0f39e4d39a3f4e1413644f7a1e9fdf6e0e0b1eab3418c2d629e5c8"
     },
     {
       "path": "runtime/__init__.py",
@@ -331,7 +566,7 @@
     },
     {
       "path": "runtime/hls_generator/__init__.py",
-      "sha256": "d5c892bc0209e53f7c193eab98ce5cb270400813bc4ebd99e3ddf71aa4a6da00"
+      "sha256": "56d58ff1deb1a9e965e80f3a9881f783ce42c4e4a3de0790a4ec8401452c9970"
     },
     {
       "path": "runtime/hls_generator/__main__.py",
@@ -339,7 +574,7 @@
     },
     {
       "path": "runtime/hls_generator/board_acceptance.py",
-      "sha256": "d69130a8076c61bae3741114f55fa9b36d13f163ba041b732ea97fefc3eeb5f0"
+      "sha256": "bedb8819c7e259932ab95111fa6e145221fad6c0662344fbe3ecf825b9123b56"
     },
     {
       "path": "runtime/hls_generator/board_platform_payload.py",
@@ -347,7 +582,7 @@
     },
     {
       "path": "runtime/hls_generator/cli.py",
-      "sha256": "e6d358456b342985c66a315a6d82fd75347ecc648662cf334fb201f20f44e734"
+      "sha256": "1a7f9b0d6664a0dae83449f1a1f8f930b6174950c606b56e23c5e1efbd5fe18e"
     },
     {
       "path": "runtime/hls_generator/comment_policy.py",
@@ -355,7 +590,7 @@
     },
     {
       "path": "runtime/hls_generator/config.py",
-      "sha256": "762d46059b54a212f5a7ea8ea6c00939252b61571db1af56635b23901a4bd1bd"
+      "sha256": "1602c02a7dd84eb496f22d7035ff9d86fe93b9cd342a75228694a8348207ded1"
     },
     {
       "path": "runtime/hls_generator/extractor.py",
@@ -367,7 +602,7 @@
     },
     {
       "path": "runtime/hls_generator/hls_profile.py",
-      "sha256": "37da5b123215e628af134cbfb6034eff0ee06d4806085c276fe3c39e17a5f355"
+      "sha256": "4744fd44938c801e11e04377e401b788e957b3656941e6bdf6718febd53bcc4a"
     },
     {
       "path": "runtime/hls_generator/hls_reports.py",
@@ -387,11 +622,11 @@
     },
     {
       "path": "runtime/hls_generator/model_provider.py",
-      "sha256": "d9d0ca617d063e3a877ef5535d33c91fe01ed7772835df594094bb8d73cfe62b"
+      "sha256": "0b359dec239ddb4a4b1a8d8c4b3c620011a646743a76e2f1fc89d51cd764a10e"
     },
     {
       "path": "runtime/hls_generator/patterns.py",
-      "sha256": "43357c290c637deea32a42096a5ec760a434dc40d88bad8a3302ae5261f0a638"
+      "sha256": "5d08cada864f953c8b3dffdf6e61f5b9360e1b0aa6e28d54a884c4433b831a29"
     },
     {
       "path": "runtime/hls_generator/planning.py",
@@ -410,6 +645,10 @@
       "sha256": "2d160d173d8a7848e6312e6f943708ddda46d390c9be97c2672ae299434f53e8"
     },
     {
+      "path": "runtime/hls_generator/remote_recovery.py",
+      "sha256": "18531aaa808115d2d7e1ae536560e427b8db079d8219d2a3b8666a9f2f58a647"
+    },
+    {
       "path": "runtime/hls_generator/requirements.py",
       "sha256": "385fda389f4e9c7a18066aec9982ea3ac13f69e436a59bca235652879c149620"
     },
@@ -419,11 +658,11 @@
     },
     {
       "path": "runtime/hls_generator/runtime_config.json",
-      "sha256": "285afb9d2740cded943412164c5bdeda6f6792ab2c221dbc0fba96c2c577e247"
+      "sha256": "9e1b4ef2f0451ca27562b76e55daec0e5f24b304330284d70adbec589a90f5e2"
     },
     {
       "path": "runtime/hls_generator/skill_dependencies.py",
-      "sha256": "da979525443d2071e3ce6c4c3952e1118c770144a5f0e4d9ba96137b122c542c"
+      "sha256": "c38853ffd714a6a4b24ffc049490294e3d8751aa1018bc84e344fd855a2902da"
     },
     {
       "path": "runtime/hls_generator/spec.py",
@@ -455,111 +694,107 @@
     },
     {
       "path": "runtime/hls_generator/workflow.py",
-      "sha256": "61e4e1fab1e0fb9b745ebdeda11ab838c46eac80a5b9613806d871667d1e8cf6"
+      "sha256": "c2439c1ae28f1e495bd8e39c1e3bf49c2f45b9db55955cbe5e916aa4fd0f96f6"
     },
     {
       "path": "runtime/hls_generator/workspace.py",
-      "sha256": "9a1c5596f94ad01e2c5257f0850d235a1821df0ddcd8330bb3ad3477d7e3cae1"
+      "sha256": "693aeac4ca8d07cfec011d3cf9e5c876f7ebefdb113a1e7aa5fe61d624b61576"
     },
     {
-      "path": "scripts/_skill_tool_delegate.py",
+      "path": "scripts/python/curation/generate_hls_template_assets.py",
+      "sha256": "78922f43a4204e5c3eee84c849914cdac1a74246379f8b40ca6f57e00f3604b8"
+    },
+    {
+      "path": "scripts/python/curation/generate_ref_opt_assets.py",
+      "sha256": "f9abc010286d4f895ec8c9051a4835056f0fc71ae41cdf3185628f51112441bc"
+    },
+    {
+      "path": "scripts/python/evaluation/evaluate_skill.py",
+      "sha256": "ca94531de900831f2da1980e7aac72948b83b7fea45705d1ea8056a30f3157e0"
+    },
+    {
+      "path": "scripts/python/governance/_skill_tool_delegate.py",
       "sha256": "d65506ae17945c91459b2102be84042e7f12c01a2760aebd27c2956e28ac0300"
     },
     {
-      "path": "scripts/audit_skill.py",
+      "path": "scripts/python/governance/audit_skill.py",
       "sha256": "b3a97fcc4f50dc39e10cd39ed42f39fdf97ffabd7702591286d5cda67ee63b6a"
     },
     {
-      "path": "scripts/confidence_loop.py",
-      "sha256": "e35f063bc9ced5969248e68b0b431006d354503b4286e0af724424a97d6b478f"
-    },
-    {
-      "path": "scripts/evaluate_skill.py",
-      "sha256": "7a75a86e833322816b95695ba501946eff2bd86f823c86836d3cad77cdf27e43"
-    },
-    {
-      "path": "scripts/inspect_project.py",
-      "sha256": "c0831453c6b2b9dec4e8e3df1e7f213f2d8764843182e78b19602bfad6ce34a3"
-    },
-    {
-      "path": "scripts/manage_dirs.py",
+      "path": "scripts/python/governance/manage_dirs.py",
       "sha256": "3016313a7a88b4b0bea33bcc2beceb7d1e552cff3875b2d3e2d23ab358232643"
     },
     {
-      "path": "scripts/manage_docs.py",
-      "sha256": "af0beba82aa0f70ae9ffe06333bf32f1fcdb8d1e8fe33a10507b290c6f39d6f2"
+      "path": "scripts/python/governance/manage_docs.py",
+      "sha256": "fa5c39028b3fae283550425c83dfd8a1f85fe423b3915889bdf7e0f1c88ded76"
     },
     {
-      "path": "scripts/prepare_release.py",
-      "sha256": "b67bcbd892153e9b74231c10f1d5f13e0065e559ebcbddfee2cbd896b96ff547"
-    },
-    {
-      "path": "scripts/quick_validate.py",
-      "sha256": "f16139008c712a710144c8f01b9163aaa322b1998b310ffe10c13d842a05f6b1"
-    },
-    {
-      "path": "scripts/remote_vitis_acceptance.py",
-      "sha256": "cf97ba409997b083293ec4f9be65e27ad309d2eb998dbe2ebf46905f47c86e5a"
-    },
-    {
-      "path": "scripts/render_agents.py",
+      "path": "scripts/python/governance/render_agents.py",
       "sha256": "dca4daf202b36bd8e1de30f7b947689267b45c9febb99165cc9da34bdf7102f8"
     },
     {
-      "path": "scripts/verify_agents.py",
+      "path": "scripts/python/governance/verify_agents.py",
       "sha256": "653e2003b8fd56d1eb746d25f59338fe9a7c926c160624d0e92db6f92392ff79"
     },
     {
+      "path": "scripts/python/inspection/inspect_project.py",
+      "sha256": "36bed08497a652733bbaf441747e0c89308da69f68d2b084fd967d2439f91dbe"
+    },
+    {
+      "path": "scripts/python/install/sync_installed_skill_copy.py",
+      "sha256": "6dc1dde4e5756e408761b567b93fdafc519647d378da5d8d6c064cbeb9f25528"
+    },
+    {
+      "path": "scripts/python/release/prepare_release.py",
+      "sha256": "d5c456ef39b270e8609bc1583206fb8102fb3a6c0cc595ac883345f21498cc2e"
+    },
+    {
+      "path": "scripts/python/remote/remote_acceptance_board.py",
+      "sha256": "b83aaca91c47d05e5de652315ae922517c30a6ba8d0864b840a9a1a7e39b7837"
+    },
+    {
+      "path": "scripts/python/remote/remote_acceptance_common.py",
+      "sha256": "3b233172384748c6c58b5a06cf645b1a7daa0967a970b2293a4674a7049c88ff"
+    },
+    {
+      "path": "scripts/python/remote/remote_acceptance_link.py",
+      "sha256": "b955f6abeeb51670d490459a775cddbdc4e97ffef9136e1dce985acfef99d71c"
+    },
+    {
+      "path": "scripts/python/remote/remote_acceptance_recovery.py",
+      "sha256": "206369538804646b94fd2412edb82d345c47361dddab050b094f95cbb107ae6c"
+    },
+    {
+      "path": "scripts/python/remote/remote_acceptance_vitis.py",
+      "sha256": "31234b24c28f075f443f82fc01b9e587d1be3249966bc991e42c0c5f061d2e53"
+    },
+    {
+      "path": "scripts/python/remote/remote_vitis_acceptance.py",
+      "sha256": "849ec9f31c6d7c4f2a1e0d5e10bbd97c56fe50f1c796def7b78495288740b8bf"
+    },
+    {
+      "path": "scripts/python/validation/confidence_local.py",
+      "sha256": "616170ee7fdaeda3558188b07acc3ebbf15e4f8ee35d10025169961305fdb27b"
+    },
+    {
+      "path": "scripts/python/validation/confidence_loop.py",
+      "sha256": "1eba4f5d2cecf8ba2876e5005c9e1d09b69f5ff4d38adba311bf282835dbb3bf"
+    },
+    {
+      "path": "scripts/python/validation/confidence_remote.py",
+      "sha256": "178bd85c876f2d75b1bdae1f5c2ae2104a89c8c4239065198f27ce6749eae97c"
+    },
+    {
+      "path": "scripts/python/validation/confidence_report.py",
+      "sha256": "664c0b3f9c3548d68b2f840288eff0f06d9ab026a2ea32725d607308b905fb35"
+    },
+    {
+      "path": "scripts/python/validation/quick_validate.py",
+      "sha256": "4b93b93761e4f4a564f80dd229e687a06306d6593c582c9c389afa468bc8b268"
+    },
+    {
       "path": "SKILL.md",
-      "sha256": "aa0487c8e2b7681d96aa50e6237d3681ab4004d1c8a15181bddcd36ced72a2fe"
-    },
-    {
-      "path": "smoke/run_smoke.py",
-      "sha256": "e7522f0931613c57bb8808f83580af4c6b2568e0d4d8bc2d659d7ea6b7592f28"
-    },
-    {
-      "path": "tests/test_board_platform_payload.py",
-      "sha256": "f45185b49f9d17966d9d134f9656e0f49b500e4b2ca1aa107966f9af093507e4"
-    },
-    {
-      "path": "tests/test_comment_coverage.py",
-      "sha256": "ac7dfafe47928e312079febe1b89228144d1e0a04fd43b290ff1a584718ce67a"
-    },
-    {
-      "path": "tests/test_comment_policy.py",
-      "sha256": "d0c92a2aa2cf2fb99dddeb55bbb782c65014e5fba0d5c5a1af8d77b2135cb21b"
-    },
-    {
-      "path": "tests/test_confidence_loop.py",
-      "sha256": "e1b172a3f14ff6eb2728d39fff09e3af3f9c3494f732533b4b371be57e6e9156"
-    },
-    {
-      "path": "tests/test_evaluate_skill.py",
-      "sha256": "63f0bdf11e9650443bba3b52fd68b1aa57cc07a7a56f205038050cc53b56b90d"
-    },
-    {
-      "path": "tests/test_hls_pattern_contracts.py",
-      "sha256": "2dfe67a4755bfdcc4911cdc55aa0fbe5f02b7ad090e1a7c7b7a505dd33930ea8"
-    },
-    {
-      "path": "tests/test_prepare_release.py",
-      "sha256": "36f27f512a56b77c8f3361b215ac8e4fb62e0f88a543be282cec84bc45f5d4f3"
-    },
-    {
-      "path": "tests/test_remote_vitis_acceptance.py",
-      "sha256": "6519790a3d15c616d91942505b8e1a2ec7a70ca6bd11654feaaa0f209babfe72"
-    },
-    {
-      "path": "tests/test_runtime_config.py",
-      "sha256": "30aed5cc18104c3756cc6ef1f87ae5783818f82fb23dd13d4c347af7b61f90f9"
-    },
-    {
-      "path": "tests/test_skill_dependencies.py",
-      "sha256": "1a03d57a3107f23d00bafc05339f4833e881d3d450319802e3e3588bad33c5e4"
-    },
-    {
-      "path": "tests/test_user_config.py",
-      "sha256": "9aebc6db90df763281e02d4ccebbd87663f13c56cb82fa10fda3cff605586fc2"
+      "sha256": "47a57d6d2ef7afeb7732d7a20b51512d8ca96c18d414d9ba7d7f11f07aa0a886"
     }
   ],
   "other_version_artifacts": [
@@ -3446,6 +3681,510 @@
     {
       "path": "dist/erie-hls-generator-v0.1.9.zip",
       "sha256": "97aa15b5aaf408baddc388d2055a9b33311a561cf9c7088ffd91b9807bac9891"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/.gitignore",
+      "sha256": "9c99732a61888573a3daf62d096168e061feacfa1ad0aaa93d79b712b8a7b590"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/agents/openai.yaml",
+      "sha256": "57ae4f6215d94a450e47d4f4fbef1eb671cf2d9d9c4a5c45d0c8dd319cd1cbd5"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/examples/hls_2d_block_transform_spec.json",
+      "sha256": "01cb9158bbabb777790e008a7f13f24033f36d35c32b91361cf8d5be8f4f908d"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/examples/hls_array_reshape_vector_scale_spec.json",
+      "sha256": "3da9bef69acd039800ac2265a855a262c46b7368398cedc8dda27d6d5f90a8cd"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/examples/hls_axi4_burst_vector_scale_spec.json",
+      "sha256": "a4b9c0f01dfd79923321d48e77c5feeb77d862c9089ac445e382c7bf17cbdcec"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/examples/hls_axis_increment_spec.json",
+      "sha256": "6e11fc2766c5f2b704224b12267074fadbc74787d01542cbafb3af14e5c7da1c"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/examples/hls_dataflow_axis_spec.json",
+      "sha256": "98aa91cd1b007cfe094d3a0b9648ae1437cec7a43f5b980a8e0db4ad949e654e"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/examples/hls_directio_freerun_axis_spec.json",
+      "sha256": "d613cb7c8778b50fa4390a65d52c0a731ae830761ec7b90f6ae53caa0f2ea0e8"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/examples/hls_fence_ordering_spec.json",
+      "sha256": "e214a42ed0201ddc73d76e61ecd844d2668e48cbca535f8ed3ee2d7db424b96a"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/examples/hls_fixed_point_scale_spec.json",
+      "sha256": "bcccd8d4198f8106c7a214c1c4b62ce89822fa187f59dc580af0c30a949792c3"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/examples/hls_host_kernel_split_spec.json",
+      "sha256": "60389795875cd5b2c6c02d7fa90be3f33db6dba6897d72e70c11ca5b83f5db6e"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/examples/hls_line_buffer_stencil_spec.json",
+      "sha256": "09bc57f465ae1d5e4c13fcdba6d0183cedb595689f5351e8b4c0dbf68da6c99e"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/examples/hls_minimal_vitis_pipeline_spec.json",
+      "sha256": "3b844bb1fb6beda5148efc094b7616f5b16d13f5da0724c95acbb0fdb6a5785b"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/examples/hls_multi_m_axi_add_spec.json",
+      "sha256": "fb191cdcbb291d40dd891b6bff2f19952fabeb460480953ac30ccf8e6cca914f"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/examples/hls_partition_vector_scale_spec.json",
+      "sha256": "74d2f8d90644fd4917501b371bcd36ce69667fbf5c50e81ed6f3cbc667f3ed71"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/examples/hls_reduction_tree_sum_spec.json",
+      "sha256": "a0f362cbd81e284c270515b0629faccdc63467928fbf0798e75caee50a3e1adf"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/examples/hls_streamofblocks_axis_spec.json",
+      "sha256": "ebd3a7c8811c82976a44d2d228f91477a78864e43c7119a87d5978c5f0edd93b"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/examples/hls_task_graph_axis_spec.json",
+      "sha256": "b3a61d9abcba187340372cc2c03325c0b79ccf153e064b952eeca6dc9caf1e3d"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/examples/hls_tiled_gemm_spec.json",
+      "sha256": "aff857e665541dd6ceb68d83b006dc1b78106e72ef1c49744f47b7a4a35c6b99"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/examples/hls_vector_lane_add_spec.json",
+      "sha256": "2bab4b7a4d2e79176b0bf8009a50a94432c06e39dbcc2f8ad5a331e1b814e9d2"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/examples/hls_vector_scale_mock_spec.json",
+      "sha256": "01387e9b68dfd9476920bd1887325afcf44a91e163a128e2abe5410db9d5826c"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/examples/hls_vector_scale_spec.json",
+      "sha256": "9cb3b558ddd841182dbddfdf69e3ec2424d2f350eb910983fd0b26b4c1552f2a"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/templates/hls_array_partition_template.json",
+      "sha256": "41eeb6dee595fe64e096126ba15a75ec1d2d135c6be1b978cc2a574507f4a5b1"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/templates/hls_array_reshape_template.json",
+      "sha256": "6d6780231b21dd00d353b576cfd51b0a9c51e4bbf62bb428113089463e9584f8"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/templates/hls_axi4_burst_template.json",
+      "sha256": "7f5ccc16de60a3c100b16e5d8456ed5190fb72da54a726269f902b789e840f5e"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/templates/hls_dataflow_template.json",
+      "sha256": "1a9aca2608da45fc3bf5a04b48ec0c17e00fdc089ec76f8a78ce60e1a08ba176"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/templates/hls_directio_freerun_template.json",
+      "sha256": "34e9204f4682ecdaa989561a166c6437b27de3a898f23d2b321eb234f6b3db8c"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/templates/hls_fence_ordering_template.json",
+      "sha256": "72ae664bba117482211c0bf35867e8b4a25ffaed07272aa6a323273ffd9d84c2"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/templates/hls_fixed_point_template.json",
+      "sha256": "f7a785050e5d72df8fa119e24b2f2382748dfa7fac49ec630373d8e1ee7244fc"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/templates/hls_host_kernel_split_template.json",
+      "sha256": "31bf1c1556baa36e97f75401ca8c1a0ef92e732221a2199479dfbdd7f6153068"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/templates/hls_line_buffer_stencil_template.json",
+      "sha256": "baff5617cf1874a56245e8b5162a58b64c62230643be75702a128cd0f94a1898"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/templates/hls_minimal_vitis_pipeline_template.json",
+      "sha256": "882cc3a5b51c60a541427ad4db88111cb71e597644050c061c5a6eb503df561c"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/templates/hls_multi_m_axi_template.json",
+      "sha256": "abe7722cca62b2327ac1298bbe118f947197a739bd0aa765ece9cddc8a26c895"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/templates/hls_reduction_tree_template.json",
+      "sha256": "ed67f0af1bc07fa7ec816a10bc497e9ca30e7607cf8cfd5f0f19ad6def910752"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/templates/hls_streamofblocks_template.json",
+      "sha256": "784619e3ab0ce3e64222ed7228fb0b0a3c0164d6bc3ca2437d837b80142addae"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/templates/hls_task_graph_template.json",
+      "sha256": "802dbb82bd9a7ce0e3e8a58eb307f9572bac5a6adf39e9e4ec41d4afc8d710dc"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/templates/hls_tiled_gemm_template.json",
+      "sha256": "24d616749bc6e5315e65879298cd990b6eef9c4db6d4d823cb52e4d4606f897d"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/templates/hls_vector_lane_template.json",
+      "sha256": "d9267c251e532aad79a7a2fdbe24e18018577bda99adc1aa538eff661da46414"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/validation-board/hosts/binary_add_host.cpp.tpl",
+      "sha256": "a67c0fd82ed5c7c4a6d81e28652088f0752e69641a8da7103b742e9081394eb3"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/validation-board/hosts/matrix_unary_host.cpp.tpl",
+      "sha256": "96e576b58a3765cc451091e9592aade2394a409857339357c1e226dbd3b6c3ea"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/validation-board/hosts/vector_increment_host.cpp.tpl",
+      "sha256": "fa865f8a2fbd824943675567bd8c261d493ec458cf2ac8cdfddd7d4d96f56ff4"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/validation-board/hosts/vector_scale_host.cpp.tpl",
+      "sha256": "584a403d2d6f5572ea9a98202156ca863ba58e160b0b8999c3ad8abb01f12d4c"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/assets/validation-board/README.md",
+      "sha256": "2f1c24205e24fb9070478a837cd66d1f5bda3b6d22b14cce5b974328ba724980"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/DESIGN_GOALS.md",
+      "sha256": "cdf34df374356c8c0a7eb5fa37ea7af4e67c36110722790418d7cafa3e337659"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/evals/evals.json",
+      "sha256": "c54afc6514bbdd4996266976424ba58e98a1eccb45f762ec5500f70d3e5f0b94"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/integration/__init__.py",
+      "sha256": "bc2f88fc551d438ee45a529941c3d7ee8b7218fa86d4dfeef103168a5509d6ef"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/integration/default_workflow_config.json",
+      "sha256": "50de84c5ba0232a84622667d661272e3544a8fcc1d23e00619afa2c3b32e5690"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/integration/hls_adapter.py",
+      "sha256": "77fc3eb1d5fad297719ca538fc580b3d41d8aca5b695274ee4a508b269b2a9bc"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/references/configuration.md",
+      "sha256": "3beb538c8becbf58fe06f6dfeca53605b77a3966cac0028b27a285b7011a31f8"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/references/hls-advanced-library-patterns.md",
+      "sha256": "f325b992589d8eee501d6eb7ad6c187515912236ac6349a454c1281f20a060ab"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/references/hls-comment-style.md",
+      "sha256": "bde763e34f2c62edc6ba37011b8e7d14eeb93b79ca6e0807f925105defd90bda"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/references/hls-device-migration-strategy.md",
+      "sha256": "51f06b10157ac64702d9f72defd5dd2b0009bc41e0d00808a8a36762c60625d4"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/references/hls-library-policy.md",
+      "sha256": "af1fb53a8647f6ab08c46694c1871ef017d25775773e24099c572136b346415e"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/references/hls-memory-burst-and-layout.md",
+      "sha256": "5014566a5ebb2ab6214b079ada464fb666553ad488d5adda3c7cf0e0af6d2f24"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/references/hls-modeling-strategy.md",
+      "sha256": "5ee3552faddf0f80e251c5f868f8cee68d3046d5049beb9e4498d1d3c4d6e4cc"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/references/hls-optimization-patterns.md",
+      "sha256": "ccf3123b228ce9c1600ecd58626b5bdf3e182bc621df9abafc7eb006cb42c309"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/references/hls-project-structure-patterns.md",
+      "sha256": "363ee4301ff2e46a9f9ed3436c540108af147e2681c40c130ace60aab5f739f1"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/references/hls-report-driven-optimization.md",
+      "sha256": "9b19c9c3790d40632b57e21868ac53bea9f35a35de827ca31c057456ed82f39d"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/references/hls-stencil-reduction-gemm-patterns.md",
+      "sha256": "245bf89e6a347aa87cec6b194e3b9133e1f2d82ded186f1847ac8314a8c72a66"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/references/hls-task-parallel-strategy.md",
+      "sha256": "bc3ca8d11f86aba2885666dde25aaff7a0fb3919edf53329198663f4cebaeeda"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/references/hls-tutorial-derived-templates.md",
+      "sha256": "d6fcb883d4c02c687cf242e360971d733899d9086611a116a506b7afa42e39a9"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/references/integration.md",
+      "sha256": "9048e4581b44066c3dd157650ef15ba6b007944ec4210e5465faf725ece83fbb"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/references/remote-board-platform-upload.md",
+      "sha256": "156918e80c0a58b83ca33697defd57bc716da495ab8091094566dbf314bc4621"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/references/vitis-hls-2024-2-script-guide.md",
+      "sha256": "e0e398dcc259b6912db81f46eeb99329bf7cccd85139cd042e1b121a97c2b835"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/references/workflow-contracts.md",
+      "sha256": "3e0586a261ac8a0cebe61a1e0824512372205cf0da5cbc44c0962d8a91f501a8"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/RELEASE_RECEIPT.json",
+      "sha256": "18eb7bf3f9da50b80171cf76d631827439f7eb846c53ab3f59db7409eb180edc"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/__init__.py",
+      "sha256": "bbac4643de7d4e94a78094973d78482bf0bbf3694d18ab704b4dcfd265b129e7"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/__init__.py",
+      "sha256": "d5c892bc0209e53f7c193eab98ce5cb270400813bc4ebd99e3ddf71aa4a6da00"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/__main__.py",
+      "sha256": "9dbb2b94e18a1b4c981e4277684bc93089b7a2e0a127118d273fc9a7723ed601"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/board_acceptance.py",
+      "sha256": "d69130a8076c61bae3741114f55fa9b36d13f163ba041b732ea97fefc3eeb5f0"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/board_platform_payload.py",
+      "sha256": "c65ef5c76e535520ff01ae36a04df9969d0c4c1044da09c36f44aa428d8883cc"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/cli.py",
+      "sha256": "e6d358456b342985c66a315a6d82fd75347ecc648662cf334fb201f20f44e734"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/comment_policy.py",
+      "sha256": "81fbad9eb62b30d2ad58232dd47ebff27c02eec8f64104e10aed6fbc72b31cbf"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/config.py",
+      "sha256": "762d46059b54a212f5a7ea8ea6c00939252b61571db1af56635b23901a4bd1bd"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/extractor.py",
+      "sha256": "2e7df8bef1c23719f7e7c4c86116802020d78bfff4cf64870948514c2684e036"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/hls_cfg.py",
+      "sha256": "20db67ccae54028ebae18dd580d869ef62e9afd13b10a4bec18a2134f5784b68"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/hls_profile.py",
+      "sha256": "37da5b123215e628af134cbfb6034eff0ee06d4806085c276fe3c39e17a5f355"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/hls_reports.py",
+      "sha256": "7002f128e57c4bf462e0bc6c1b343d6ab5135eeefeed47fd84e488204ba016bc"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/hls_tcl.py",
+      "sha256": "e9910f44657464346790e9f4ae8dbc098ac1b8cf4dfececb336f2bfbc230f441"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/interface_contract.py",
+      "sha256": "c3bbade98d6f7a9e91bd0962385554136bdfac7617491f18cc79b6d83bb9bdf5"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/intervention.py",
+      "sha256": "4ee84988b2f19bf5e7456fea185eca9ab5a7862e3db81f024d61eda9537a897c"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/model_provider.py",
+      "sha256": "d9d0ca617d063e3a877ef5535d33c91fe01ed7772835df594094bb8d73cfe62b"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/patterns.py",
+      "sha256": "43357c290c637deea32a42096a5ec760a434dc40d88bad8a3302ae5261f0a638"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/planning.py",
+      "sha256": "c1f2abc2fdff7ae03b6825bb5e9bb06d128fd0a7bb30bf5dd2873fe633dd5261"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/prompt.py",
+      "sha256": "bf35fa8207b52e28233f01ff8d23ff0613c10fef60062054758d1be60b0f8f8c"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/reference_contract.py",
+      "sha256": "0311756342233183accc806e683f388e7cdb1fd7e407e776379986f041fcd94f"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/remote_directory_contract.py",
+      "sha256": "2d160d173d8a7848e6312e6f943708ddda46d390c9be97c2672ae299434f53e8"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/requirements.py",
+      "sha256": "385fda389f4e9c7a18066aec9982ea3ac13f69e436a59bca235652879c149620"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/route_contract.py",
+      "sha256": "6eecbc44e5f8d0b79be084f7b595c78a3976ffad71a58d4808b92ed3820217a8"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/runtime_config.json",
+      "sha256": "285afb9d2740cded943412164c5bdeda6f6792ab2c221dbc0fba96c2c577e247"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/skill_dependencies.py",
+      "sha256": "da979525443d2071e3ce6c4c3952e1118c770144a5f0e4d9ba96137b122c542c"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/spec.py",
+      "sha256": "fb5c212d8df454f5a167f6447986a623e6edc05a7f1ce137695f3435c6659a05"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/trace.py",
+      "sha256": "cc773b2a3813f02a9591b3917e77f953d652b24219b03ea92577cea3142de088"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/user_config.py",
+      "sha256": "fb1ed8f5dbe1e61ea66eaff725d04d120fa7e91793f19568c6a3c98f4dff3fc6"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/validation.py",
+      "sha256": "e04679c94fb21071244ebfa89868f22e0873048ab9d08b879fef53c8d8bbe6af"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/vectors.py",
+      "sha256": "a455e5c842d9cbbd6f4cb381cbc900a051b814b6ddc2c9cac23f42dc32d63b1e"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/verifier.py",
+      "sha256": "cd81295ddaebb783ea27022fc03d922e890dbaeb45b9c2442955e130086f1d21"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/vitis_rules.py",
+      "sha256": "7ef5a9490f0dc359515d4da5ffaaab51ac147ca3548db1dda76dc190e52abbf6"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/workflow.py",
+      "sha256": "61e4e1fab1e0fb9b745ebdeda11ab838c46eac80a5b9613806d871667d1e8cf6"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/runtime/hls_generator/workspace.py",
+      "sha256": "9a1c5596f94ad01e2c5257f0850d235a1821df0ddcd8330bb3ad3477d7e3cae1"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/scripts/_skill_tool_delegate.py",
+      "sha256": "d65506ae17945c91459b2102be84042e7f12c01a2760aebd27c2956e28ac0300"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/scripts/audit_skill.py",
+      "sha256": "b3a97fcc4f50dc39e10cd39ed42f39fdf97ffabd7702591286d5cda67ee63b6a"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/scripts/confidence_loop.py",
+      "sha256": "e35f063bc9ced5969248e68b0b431006d354503b4286e0af724424a97d6b478f"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/scripts/evaluate_skill.py",
+      "sha256": "7a75a86e833322816b95695ba501946eff2bd86f823c86836d3cad77cdf27e43"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/scripts/inspect_project.py",
+      "sha256": "c0831453c6b2b9dec4e8e3df1e7f213f2d8764843182e78b19602bfad6ce34a3"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/scripts/manage_dirs.py",
+      "sha256": "3016313a7a88b4b0bea33bcc2beceb7d1e552cff3875b2d3e2d23ab358232643"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/scripts/manage_docs.py",
+      "sha256": "af0beba82aa0f70ae9ffe06333bf32f1fcdb8d1e8fe33a10507b290c6f39d6f2"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/scripts/prepare_release.py",
+      "sha256": "b67bcbd892153e9b74231c10f1d5f13e0065e559ebcbddfee2cbd896b96ff547"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/scripts/quick_validate.py",
+      "sha256": "f16139008c712a710144c8f01b9163aaa322b1998b310ffe10c13d842a05f6b1"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/scripts/remote_vitis_acceptance.py",
+      "sha256": "cf97ba409997b083293ec4f9be65e27ad309d2eb998dbe2ebf46905f47c86e5a"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/scripts/render_agents.py",
+      "sha256": "dca4daf202b36bd8e1de30f7b947689267b45c9febb99165cc9da34bdf7102f8"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/scripts/verify_agents.py",
+      "sha256": "653e2003b8fd56d1eb746d25f59338fe9a7c926c160624d0e92db6f92392ff79"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/SKILL.md",
+      "sha256": "aa0487c8e2b7681d96aa50e6237d3681ab4004d1c8a15181bddcd36ced72a2fe"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/smoke/run_smoke.py",
+      "sha256": "e7522f0931613c57bb8808f83580af4c6b2568e0d4d8bc2d659d7ea6b7592f28"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/tests/test_board_platform_payload.py",
+      "sha256": "f45185b49f9d17966d9d134f9656e0f49b500e4b2ca1aa107966f9af093507e4"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/tests/test_comment_coverage.py",
+      "sha256": "ac7dfafe47928e312079febe1b89228144d1e0a04fd43b290ff1a584718ce67a"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/tests/test_comment_policy.py",
+      "sha256": "d0c92a2aa2cf2fb99dddeb55bbb782c65014e5fba0d5c5a1af8d77b2135cb21b"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/tests/test_confidence_loop.py",
+      "sha256": "e1b172a3f14ff6eb2728d39fff09e3af3f9c3494f732533b4b371be57e6e9156"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/tests/test_evaluate_skill.py",
+      "sha256": "63f0bdf11e9650443bba3b52fd68b1aa57cc07a7a56f205038050cc53b56b90d"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/tests/test_hls_pattern_contracts.py",
+      "sha256": "2dfe67a4755bfdcc4911cdc55aa0fbe5f02b7ad090e1a7c7b7a505dd33930ea8"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/tests/test_prepare_release.py",
+      "sha256": "36f27f512a56b77c8f3361b215ac8e4fb62e0f88a543be282cec84bc45f5d4f3"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/tests/test_remote_vitis_acceptance.py",
+      "sha256": "6519790a3d15c616d91942505b8e1a2ec7a70ca6bd11654feaaa0f209babfe72"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/tests/test_runtime_config.py",
+      "sha256": "30aed5cc18104c3756cc6ef1f87ae5783818f82fb23dd13d4c347af7b61f90f9"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/tests/test_skill_dependencies.py",
+      "sha256": "1a03d57a3107f23d00bafc05339f4833e881d3d450319802e3e3588bad33c5e4"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0/tests/test_user_config.py",
+      "sha256": "9aebc6db90df763281e02d4ccebbd87663f13c56cb82fa10fda3cff605586fc2"
+    },
+    {
+      "path": "dist/erie-hls-generator-v0.2.0.zip",
+      "sha256": "f401c4977e72e2d7feccd49c81bd4e22f155db005369aa04880c3bc066f597d0"
     }
   ]
 }
