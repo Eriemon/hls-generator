@@ -93,8 +93,8 @@ The runtime does not add a cloud SDK dependency.
 ## HLS-only validation
 
 Final hardware-facing artifacts must be HLS C/C++ headers, HLS C/C++ sources,
-C++ HLS testbenches, `.cfg` files, or Vitis reports. Python reference models
-and vectors are allowed as workflow intermediates.
+C++ HLS testbenches, `.cfg` files, vectors, or Vitis reports. This workflow no
+longer generates Python reference models.
 
 Validation selects AMD-Xilinx tooling in the order configured by
 `vitis.tools`. The default order is:

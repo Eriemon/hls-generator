@@ -21,7 +21,7 @@ keywords:
   - hardware generation
 repository-code: "https://github.com/Eriemon/hls-generator"
 url: "https://github.com/Eriemon/hls-generator"
-version: "0.2.1"
-date-released: "2026-05-29"
+version: "0.2.3"
+date-released: "2026-07-05"
 year: 2026
 license: "Apache-2.0"

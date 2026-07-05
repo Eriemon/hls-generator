@@ -11,7 +11,7 @@
 <p align="center">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-1f6feb"></a>
   <a href="pyproject.toml"><img alt="Python" src="https://img.shields.io/badge/python-3.10%2B-2f81f7"></a>
-  <img alt="Version" src="https://img.shields.io/badge/version-v0.2.1-7c3aed">
+  <img alt="Version" src="https://img.shields.io/badge/version-v0.2.3-7c3aed">
   <a href="SKILL.md"><img alt="Agent Skill" src="https://img.shields.io/badge/agent-skill-16a34a"></a>
   <a href="references/vitis-hls-2024-2-script-guide.md"><img alt="Target" src="https://img.shields.io/badge/target-Vitis%20HLS-f59e0b"></a>
 </p>
@@ -50,11 +50,13 @@ HLS Generator 用来把 AI 编程代理变成更可靠的 HLS 工程助手。它
   <img src="docs/assets/workflow-cn.svg" alt="HLS Generator 工作流" width="100%">
 </p>
 
-## v0.2.1 重点更新
+## v0.2.3 重点更新
 
-- 扩展 HLS 模板与 example corpus，加入 CORDIC、FFT、FIR、prefix、RLE、线性代数与面向板卡的结构化 spec。
-- 新增 validation-board host 模板，以及 remote recovery 与 confidence helpers，补强远程 Vitis acceptance 与 release 流程。
-- 将治理、验证、发布、curation 和 remote acceptance 辅助脚本集中到 `scripts/python/`，同时把 repo-local 验证资产继续留在公开仓库之外。
+- 新增 HLS 请求分流能力，可区分 `generate`、`modify`、`explain` 三类路径；其中 comment-only 修改现在必须提供 baseline 目录，先做对照再允许通过。
+- 新增可读性与注释安全门禁栈，包括 `readability-gate`、comment-only 的 token/AST 保护、命名/pragma/结构检查，以及 `runtime/hls_generator/readability_gate/` 与 `scripts/python/quality_gate/` 下的公开包装入口。
+- 扩展确定性 mock 生成能力，补入更完整的 mock HLS 产物、mock vectors 和 comment rendering，提升本地验证、审查和工作流 dry-run 的覆盖面。
+- 新增 `scripts/python/task_dispatcher/` 下的任务调度与工作流包装脚本，并补入 `references/hls_dispatcher.md`、`references/hls_readability_gate.md`、`references/style/` 等说明文档。
+- 继续保持公开仓库边界：远程板卡平台上传说明保留 `<REDACTED_LOCAL_PATH>` 脱敏占位符，本地验证资产、设置文件、缓存和 smoke 产物不进入公开仓库和重建 release。
 
 ## 仓库结构
 
@@ -63,12 +65,15 @@ HLS Generator 用来把 AI 编程代理变成更可靠的 HLS 工程助手。它
 | `SKILL.md` | 面向 Agent 的触发、流程、约束和工具使用规则。 |
 | `agents/openai.yaml` | Skill 列表和调用入口的 UI 元数据。 |
 | `runtime/hls_generator/` | scaffold、prompt 渲染、抽取、验证、报告和 workflow 状态。 |
+| `runtime/hls_generator/readability_gate/` | HLS 可读性、命名、pragma、结构和 AST 支撑检查模块。 |
 | `integration/hls_adapter.py` | 面向宿主应用的稳定接口。 |
 | `assets/examples/` | stream、memory、dataflow、partition、reshape、fixed-point、multi-`m_axi` 等 HLS spec 示例。 |
 | `assets/templates/` | 常见 kernel 家族与面向板卡场景的可复用结构化 HLS JSON 模板。 |
 | `assets/validation-board/` | 远程验证所需的板端 host 模板与辅助载荷。 |
-| `references/` | Vitis HLS 策略、配置规则、工作流契约、集成说明、注释风格指南和模板家族目录。 |
-| `scripts/python/` | 公开 skill 仓库提供的 curation、release、governance、validation、inspection 与 remote acceptance 辅助脚本。 |
+| `references/` | Vitis HLS 策略、分流规则、可读性指南、工作流契约、集成说明、风格覆盖和模板家族目录。 |
+| `scripts/python/quality_gate/` | 公开可用的 HLS/Python 质量门包装器与规则执行入口。 |
+| `scripts/python/task_dispatcher/` | HLS 与相关 Python 审查流程的请求分类与工作流包装入口。 |
+| `scripts/python/` | 公开 skill 仓库提供的 curation、release、governance、validation、inspection、任务分流与 remote acceptance 辅助脚本。 |
 
 ## 安装
 
@@ -93,7 +98,8 @@ python -m runtime.hls_generator --version
 python -m runtime.hls_generator config --path
 python -m runtime.hls_generator deps check --json
 python -m runtime.hls_generator scaffold --target hls --name vector_scale --out .\reports\hls\spec.json
-python -m runtime.hls_generator prompt --target hls --spec .\reports\hls\spec.json --out .\reports\hls\prompt.md --comment-language en
+python -m runtime.hls_generator prompt --target hls --spec .\reports\hls\spec.json --out .\reports\hls\prompt.md --confirm-requirements --confirmation-notes "user-confirmed HLS contract"
+python -m runtime.hls_generator readability-gate --target hls --path .\reports\hls\generated --profile kernel --style current-project --json
 ```
 
 首次使用时，依赖检查会阻塞缺失的 required 或 recommended Codex skills。运行 `python -m runtime.hls_generator deps install --all` 前需要先获得用户确认，安装后重启 Codex 以加载新的 skill metadata。
@@ -104,7 +110,15 @@ python -m runtime.hls_generator prompt --target hls --spec .\reports\hls\spec.js
 python -m runtime.hls_generator validate --target hls --spec .\reports\hls\spec.json --path .\reports\hls\generated --readiness static --no-external
 ```
 
+如果是只改注释的 HLS 文件，必须同时保留 baseline 目录，并在 `readability-gate` 与 `validate` 中传入 `--baseline-path`，让 token/AST 等价保护先完成再接受改写。
+
 工作区私有的 smoke、单元和 confidence 验证资产放在公开仓库之外的 `tmp/validation/hls-generator/`。
+
+## 公开仓库边界
+
+- 公开跟踪内容只保留 skill payload、公开元数据，以及安装和使用所需的用户文档。
+- 本地 smoke 资产、私有验证载荷、`.settings/`、`*.local.json`、`*.remote.json`、缓存、`reports/`、`tests/`、`smoke*` 等本地专用内容不会进入公开仓库和重建 release zip。
+- 涉及远程路径的说明继续做脱敏处理，例如 `references/remote-board-platform-upload.md` 保留 `<REDACTED_LOCAL_PATH>`，不会写入真实本地文件系统路径。
 
 外部验证需要真实 Vitis HLS 环境。只有实际运行 `vitis-run` 或 `vitis_hls` 后，才可以声称 Vitis 验证通过。
 
@@ -149,8 +163,8 @@ Jiyuan Liu 和 He Li 隶属于东南大学电子科学与工程学院。
   author       = {Jiyuan Liu and He Li},
   title        = {{HLS Generator}: An Agent Skill for Vitis HLS Workflows},
   year         = {2026},
-  version      = {0.2.1},
-  date         = {2026-05-29},
+  version      = {0.2.3},
+  date         = {2026-07-05},
   url          = {https://github.com/Eriemon/hls-generator},
   license      = {Apache-2.0},
   note         = {Agent skill package for structured AMD/Xilinx Vitis HLS workflows}

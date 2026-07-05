@@ -34,8 +34,6 @@ artifacts are kept separate:
 - `requirements/artifacts/plan/<name>_requirements.json`
 - `codegen_plan/artifacts/plan/<name>_codegen_plan.json`
 - `tests/artifacts/plan/<name>_test_vectors.json`
-- `python/artifacts/model/<name>_model.py`
-- `python/artifacts/model/<name>_vectors.json`
 - `hls/artifacts/...`
 - `validation.json`
 - `intervention.json` when blocked on a human decision
@@ -49,12 +47,19 @@ artifacts are kept separate:
 The workflow is HLS-only and uses this fixed stage order:
 
 ```text
-requirements -> codegen_plan -> tests -> python -> hls
+requirements -> codegen_plan -> tests -> hls
 ```
 
 The `requirements` and `codegen_plan` stages are structured JSON preflight
 contracts. The workflow does not enter prompt-driven HLS generation when the
 codegen plan has unresolved open questions or `ready_for_generation=false`.
+Remote acceptance is intentionally not a default stage. `remote_toolchain_request.json`
+and `scripts/python/remote/remote_vitis_acceptance.py` are explicit follow-up
+acceptance helpers for callers that need remote Vitis or board evidence.
+
+Legacy 5-stage run directories that still contain a `python` stage or old
+`reference_contract`/`python_interface`/`python_quality_gate` outputs are not
+resumed. The runtime fails explicitly and requires a fresh HLS-only rerun.
 
 ## Stable statuses
 
@@ -101,6 +106,10 @@ Static checks validate manifests, expected outputs, HLS-only file types,
 interface pragmas, top function declarations, `hls_config.cfg`, testbench
 `main()`, PASS/FAIL behavior, vector hashes, and Python/HLS interface
 contracts.
+
+Static-only reports must expose `static_only=true`, `vitis_executed=false`,
+and `acceptance_required=true`. A report may only set `vitis_executed=true`
+after the runtime has actually launched the selected AMD-Xilinx tool command.
 
 External validation uses AMD-Xilinx tooling only. Tool order and command
 templates come from `runtime/hls_generator/runtime_config.json`; the default

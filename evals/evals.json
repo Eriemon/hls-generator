@@ -47,11 +47,18 @@
       "with_skill_expected_pass": true,
       "without_skill_expected_pass": false,
       "without_skill_reason": "A baseline evaluation does not assume repo-specific pytest gating.",
-      "required_files": ["scripts/python/validation/confidence_loop.py"],
+      "required_files": [
+        "scripts/python/validation/confidence_loop.py",
+        "scripts/python/remote/remote_vitis_acceptance.py"
+      ],
       "required_terms": [
         {
           "file": "scripts/python/validation/confidence_loop.py",
-          "terms": ["\"pytest\"", "\"-q\"", "\"tests\""]
+          "terms": ["\"remote_pytest\"", "_run_remote_pytest", "_run_split_remote_pytest"]
+        },
+        {
+          "file": "scripts/python/remote/remote_vitis_acceptance.py",
+          "terms": ["python -m pytest -q tests", "_run_pytest_mode"]
         }
       ]
     },
@@ -87,7 +94,7 @@
       "required_terms": [
         {
           "file": "scripts/python/remote/remote_vitis_acceptance.py",
-          "terms": ["choices=(\"link\", \"vitis\", \"board\")", "HLS_BOARD_STATUS", "_run_board_mode"]
+          "terms": ["choices=(\"link\", \"pytest\", \"smoke\", \"vitis\", \"board\")", "HLS_BOARD_STATUS", "_run_board_mode"]
         }
       ]
     },
@@ -119,7 +126,7 @@
     },
     {
       "id": "typed-comment-policy-gate",
-      "title": "Generated HLS comments use typed placement semantics",
+      "title": "Generated HLS comments use strict Chinese placement semantics",
       "with_skill_expected_pass": true,
       "without_skill_expected_pass": false,
       "without_skill_reason": "A baseline setup may check for comment presence without enforcing placement or hardware-intent semantics.",
@@ -127,12 +134,12 @@
         "runtime/hls_generator/comment_policy.py",
         "../../tests/test_comment_policy.py",
         "references/hls-comment-style.md",
-        "../../smoke/run_smoke.py"
+        "../../tests/smoke/run_smoke.py"
       ],
       "required_terms": [
         {
           "file": "runtime/hls_generator/comment_policy.py",
-          "terms": ["typed_hls_comment_placement", "generic generated line", "function contract", "HLS pragma intent"]
+          "terms": ["strict_chinese_hls_comment_spacing", "generic generated line", "PRAGMA_INTENT_KEYWORDS", "_GENERIC_COMMENT_PATTERNS"]
         },
         {
           "file": "../../tests/test_comment_policy.py",
@@ -140,11 +147,11 @@
         },
         {
           "file": "references/hls-comment-style.md",
-          "terms": ["typed comment placement", "Generic", "Trivial lines"]
+          "terms": ["strict Chinese comment placement", "Blocking examples", "Trivial lines"]
         },
         {
-          "file": "../../smoke/run_smoke.py",
-          "terms": ["_run_comment_policy_checks", "comment_policy", "generic generated line"]
+          "file": "../../tests/smoke/run_smoke.py",
+          "terms": ["TUPLE_SMOKE_TEST_TARGETS", "test_comment_policy.py", "comment_policy"]
         }
       ]
     },

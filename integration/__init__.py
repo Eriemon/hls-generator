@@ -1,2 +1,2 @@
-"""Local integration helpers for the HLS generator skill."""
+"""提供 HLS 生成器与外部调用方之间的集成适配入口。"""
 

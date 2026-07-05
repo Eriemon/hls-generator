@@ -4,7 +4,7 @@
 
 This skill exists to help Codex generate AMD-Xilinx/Vitis HLS C/C++ kernels with supporting local workflow automation. The previous implementation mixed HLS and Verilog RTL paths, which made the skill harder to trigger correctly, harder to validate, and easier for agents to drift into direct RTL generation. This project intentionally narrows the skill to HLS so every prompt, example, validation rule, and command path reinforces the same target.
 
-The final hardware-facing artifacts must be Vitis HLS source, headers, C++ testbenches, configuration files, and HLS reports. Python reference models and vectors are allowed as intermediate validation artifacts because they improve semantic checking before HLS generation, but they are not the generated hardware deliverable.
+The final hardware-facing artifacts must be Vitis HLS source, headers, C++ testbenches, configuration files, vectors, and HLS reports. The workflow is now HLS-only and does not generate or validate Python reference models.
 
 ## Non-goals
 
@@ -35,16 +35,15 @@ The design uses the local Skill-pattern reference reviewed during planning:
 - Generator: produce a fixed manifest plus HLS files from a structured spec.
 - Reviewer: validate generated HLS artifacts with static checks, interface-contract checks, testbench checks, and Vitis report checks.
 - Inversion: require confirmed requirements and interface choices before generation.
-- Pipeline: enforce `requirements -> codegen_plan -> tests -> python -> hls` instead of letting the agent skip stages.
+- Pipeline: enforce `requirements -> codegen_plan -> tests -> hls` instead of letting the agent skip stages.
 
 ## Workflow Stages
 
 1. Normalize confirmed requirements and interface profile.
 2. Build a code generation plan with open-question gating.
 3. Generate semantic test vectors.
-4. Generate a Python oracle and vector contract as intermediate validation support.
-5. Generate HLS C/C++ and configuration artifacts.
-6. Validate statically and then through Vitis tooling.
+4. Generate HLS C/C++ and configuration artifacts from the confirmed vectors and interface contract.
+5. Validate statically and then through Vitis tooling.
 
 ## Version Control And Locality
 

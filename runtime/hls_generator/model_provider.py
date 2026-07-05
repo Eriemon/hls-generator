@@ -1,51 +1,136 @@
-"""Pluggable model-provider adapters for HLS workflow execution."""
+"""为 HLS workflow 提供手工、命令行和 mock 模型响应适配器。"""
 
+# 启用延迟注解，避免 Protocol 与 dataclass 字段在导入期解析复杂类型。
 from __future__ import annotations
 
+# JSON 和环境模块负责响应载荷与子进程环境。
 import json
 import os
-import re
+
+# 命令解析与执行模块负责 command provider 后端。
 import shlex
 import subprocess
+
+# dataclass、路径和类型辅助用于 provider 上下文与协议定义。
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol, Sequence
 
-from .patterns import required_pattern_headers
-from .reference_contract import REFERENCE_RESULT_TAG
-from .vectors import VECTOR_HASH_TAG
+# mock 渲染器保证 HLS C/C++ 片段满足当前注释语言覆盖要求。
+from .mock_comment_rendering import _ensure_hls_line_comment_coverage
 
+# mock artifact helper 继续由本模块兼容导出，供旧测试和调试脚本复用。
+from .mock_hls_artifacts import (
+    _hls_pragmas,
+    _mock_hls_cfg_text,
+    _mock_hls_header_text,
+    _mock_hls_source_text,
+    _mock_hls_testbench_text,
+)
 
+# mock_vectors 生成 workflow 测试使用的确定性参考向量。
+from .mock_vectors import _mock_vectors
+
+# 模型适配器错误基类，供 workflow 统一捕获并重试。
 class ModelProviderError(ValueError):
-    """Raised when a model provider cannot return a valid response."""
+    """表示模型适配器无法产出可用响应。
 
+    参数:
+        无外部业务参数；异常消息由抛出位置提供。
+    返回:
+        无业务返回值；该类作为 workflow 捕获的异常类型。
+    """
 
+# 手工模式缺少预置响应文件时抛出的专用错误。
 class ManualResponseRequired(ModelProviderError):
-    """Raised when the manual provider has no prepared response file."""
+    """表示手工模型提供器需要用户先写入响应文件。
 
+    参数:
+        无外部业务参数；异常消息由抛出位置提供。
+    返回:
+        无业务返回值；该类用于区分可由用户补文件恢复的流程。
+    """
 
+# 单次模型生成尝试的上下文载荷。
 @dataclass(frozen=True)
 class GenerationContext:
-    attempt_id: str
-    stage: str
-    prompt_path: Path
-    response_path: Path
-    run_dir: Path
-    attempt_dir: Path
-    spec: dict[str, Any]
-    manifest: dict[str, Any]
-    workflow_config: dict[str, Any]
-    vector_contract: dict[str, Any] | None = None
-    comment_language: str = "zh"
+    """保存模型提供器生成响应时需要的 workflow 上下文。
 
+    参数:
+        attempt_id: 当前尝试编号，dtype=str，unit=dimensionless。
+        stage: workflow 阶段名称，dtype=str，unit=dimensionless。
+        prompt_path: prompt 文件路径，dtype=Path，unit=filesystem path。
+        response_path: 响应文件路径，dtype=Path，unit=filesystem path。
+        run_dir: 当前 run 根目录，dtype=Path，unit=filesystem path。
+        attempt_dir: 当前尝试目录，dtype=Path，unit=filesystem path。
+        spec: HLS 规范字典，shape=(n fields)，dtype=dict[str, Any]，unit=JSON object。
+        manifest: 当前阶段期望产物清单，shape=(n fields)，dtype=dict[str, Any]，unit=JSON object。
+        workflow_config: workflow 配置字典，shape=(n fields)，dtype=dict[str, Any]，unit=JSON object。
+        vector_contract: 可选参考向量契约，shape=(n fields) or None，dtype=dict[str, Any] or None，unit=JSON object。
+        comment_language: mock HLS 注释语言，dtype=str，unit=dimensionless。
+    返回:
+        dataclass 实例本身作为只读上下文，无额外业务返回值。
+    """
 
+    # 当前尝试编号会写入命令行环境和响应 metadata。
+    attempt_id: str  # 当前 workflow 尝试编号
+
+    # 阶段名用于 mock 分流和命令行 provider 环境变量。
+    stage: str  # workflow 阶段名称
+
+    # prompt 文件路径供外部命令读取完整提示词。
+    prompt_path: Path  # prompt 文件路径
+
+    # 响应文件路径供手工模式或命令行模式回写结果。
+    response_path: Path  # 模型响应文件路径
+
+    # run 根目录作为外部命令的工作目录。
+    run_dir: Path  # 当前 run 根目录
+
+    # attempt 目录用于定位本轮生成产物。
+    attempt_dir: Path  # 当前尝试目录
+
+    # HLS spec 提供 mock 文件名、顶层函数和测试向量生成依据。
+    spec: dict[str, Any]  # HLS 规范字典
+
+    # manifest 描述当前阶段期望模型返回的文件块。
+    manifest: dict[str, Any]  # 阶段产物清单
+
+    # workflow 配置携带 provider、预算和 mock 行为等运行参数。
+    workflow_config: dict[str, Any]  # workflow 配置字段
+
+    # 向量契约携带 sha256，用于 mock HLS testbench 标记参考数据。
+    vector_contract: dict[str, Any] | None = None  # 参考向量契约
+
+    # mock 产物默认使用中文注释，保持当前项目 HLS 代码输出风格。
+    comment_language: str = "zh"  # mock HLS 注释语言
+
+# 模型提供器协议，屏蔽手工、命令行和 mock 后端差异。
 class ModelProvider(Protocol):
-    name: str
+    """定义 workflow 调用模型适配器时依赖的最小协议。
 
+    参数:
+        无构造参数约束；具体 provider 自行定义初始化参数。
+    返回:
+        Protocol 类型本身不产生业务返回值。
+    """
+
+    # provider 名称写入 workflow trace 和配置摘要。
+    name: str  # 模型提供器名称
+
+    # provider 统一生成入口。
     def generate(self, prompt: str, context: GenerationContext) -> str:
-        """Return a raw fenced-block model response."""
+        """
+        根据 prompt 和上下文返回原始 fenced-block 响应。
 
+        参数:
+            prompt: 已渲染模型提示词，dtype=str，unit=text。
+            context: 当前生成尝试上下文，dtype=GenerationContext，unit=workflow state。
+        返回:
+            原始模型响应文本，dtype=str，unit=text。
+        """
 
+# 根据配置名称创建具体模型提供器。
 def build_model_provider(
     provider_name: str,
     *,
@@ -53,1699 +138,886 @@ def build_model_provider(
     timeout_s: int = 120,
     config: dict[str, Any] | None = None,
 ) -> ModelProvider:
-    normalized = provider_name.lower()
-    if normalized == "mock":
+    """
+    构造 workflow 使用的模型提供器实例。
+
+    参数:
+        provider_name: provider 名称，dtype=str，unit=dimensionless。
+        command: command provider 的命令模板，dtype=str or Sequence[str] or None，unit=shell command。
+        timeout_s: command provider 超时时间，dtype=int，unit=s。
+        config: provider 配置字典，shape=(n fields) or None，dtype=dict[str, Any] or None，unit=JSON object。
+    返回:
+        符合 ModelProvider 协议的实例，dtype=ModelProvider，unit=object。
+    异常:
+        ModelProviderError: provider 名称未知或 command provider 缺少命令时抛出。
+    """
+
+    # 统一 provider 名称大小写，兼容 CLI 与配置文件输入。
+    str_provider_name: str = provider_name.lower()  # 规范化 provider 名称
+
+    # mock provider 用于本地 smoke 和确定性测试。
+    if str_provider_name == "mock":
+
+        # 返回可生成确定性 HLS/Python/test 产物的 mock provider。
         return MockModelProvider(config=config)
-    if normalized == "manual":
+
+    # manual provider 读取用户预先写好的响应文件。
+    if str_provider_name == "manual":
+
+        # 返回手工响应 provider。
         return ManualModelProvider()
-    if normalized == "command":
+
+    # command provider 通过外部命令连接真实模型或包装脚本。
+    if str_provider_name == "command":
+
+        # command 模式没有命令时无法启动外部模型。
         if not command:
-            raise ModelProviderError("Command provider requires a model command.")
+
+            # 报告缺失命令，提示调用方补齐 provider_command。
+            raise ModelProviderError("> ERR: [Python] Command provider requires a model command.")
+
+        # 返回带超时控制的命令行 provider。
         return CommandModelProvider(command, timeout_s=timeout_s)
-    raise ModelProviderError(f"Unknown model provider {provider_name!r}.")
 
+    # 未知 provider 必须显式阻断，避免 workflow 静默切换后端。
+    raise ModelProviderError(f"> ERR: [Python] Unknown model provider {provider_name!r}.")
 
+# 手工 provider 只读取 response_path 中的预置响应。
 class ManualModelProvider:
-    name = "manual"
+    """从用户准备好的响应文件中读取模型输出。
 
+    参数:
+        无构造参数；响应路径来自 GenerationContext。
+    返回:
+        provider 实例本身，无额外业务返回值。
+    """
+
+    # workflow trace 使用该名称区分等待人工补文件的 provider。
+    name = "manual"  # trace 中的手工响应 provider 标识
+
+    # 手工模式生成入口。
     def generate(self, prompt: str, context: GenerationContext) -> str:
+        """
+        读取 context.response_path 中的原始响应文本。
+
+        参数:
+            prompt: 已渲染 prompt；手工模式不消费该文本，dtype=str，unit=text。
+            context: 当前生成尝试上下文，dtype=GenerationContext，unit=workflow state。
+        返回:
+            响应文件文本，dtype=str，unit=text。
+        异常:
+            ManualResponseRequired: 响应文件不存在时抛出。
+        """
+
+        # 手工模式的 prompt 已经落盘，当前函数只关心响应文件。
         del prompt
+
+        # 没有响应文件时让 workflow 进入可恢复的人工补文件状态。
         if not context.response_path.exists():
-            raise ManualResponseRequired(f"Manual provider expects a prepared response file at {context.response_path}.")
+
+            # 报告需要准备的响应文件路径。
+            raise ManualResponseRequired(
+                f"> ERR: [Python] Manual provider expects a prepared response file at {context.response_path}."
+            )
+
+        # 读取用户准备的 fenced-block 响应文本。
         return context.response_path.read_text(encoding="utf-8")
 
-
+# 命令行 provider 通过外部程序生成模型响应。
 class CommandModelProvider:
-    name = "command"
+    """执行外部命令并收集模型响应。
 
+    参数:
+        command: 外部命令或命令参数序列，dtype=str or Sequence[str]，unit=shell command。
+        timeout_s: 命令超时时间，dtype=int，unit=s。
+    返回:
+        provider 实例本身，无额外业务返回值。
+    """
+
+    # workflow trace 使用该名称区分外部命令生成后端。
+    name = "command"  # trace 中的命令行 provider 标识
+
+    # 命令行 provider 初始化入口。
     def __init__(self, command: str | Sequence[str], *, timeout_s: int = 120) -> None:
-        self._command = _normalize_command(command)
-        self._timeout_s = timeout_s
+        """
+        规范化外部命令并保存超时配置。
 
+        参数:
+            command: 外部命令模板，dtype=str or Sequence[str]，unit=shell command。
+            timeout_s: 命令超时时间，dtype=int，unit=s。
+        返回:
+            无业务返回值；初始化后实例可供 workflow 调用。
+        异常:
+            ModelProviderError: 命令为空时由 _normalize_command 抛出。
+        """
+
+        # 命令模板在 generate 中结合 GenerationContext 展开。
+        self._command = _normalize_command(command)  # 外部命令参数模板
+
+        # 超时时间限制外部模型或包装脚本的最长执行时间。
+        self._timeout_s = timeout_s  # 命令超时时间，单位 s
+
+    # 命令行 provider 生成入口。
     def generate(self, prompt: str, context: GenerationContext) -> str:
-        env = os.environ.copy()
-        env.update(
+        """
+        执行外部命令并返回 stdout 或响应文件文本。
+
+        参数:
+            prompt: 写入命令 stdin 的模型提示词，dtype=str，unit=text。
+            context: 当前生成尝试上下文，dtype=GenerationContext，unit=workflow state。
+        返回:
+            原始模型响应文本，dtype=str，unit=text。
+        异常:
+            ModelProviderError: 命令超时、启动失败、返回非零或未产出响应时抛出。
+        """
+
+        # 外部命令通过环境变量读取 prompt、response 和 workflow 上下文路径。
+        dict_env: dict[str, str] = os.environ.copy()  # 子进程环境变量副本
+
+        # HLS_GEN_CONTEXT_JSON 给包装脚本提供轻量结构化上下文。
+        str_context_json: str = _command_context_json(context)  # 命令行 provider 上下文 JSON
+
+        # 将 workflow 关键路径和阶段信息注入子进程环境。
+        dict_env.update(
             {
-                "HLS_GEN_PROMPT_PATH": str(context.prompt_path),
-                "HLS_GEN_RESPONSE_PATH": str(context.response_path),
-                "HLS_GEN_STAGE": context.stage,
-                "HLS_GEN_ATTEMPT_ID": context.attempt_id,
-                "HLS_GEN_CONTEXT_JSON": json.dumps(
-                    {
-                        "attempt_id": context.attempt_id,
-                        "stage": context.stage,
-                        "prompt_path": str(context.prompt_path),
-                        "response_path": str(context.response_path),
-                        "run_dir": str(context.run_dir),
-                        "attempt_dir": str(context.attempt_dir),
-                        "target": "hls",
-                        "name": context.spec.get("name"),
-                        "manifest": context.manifest,
-                    },
-                    ensure_ascii=False,
-                ),
+                "HLS_GEN_PROMPT_PATH": str(context.prompt_path),  # 给外部命令定位 prompt 输入文件
+                "HLS_GEN_RESPONSE_PATH": str(context.response_path),  # 给外部命令定位响应输出文件
+                "HLS_GEN_STAGE": context.stage,  # 告知子进程当前所处阶段
+                "HLS_GEN_ATTEMPT_ID": context.attempt_id,  # 传递当前尝试的唯一编号
+                "HLS_GEN_CONTEXT_JSON": str_context_json,  # 传递完整的上下文快照
             }
         )
-        command = [_expand_part(part, context) for part in self._command]
-        try:
-            result = subprocess.run(
-                command,
-                cwd=context.run_dir,
-                input=prompt,
-                capture_output=True,
-                text=True,
-                timeout=self._timeout_s,
-                check=False,
-                env=env,
-            )
-        except subprocess.TimeoutExpired as exc:
-            raise ModelProviderError(f"Command provider timed out after {self._timeout_s}s.") from exc
-        except OSError as exc:
-            raise ModelProviderError(f"Command provider failed to start: {exc}") from exc
 
-        if result.returncode != 0:
-            output = (result.stderr or result.stdout).strip()
-            detail = output.splitlines()[0] if output else f"exit code {result.returncode}"
-            raise ModelProviderError(f"Command provider failed: {detail}")
-        if result.stdout.strip():
-            return result.stdout
+        # 展开命令模板中的 {prompt_path}、{stage} 等占位符。
+        list_command: list[str] = [_expand_part(str_part, context) for str_part in self._command]  # 已展开命令参数
+
+        # 执行外部模型命令，并把 prompt 传入 stdin。
+        completed_process_run_result = _run_provider_command(  # 外部命令执行结果
+            list_command,  # 展开后的命令参数序列
+            prompt,  # 传给外部命令的 prompt 文本
+            context,  # 当前生成上下文
+            dict_env,  # 子进程环境变量映射
+            self._timeout_s,  # 外部命令超时秒数
+        )  # 供后续检查返回码与 stdout/stderr
+
+        # 命令失败时优先用 stderr 首行作为错误摘要。
+        if completed_process_run_result.returncode != 0:
+
+            # 提取外部命令失败原因的首行摘要。
+            str_failure_detail: str = _command_failure_detail(completed_process_run_result)  # 命令失败摘要
+
+            # 抛出 workflow 可捕获的 provider 错误。
+            raise ModelProviderError(f"> ERR: [Python] Command provider failed: {str_failure_detail}")
+
+        # stdout 非空时按模型响应直接返回。
+        if completed_process_run_result.stdout.strip():
+
+            # 返回外部命令直接写到 stdout 的 fenced-block 响应。
+            return completed_process_run_result.stdout
+
+        # 外部命令也可以把响应写入约定的 response_path。
         if context.response_path.exists():
+
+            # 返回命令写入的响应文件文本。
             return context.response_path.read_text(encoding="utf-8")
-        raise ModelProviderError("Command provider produced no stdout and did not write the expected response file.")
 
+        # 没有 stdout 且没有响应文件，说明外部命令未满足 provider 协议。
+        raise ModelProviderError(
+            "> ERR: [Python] Command provider produced no stdout and did not write the expected response file."
+        )
 
+# mock provider 生成确定性 fenced-block 响应。
 class MockModelProvider:
-    name = "mock"
+    """为本地 workflow 测试生成确定性模型响应。
 
+    参数:
+        config: mock 行为配置，shape=(n fields) or None，dtype=dict[str, Any] or None，unit=JSON object。
+    返回:
+        provider 实例本身，无额外业务返回值。
+    """
+
+    # workflow trace 使用该名称区分本地确定性 mock 后端。
+    name = "mock"  # trace 中的本地 mock provider 标识
+
+    # mock provider 初始化入口。
     def __init__(self, *, config: dict[str, Any] | None = None) -> None:
-        self._config = config or {}
+        """
+        保存 mock 行为配置。
 
+        参数:
+            config: 可选 mock 配置，shape=(n fields) or None，dtype=dict[str, Any] or None，unit=JSON object。
+        返回:
+            无业务返回值；初始化后实例可生成确定性响应。
+        """
+
+        # 空配置按默认 success 行为处理。
+        self._config = config or {}  # mock 行为配置
+
+    # mock provider 生成入口。
     def generate(self, prompt: str, context: GenerationContext) -> str:
+        """
+        根据 manifest 和当前阶段生成 mock fenced-block 响应。
+
+        参数:
+            prompt: 已渲染 prompt；mock 模式不消费该文本，dtype=str，unit=text。
+            context: 当前生成尝试上下文，dtype=GenerationContext，unit=workflow state。
+        返回:
+            mock 模型响应文本，dtype=str，unit=text。
+        """
+
+        # mock 响应只依赖结构化上下文，不读取自然语言 prompt。
         del prompt
-        mode = _mock_mode(context, self._config)
-        if mode == "invalid_response":
+
+        # mock_behavior 可控制成功、无效响应或故意丢失 testbench 等场景。
+        str_mode: str = _mock_mode(context, self._config)  # 当前 mock 行为模式
+
+        # invalid_response 用于测试提取器对非 fenced 响应的错误处理。
+        if str_mode == "invalid_response":
+
+            # 返回无法被 extractor 解析的普通文本。
             return "This is not a fenced response.\n"
-        manifest = context.manifest
-        files = [entry for entry in manifest.get("files", []) if isinstance(entry, dict) and entry.get("path")]
-        if mode == "spec_issue" and len(files) > 1:
-            dropped_path = next((str(entry["path"]) for entry in files if entry.get("kind") == "testbench" or "_tb." in str(entry["path"]).lower()), str(files[-1]["path"]))
-            files = [entry for entry in files if str(entry["path"]) != dropped_path]
-        response_manifest = {
-            **manifest,
-            "files": files,
-            "checks": {
-                "spec_coverage": [f"Mock provider generated HLS stage {context.stage} artifacts."],
-                "verification_plan": ["Mock response includes deterministic vectors and PASS/FAIL hooks."],
-                "execution_plan": ["Mock response is intended for local workflow tests."],
-                "implementation_assessment": ["Mock HLS artifacts satisfy structural workflow contracts."],
-                "reviewability_assessment": ["Mock artifacts include minimal comments and result markers."],
-                "assumptions": [],
-                "known_limitations": ["Mock provider prioritizes workflow determinism over hardware fidelity."],
-            },
-        }
-        blocks = ["```json", json.dumps(response_manifest, indent=2, ensure_ascii=False), "```"]
-        file_map = _mock_file_contents(context, files)
-        for file_entry in files:
-            rel_path = str(file_entry["path"])
-            language = str(file_entry.get("language") or "text")
-            blocks.extend([f"```{language} path={rel_path}", file_map[rel_path].rstrip(), "```"])
-        return "\n".join(blocks) + "\n"
 
+        # manifest 是 workflow 对当前阶段文件块的期望。
+        dict_manifest: dict[str, Any] = context.manifest  # 当前阶段产物清单
 
-def _normalize_command(command: str | Sequence[str]) -> list[str]:
-    parts = shlex.split(command, posix=False) if isinstance(command, str) else [str(item) for item in command]
-    if not parts:
-        raise ModelProviderError("Model command must not be empty.")
-    return parts
+        # 只保留带 path 的文件项，防止脏 manifest 进入 fenced path。
+        list_files: list[dict[str, Any]] = _manifest_files(dict_manifest)  # 可生成的 manifest 文件项
 
+        # spec_issue 模式故意丢弃 testbench 文件，用于验证合同门禁。
+        list_response_files: list[dict[str, Any]] = _mode_adjusted_files(str_mode, list_files)  # mock 响应文件项
 
-def _expand_part(part: str, context: GenerationContext) -> str:
-    values = {
-        "attempt_id": context.attempt_id,
-        "stage": context.stage,
-        "prompt_path": str(context.prompt_path),
-        "response_path": str(context.response_path),
-        "run_dir": str(context.run_dir),
-        "attempt_dir": str(context.attempt_dir),
-        "target": "hls",
-        "name": str(context.spec.get("name") or ""),
-    }
-    try:
-        return part.format_map(values)
-    except Exception:
-        return part
+        # response manifest 保留原 manifest 的其余字段，并补齐 mock 检查说明。
+        dict_response_manifest: dict[str, Any] = _mock_response_manifest(  # mock 响应使用的 manifest 载荷
+            dict_manifest,  # 原始阶段 manifest
+            list_response_files,  # 已按模式调整后的输出文件
+            context.stage,  # 当前 workflow 阶段名
+        )  # 组装成供 extractor 读取的 manifest 主体
 
+        # fenced 响应第一块固定为 JSON manifest。
+        list_blocks: list[str] = _manifest_block(dict_response_manifest)  # fenced 响应块列表
 
-def _mock_mode(context: GenerationContext, config: dict[str, Any]) -> str:
-    behavior = config.get("mock_behavior")
-    if behavior is None:
-        behavior = (context.spec.get("workflow") or {}).get("mock_behavior")
-    if isinstance(behavior, str):
-        return behavior
-    if isinstance(behavior, dict):
-        raw = behavior.get(context.stage, behavior.get("*", behavior.get("default", "success")))
-        if isinstance(raw, dict):
-            return str(raw.get("mode", "success"))
-        if raw:
-            return str(raw)
-    return "success"
+        # 为每个 manifest 文件生成对应文本。
+        dict_file_map: dict[str, str] = _mock_file_contents(context, list_response_files)  # path 到 mock 文件文本的映射
 
+        # 逐个追加 path fenced block。
+        for dict_file_entry in list_response_files:
 
-def _mock_file_contents(context: GenerationContext, files: list[dict[str, Any]]) -> dict[str, str]:
-    stage = context.stage
-    spec = context.spec
-    vectors = _mock_vectors(spec)
-    vector_hash = str((context.vector_contract or {}).get("sha256") or "")
-    contents: dict[str, str] = {}
-    if stage == "tests":
-        payload = {"version": 1, "case_ids": [str(item["id"]) for item in vectors], "cases": vectors}
-        for file_entry in files:
-            contents[str(file_entry["path"])] = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
-        return contents
-    if stage == "python":
-        for file_entry in files:
-            rel_path = str(file_entry["path"])
-            if rel_path.endswith("_model.py"):
-                contents[rel_path] = _mock_python_model_text(vectors)
-            elif rel_path.endswith("_vectors.json"):
-                contents[rel_path] = json.dumps({"cases": vectors}, indent=2, ensure_ascii=False) + "\n"
-            else:
-                contents[rel_path] = "{}\n"
-        return contents
-    if stage == "hls":
-        header_name = next((Path(str(item["path"])).name for item in files if str(item["path"]).endswith((".h", ".hpp"))), "kernel.h")
-        for file_entry in files:
-            rel_path = str(file_entry["path"])
-            suffix = Path(rel_path).suffix.lower()
-            if suffix in {".h", ".hpp"}:
-                contents[rel_path] = _ensure_hls_line_comment_coverage(_mock_hls_header_text(spec, context.comment_language), context.comment_language)
-            elif suffix in {".cpp", ".cc", ".cxx"} and "_tb" not in Path(rel_path).stem:
-                contents[rel_path] = _ensure_hls_line_comment_coverage(_mock_hls_source_text(spec, header_name, context.comment_language), context.comment_language)
-            elif suffix in {".cpp", ".cc", ".cxx"}:
-                contents[rel_path] = _ensure_hls_line_comment_coverage(_mock_hls_testbench_text(spec, vectors, vector_hash, context.comment_language), context.comment_language)
-            elif suffix == ".cfg":
-                contents[rel_path] = _mock_hls_cfg_text(spec, files)
-            else:
-                contents[rel_path] = "\n"
-        return contents
-    for file_entry in files:
-        contents[str(file_entry["path"])] = "{}\n"
-    return contents
+            # manifest path 作为 fenced block 的 path 属性。
+            str_rel_path: str = str(dict_file_entry["path"])  # manifest 文件相对路径
 
+            # language 字段只影响 fenced block 标记，不参与文件内容生成。
+            str_language: str = str(dict_file_entry.get("language") or "text")  # fenced block 语言标签
 
-def _mock_vectors(spec: dict[str, Any]) -> list[dict[str, Any]]:
-    configured = (spec.get("workflow") or {}).get("mock_vectors")
-    if isinstance(configured, list) and configured:
-        return configured
-    pattern = _example_pattern(spec)
-    arguments = {str(item.get("name")): item for item in spec.get("interfaces", {}).get("arguments", []) if isinstance(item, dict) and item.get("name")}
-    if pattern in {"fir", "fft", "cordic", "prefix_scan"} and {"input", "output", "length"}.issubset(arguments):
-        return [
-            {
-                "id": "case_nominal",
-                "inputs": {"input": [1, 2, 3, 4], "length": 4},
-                "expected_outputs": {"output": [2, 3, 4, 5]},
-                "checkpoints": {"length": 4, "first_output": 2},
-            },
-            {
-                "id": "case_boundary",
-                "inputs": {"input": [0, 7], "length": 2},
-                "expected_outputs": {"output": [1, 8]},
-                "checkpoints": {"length": 2, "first_output": 1},
-            },
-        ]
-    if pattern == "matmul" and {"input_a", "input_b", "output", "length"}.issubset(arguments):
-        return [
-            {
-                "id": "case_nominal",
-                "inputs": {"input_a": [1, 2, 3], "input_b": [4, 5, 6], "length": 3},
-                "expected_outputs": {"output": [5, 7, 9]},
-                "checkpoints": {"length": 3, "first_output": 5},
-            },
-            {
-                "id": "case_boundary",
-                "inputs": {"input_a": [9, 0], "input_b": [1, 7], "length": 2},
-                "expected_outputs": {"output": [10, 7]},
-                "checkpoints": {"length": 2, "first_output": 10},
-            },
-        ]
-    if pattern == "rle_axis" and {"in_stream", "out_stream", "length"}.issubset(arguments):
-        return [
-            {
-                "id": "case_nominal",
-                "inputs": {"in_stream": [1, 1, 2], "length": 3},
-                "expected_outputs": {"out_stream": [2, 2, 3]},
-                "checkpoints": {"length": 3, "first_output": 2},
-            },
-            {
-                "id": "case_boundary",
-                "inputs": {"in_stream": [0, 15], "length": 2},
-                "expected_outputs": {"out_stream": [1, 16]},
-                "checkpoints": {"length": 2, "first_output": 1},
-            },
-        ]
-    if pattern == "line_buffer_stencil":
-        return [
-            {
-                "id": "case_nominal",
-                "inputs": {"input": [1, 2, 3, 4], "length": 4},
-                "expected_outputs": {"output": [4, 6, 9, 11]},
-                "checkpoints": {"length": 4, "first_output": 4},
-            },
-            {
-                "id": "case_boundary",
-                "inputs": {"input": [5, 1], "length": 2},
-                "expected_outputs": {"output": [11, 7]},
-                "checkpoints": {"length": 2, "first_output": 11},
-            },
-        ]
-    if pattern == "reduction_tree":
-        return [
-            {
-                "id": "case_nominal",
-                "inputs": {"input": [1, 2, 3, 4], "length": 4},
-                "expected_outputs": {"output": [10]},
-                "checkpoints": {"length": 4, "first_output": 10},
-            },
-            {
-                "id": "case_boundary",
-                "inputs": {"input": [9], "length": 1},
-                "expected_outputs": {"output": [9]},
-                "checkpoints": {"length": 1, "first_output": 9},
-            },
-        ]
-    if pattern == "tiled_gemm":
-        return [
-            {
-                "id": "case_nominal",
-                "inputs": {"input_a": [1, 2, 3, 4], "input_b": [5, 6, 7, 8], "length": 4},
-                "expected_outputs": {"output": [5, 12, 21, 32]},
-                "checkpoints": {"length": 4, "first_output": 5},
-            },
-            {
-                "id": "case_boundary",
-                "inputs": {"input_a": [2, 0], "input_b": [4, 9], "length": 2},
-                "expected_outputs": {"output": [8, 0]},
-                "checkpoints": {"length": 2, "first_output": 8},
-            },
-        ]
-    if pattern == "task_graph" and {"input", "output", "length"}.issubset(arguments):
-        return [
-            {
-                "id": "case_nominal",
-                "inputs": {"input": [1, 2, 3], "length": 3},
-                "expected_outputs": {"output": [2, 3, 4]},
-                "checkpoints": {"length": 3, "first_output": 2},
-            },
-            {
-                "id": "case_boundary",
-                "inputs": {"input": [0, 15], "length": 2},
-                "expected_outputs": {"output": [1, 16]},
-                "checkpoints": {"length": 2, "first_output": 1},
-            },
-        ]
-    if pattern == "dataflow" and {"input", "output", "rows", "cols"}.issubset(arguments):
-        return [
-            {
-                "id": "case_nominal",
-                "inputs": {"input": [1, 2, 3, 4], "rows": 2, "cols": 2},
-                "expected_outputs": {"output": [2, 3, 4, 5]},
-                "checkpoints": {"rows": 2, "cols": 2, "first_output": 2},
-            },
-            {
-                "id": "case_boundary",
-                "inputs": {"input": [5, 7, 9], "rows": 1, "cols": 3},
-                "expected_outputs": {"output": [6, 8, 10]},
-                "checkpoints": {"rows": 1, "cols": 3, "first_output": 6},
-            },
-        ]
-    if pattern == "directio_freerun" and {"in_stream", "out_stream"}.issubset(arguments):
-        return [
-            {
-                "id": "case_nominal",
-                "inputs": {"in_stream": [1, 2, 3]},
-                "expected_outputs": {"out_stream": [2, 3, 4]},
-                "checkpoints": {"token_count": 3, "first_output": 2},
-            },
-            {
-                "id": "case_boundary",
-                "inputs": {"in_stream": [0, 15]},
-                "expected_outputs": {"out_stream": [1, 16]},
-                "checkpoints": {"token_count": 2, "first_output": 1},
-            },
-        ]
-    if {"input", "output", "scale", "length"}.issubset(arguments):
-        return [
-            {
-                "id": "case_nominal",
-                "inputs": {"input": [1, 2, 3], "scale": 2, "length": 3},
-                "expected_outputs": {"output": [2, 4, 6]},
-                "checkpoints": {"length": 3, "first_output": 2},
-            },
-            {
-                "id": "case_boundary",
-                "inputs": {"input": [9, 8, 7], "scale": 0, "length": 3},
-                "expected_outputs": {"output": [0, 0, 0]},
-                "checkpoints": {"length": 3, "first_output": 0},
-            },
-        ]
-    if {"input_a", "input_b", "output", "length"}.issubset(arguments):
-        return [
-            {
-                "id": "case_nominal",
-                "inputs": {"input_a": [1, 2, 3], "input_b": [4, 5, 6], "length": 3},
-                "expected_outputs": {"output": [5, 7, 9]},
-                "checkpoints": {"length": 3, "first_output": 5},
-            },
-            {
-                "id": "case_boundary",
-                "inputs": {"input_a": [9, 0], "input_b": [1, 7], "length": 2},
-                "expected_outputs": {"output": [10, 7]},
-                "checkpoints": {"length": 2, "first_output": 10},
-            },
-        ]
-    if pattern == "host_kernel_split" and {"input", "output", "length"}.issubset(arguments):
-        return [
-            {
-                "id": "case_nominal",
-                "inputs": {"input": [1, 2, 3], "length": 3},
-                "expected_outputs": {"output": [2, 3, 4]},
-                "checkpoints": {"length": 3, "first_output": 2},
-            },
-            {
-                "id": "case_boundary",
-                "inputs": {"input": [0, 15], "length": 2},
-                "expected_outputs": {"output": [1, 16]},
-                "checkpoints": {"length": 2, "first_output": 1},
-            },
-        ]
-    if {"in_stream", "out_stream", "length"}.issubset(arguments):
-        return [
-            {
-                "id": "case_nominal",
-                "inputs": {"in_stream": [1, 2, 3], "length": 3},
-                "expected_outputs": {"out_stream": [2, 3, 4]},
-                "checkpoints": {"length": 3, "first_output": 2},
-            },
-            {
-                "id": "case_boundary",
-                "inputs": {"in_stream": [0, 15], "length": 2},
-                "expected_outputs": {"out_stream": [1, 16]},
-                "checkpoints": {"length": 2, "first_output": 1},
-            },
-        ]
-    return [
-        {
-            "id": "case_passthrough",
-            "inputs": {"value": 1},
-            "expected_outputs": {"value": 1},
-            "checkpoints": {"value": 1},
-        }
-    ]
-
-
-def _mock_python_model_text(vectors: list[dict[str, Any]]) -> str:
-    payload = repr(vectors)
-    return f'''REFERENCE_VECTORS = {payload}
-
-
-def run_case(case):
-    inputs = case.get("inputs", {{}})
-    if all(key in inputs for key in ("input", "scale", "length")):
-        length = int(inputs["length"])
-        scale = int(inputs["scale"])
-        return {{"output": [int(value) * scale for value in list(inputs["input"])[:length]]}}
-    if "input" in inputs and "length" in inputs:
-        length = int(inputs["length"])
-        return {{"output": [int(value) + 1 for value in list(inputs["input"])[:length]]}}
-    if all(key in inputs for key in ("input_a", "input_b", "length")):
-        length = int(inputs["length"])
-        return {{"output": [int(a) + int(b) for a, b in zip(list(inputs["input_a"])[:length], list(inputs["input_b"])[:length])]}}
-    if "in_stream" in inputs and "length" in inputs:
-        length = int(inputs["length"])
-        return {{"out_stream": [int(value) + 1 for value in list(inputs["in_stream"])[:length]]}}
-    if "expected_outputs" in case:
-        return case["expected_outputs"]
-    return case.get("outputs", inputs)
-
-
-def collect_checkpoints(case):
-    return case.get("checkpoints", {{"observed": run_case(case)}})
-
-
-def run_tests():
-    for case in REFERENCE_VECTORS:
-        expected = case.get("expected_outputs", run_case(case))
-        if run_case(case) != expected:
-            print(f"FAIL {{case.get('id', 'case')}}")
-            return False
-    print("PASS")
-    return True
-
-
-if __name__ == "__main__":
-    raise SystemExit(0 if run_tests() else 1)
-'''
-
-
-def _mock_hls_header_text(spec: dict[str, Any], comment_language: str) -> str:
-    top = str(spec.get("interfaces", {}).get("top_function") or spec.get("name") or "kernel")
-    headers = ["ap_fixed.h", "ap_int.h"]
-    for header in required_pattern_headers(spec):
-        if header not in headers:
-            headers.append(header)
-    if "hls_stream.h" not in headers:
-        headers.append("hls_stream.h")
-    include_block = "".join(f"#include <{header}>\n" for header in headers)
-    return "#pragma once\n" + include_block + "\n" + f"// {_comment(comment_language, 'Vitis HLS top function declaration.', 'Vitis HLS 顶层函数声明。')}\nvoid {top}({_cpp_arguments(spec)});\n"
-
-
-def _mock_hls_source_text(spec: dict[str, Any], header_name: str, comment_language: str) -> str:
-    top = str(spec.get("interfaces", {}).get("top_function") or spec.get("name") or "kernel")
-    helpers = _mock_hls_helpers_text(spec, comment_language)
-    helper_block = helpers + "\n" if helpers else ""
-    tolerance_block = _mock_tolerance_marker(spec, comment_language, indent="  ")
-    tolerance_text = f"{tolerance_block}\n" if tolerance_block else ""
-    return f'''#include "{header_name}"
-
-{helper_block}
-void {top}({_cpp_arguments(spec)}) {{
-  // {_comment(comment_language, 'Port protocols and pipeline constraints follow the confirmed HLS spec.', '端口协议和流水线约束由确认后的 HLS spec 驱动。')}
-{_hls_pragmas(spec)}
-{tolerance_text}  // {_comment(comment_language, 'Core computation stays synthesizable and aligned with the Python oracle.', '核心计算保持可综合并与 Python oracle 对齐。')}
-{_mock_hls_body(spec)}
-}}
-'''
-
-
-def _mock_hls_helpers_text(spec: dict[str, Any], comment_language: str) -> str:
-    pattern = _example_pattern(spec)
-    name = str(spec.get("name") or "kernel")
-    arg_names = {
-        str(item.get("name"))
-        for item in spec.get("interfaces", {}).get("arguments", [])
-        if isinstance(item, dict) and item.get("name")
-    }
-    if pattern == "matmul" and _requires_dataflow_pragma(spec) and {"input_a", "input_b", "output", "length"}.issubset(arg_names):
-        return f'''static void load_matmul_a(const ap_uint<32>* input_a, hls::stream<ap_uint<32> >& a_stream, int length) {{
-  // {_comment(comment_language, 'Load the first matrix operand into a dedicated dataflow stream.', '将第一路矩阵操作数加载到独立 dataflow stream。')}
-  for (int i = 0; i < length; ++i) {{
-    #pragma HLS PIPELINE II=1
-    a_stream.write(input_a[i]);
-  }}
-}}
-
-static void load_matmul_b(const ap_uint<32>* input_b, hls::stream<ap_uint<32> >& b_stream, int length) {{
-  // {_comment(comment_language, 'Load the second matrix operand into a dedicated dataflow stream.', '将第二路矩阵操作数加载到独立 dataflow stream。')}
-  for (int i = 0; i < length; ++i) {{
-    #pragma HLS PIPELINE II=1
-    b_stream.write(input_b[i]);
-  }}
-}}
-
-static void compute_matmul_tile(hls::stream<ap_uint<32> >& a_stream, hls::stream<ap_uint<32> >& b_stream, hls::stream<ap_uint<32> >& out_stream, int length) {{
-  // {_comment(comment_language, 'Compute stage keeps the blocked tile buffers local while DATAFLOW overlaps load and store.', '计算阶段保持分块 tile buffer 为局部资源，同时让 DATAFLOW 与加载、回写重叠。')}
-  for (int base = 0; base < length; base += 4) {{
-    ap_uint<32> tile_a[4];
-    ap_uint<32> tile_b[4];
-    #pragma HLS ARRAY_PARTITION variable=tile_a complete dim=1
-    #pragma HLS ARRAY_PARTITION variable=tile_b complete dim=1
-    int chunk = (length - base < 4) ? (length - base) : 4;
-    for (int j = 0; j < 4; ++j) {{
-      #pragma HLS UNROLL
-      tile_a[j] = (j < chunk) ? a_stream.read() : ap_uint<32>(0);
-      tile_b[j] = (j < chunk) ? b_stream.read() : ap_uint<32>(0);
-    }}
-    for (int j = 0; j < 4; ++j) {{
-      #pragma HLS UNROLL
-      if (j < chunk) {{
-        out_stream.write(tile_a[j] + tile_b[j]);
-      }}
-    }}
-  }}
-}}
-
-static void store_matmul(hls::stream<ap_uint<32> >& out_stream, ap_uint<32>* output, int length) {{
-  // {_comment(comment_language, 'Store the computed tile outputs back to memory.', '将计算得到的 tile 输出回写到存储。')}
-  for (int i = 0; i < length; ++i) {{
-    #pragma HLS PIPELINE II=1
-    output[i] = out_stream.read();
-  }}
-}}'''
-    if pattern not in {"dataflow", "task_graph"}:
-        return ""
-    stream_name = "task_stream" if pattern == "task_graph" else "mid_stream"
-    result_name = "task_result_stream" if pattern == "task_graph" else "result_stream"
-    if pattern == "dataflow" and {"input", "output", "rows", "cols"}.issubset(arg_names):
-        return f'''static void read_block(const ap_uint<32>* input, hls::stream<ap_uint<32> >& read_stream, int rows, int cols) {{
-  // {_comment(comment_language, 'Read block isolates the flat memory walk before the row transform stage.', 'read_block 在行变换前先隔离扁平存储读取。')}
-  int total = rows * cols;
-  for (int i = 0; i < total; ++i) {{
-    #pragma HLS PIPELINE II=1
-    read_stream.write(input[i]);
-  }}
-}}
-
-static void row_pass(hls::stream<ap_uint<32> >& read_stream, hls::stream<ap_uint<32> >& row_stream, int rows, int cols) {{
-  // {_comment(comment_language, 'Row pass models the first block-local transform stage under DATAFLOW.', 'row_pass 模拟 DATAFLOW 下的第一段块内行变换。')}
-  int total = rows * cols;
-  for (int i = 0; i < total; ++i) {{
-    #pragma HLS PIPELINE II=1
-    row_stream.write(read_stream.read());
-  }}
-}}
-
-static void transpose_or_reorder(hls::stream<ap_uint<32> >& row_stream, hls::stream<ap_uint<32> >& reorder_stream, int rows, int cols) {{
-  // {_comment(comment_language, 'Transpose or reorder keeps the 2D block skeleton explicit even in the mock implementation.', 'transpose_or_reorder 让二维块重排骨架在 mock 中仍保持显式。')}
-  int total = rows * cols;
-  for (int i = 0; i < total; ++i) {{
-    #pragma HLS PIPELINE II=1
-    reorder_stream.write(row_stream.read());
-  }}
-}}
-
-static void col_pass(hls::stream<ap_uint<32> >& reorder_stream, hls::stream<ap_uint<32> >& col_stream, int rows, int cols) {{
-  // {_comment(comment_language, 'Column pass models the second transform stage after the reorder boundary.', 'col_pass 模拟重排边界后的第二段列变换。')}
-  int total = rows * cols;
-  for (int i = 0; i < total; ++i) {{
-    #pragma HLS PIPELINE II=1
-    ap_uint<32> value = reorder_stream.read();
-    col_stream.write(value + 1);
-  }}
-}}
-
-static void write_block(hls::stream<ap_uint<32> >& col_stream, ap_uint<32>* output, int rows, int cols) {{
-  // {_comment(comment_language, 'Write block drains the transformed block back to flat memory.', 'write_block 将变换后的块结果回写到扁平存储。')}
-  int total = rows * cols;
-  for (int i = 0; i < total; ++i) {{
-    #pragma HLS PIPELINE II=1
-    output[i] = col_stream.read();
-  }}
-}}'''
-    if pattern == "task_graph":
-        if {"input", "output", "length"}.issubset(arg_names):
-            return f'''static void load_{name}(const ap_uint<32>* input, hls::stream<ap_uint<32> >& {stream_name}, hls::stream<int>& count_stream, int length) {{
-  // {_comment(comment_language, 'Load stage captures the bounded transaction length before streaming memory data into the task actor.', '加载阶段先锁定有界事务长度，再把存储数据流送入 task actor。')}
-  count_stream.write(length);
-  for (int i = 0; i < length; ++i) {{
-    #pragma HLS PIPELINE II=1
-    {stream_name}.write(input[i]);
-  }}
-}}
-
-static void compute_{name}(hls::stream<ap_uint<32> >& {stream_name}, hls::stream<ap_uint<32> >& {result_name}, hls::stream<int>& count_stream) {{
-  // {_comment(comment_language, 'Compute actor consumes the streamed transaction count so hls::task remains stream-only.', '计算 actor 通过流式事务计数保持 hls::task 仅流参数约束。')}
-  int length = count_stream.read();
-  for (int i = 0; i < length; ++i) {{
-    #pragma HLS PIPELINE II=1 style=flp
-    ap_uint<32> value = {stream_name}.read();
-    {result_name}.write(value + 1);
-  }}
-}}
-
-static void store_{name}(hls::stream<ap_uint<32> >& {result_name}, ap_uint<32>* output, int length) {{
-  // {_comment(comment_language, 'Store stage drains the task result stream back to memory under the same bounded transaction length.', '回写阶段在相同有界事务长度下把 task 结果流写回存储。')}
-  for (int i = 0; i < length; ++i) {{
-    #pragma HLS PIPELINE II=1
-    output[i] = {result_name}.read();
-  }}
-}}'''
-        return f'''static void seed_{name}_counts(int length, hls::stream<int>& read_count_stream) {{
-  // {_comment(comment_language, 'Seed one bounded transaction count into the task graph so restart semantics stay explicit.', '将一次有界事务的计数写入 task graph，使重启语义保持显式。')}
-  read_count_stream.write(length);
-}}
-
-static void read_{name}(hls::stream<ap_uint<32> >& in_stream, hls::stream<ap_uint<32> >& {stream_name}, hls::stream<int>& read_count_stream, hls::stream<int>& compute_count_stream) {{
-  // {_comment(comment_language, 'Read actor consumes one seeded transaction count before streaming AXI tokens.', '读取 actor 先消费一次预置事务计数，再顺序吸收 AXI token。')}
-  int length = read_count_stream.read();
-  for (int i = 0; i < length; ++i) {{
-    #pragma HLS PIPELINE II=1 style=flp
-    {stream_name}.write(in_stream.read());
-  }}
-  compute_count_stream.write(length);
-}}
-
-static void compute_{name}(hls::stream<ap_uint<32> >& {stream_name}, hls::stream<ap_uint<32> >& {result_name}, hls::stream<int>& compute_count_stream, hls::stream<int>& write_count_stream) {{
-  // {_comment(comment_language, 'Compute actor uses a streamed transaction count so Vitis 2022.2 hls::task stays stream-only.', '计算 actor 通过流式事务计数保持 Vitis 2022.2 的 hls::task 仅流参数约束。')}
-  int length = compute_count_stream.read();
-  for (int i = 0; i < length; ++i) {{
-    #pragma HLS PIPELINE II=1 style=flp
-    ap_uint<32> value = {stream_name}.read();
-    {result_name}.write(value + 1);
-  }}
-  write_count_stream.write(length);
-}}
-
-static void write_{name}(hls::stream<ap_uint<32> >& {result_name}, hls::stream<ap_uint<32> >& out_stream, hls::stream<int>& write_count_stream) {{
-  // {_comment(comment_language, 'Write actor consumes the streamed transaction count before draining result tokens.', '写出 actor 先消费流式事务计数，再按边界取走结果 token。')}
-  int length = write_count_stream.read();
-  for (int i = 0; i < length; ++i) {{
-    #pragma HLS PIPELINE II=1 style=flp
-    out_stream.write({result_name}.read());
-  }}
-}}'''
-    return f'''static void read_{name}(hls::stream<ap_uint<32> >& in_stream, hls::stream<ap_uint<32> >& {stream_name}, int length) {{
-  // {_comment(comment_language, 'Read stage isolates external AXI-Stream input from compute latency.', '读取阶段将外部 AXI-Stream 输入与计算延迟解耦。')}
-  for (int i = 0; i < length; ++i) {{
-    #pragma HLS PIPELINE II=1
-    {stream_name}.write(in_stream.read());
-  }}
-}}
-
-static void compute_{name}(hls::stream<ap_uint<32> >& {stream_name}, hls::stream<ap_uint<32> >& {result_name}, int length) {{
-  // {_comment(comment_language, 'Compute stage owns the token transform so DATAFLOW can overlap stages.', '计算阶段独立负责 token 变换，便于 DATAFLOW 重叠执行。')}
-  for (int i = 0; i < length; ++i) {{
-    #pragma HLS PIPELINE II=1
-    ap_uint<32> value = {stream_name}.read();
-    {result_name}.write(value + 1);
-  }}
-}}
-
-static void write_{name}(hls::stream<ap_uint<32> >& {result_name}, hls::stream<ap_uint<32> >& out_stream, int length) {{
-  // {_comment(comment_language, 'Write stage preserves one output token for each input token.', '写出阶段确保每个输入 token 对应一个输出 token。')}
-  for (int i = 0; i < length; ++i) {{
-    #pragma HLS PIPELINE II=1
-    out_stream.write({result_name}.read());
-  }}
-}}'''
-
-
-def _mock_hls_testbench_text(spec: dict[str, Any], vectors: list[dict[str, Any]], vector_hash: str, comment_language: str) -> str:
-    top = str(spec.get("interfaces", {}).get("top_function") or spec.get("name") or "kernel")
-    arg_names = {str(item.get("name")) for item in spec.get("interfaces", {}).get("arguments", []) if isinstance(item, dict)}
-    hash_comment = f"  // {VECTOR_HASH_TAG} {vector_hash}\n" if vector_hash else ""
-    case_comments = "\n".join(f'  // {item["id"]} PASS FAIL' for item in vectors)
-    tolerance_comment = _mock_tolerance_marker(spec, comment_language, indent="  ")
-    tolerance_text = f"{tolerance_comment}\n" if tolerance_comment else ""
-    if {"input_a", "input_b", "output", "length"}.issubset(arg_names):
-        body = _mock_multi_m_axi_cases(spec, top, vectors, comment_language)
-    elif {"input", "output", "scale", "length"}.issubset(arg_names):
-        body = _mock_vector_scale_cases(spec, top, vectors, comment_language)
-    elif {"input", "output", "rows", "cols"}.issubset(arg_names):
-        body = _mock_block_transform_cases(spec, top, vectors, comment_language)
-    elif {"input", "output", "length"}.issubset(arg_names):
-        body = _mock_input_output_cases(spec, top, vectors, comment_language)
-    elif {"in_stream", "out_stream", "length"}.issubset(arg_names):
-        if _example_pattern(spec) == "task_graph":
-            body = _mock_task_graph_axis_cases(top, vectors, comment_language)
-        elif _example_pattern(spec) == "rle_axis":
-            body = _mock_rle_axis_cases(spec, top, vectors, comment_language)
-        else:
-            body = _mock_axis_cases(top, vectors, comment_language)
-    elif {"in_stream", "out_stream"}.issubset(arg_names):
-        body = _mock_directio_unit_cases(top, vectors, comment_language) if _example_pattern(spec) == "directio_freerun" else f"  {top}(in_stream, out_stream);\n"
-    else:
-        body = f"  {top}();\n"
-    return f'''#include <iostream>
-#include "../src/{top}.h"
-
-int main() {{
-{hash_comment}{tolerance_text}{case_comments}
-  int failures = 0;
-{body}
-  if (failures != 0) {{
-    std::cout << "FAIL\\n";
-    return 1;
-  }}
-  std::cout << "PASS\\n";
-  return 0;
-}}
-'''
-
-
-def _mock_hls_cfg_text(spec: dict[str, Any], files: list[dict[str, Any]]) -> str:
-    top = str(spec.get("interfaces", {}).get("top_function") or spec.get("name") or "kernel")
-    lines = ["[HLS]", f"syn.top={top}"]
-    for item in files:
-        path = str(item["path"])
-        suffix = Path(path).suffix.lower()
-        if suffix in {".cpp", ".cc", ".cxx"} and "_tb" not in Path(path).stem:
-            lines.append(f"syn.file={path}")
-        if suffix in {".h", ".hpp"}:
-            lines.append(f"syn.file={path}")
-    for item in files:
-        path = str(item["path"])
-        if "_tb" in Path(path).stem and Path(path).suffix.lower() in {".cpp", ".cc", ".cxx"}:
-            lines.append(f"tb.file={path}")
-    clock = spec.get("clock", {})
-    if isinstance(clock, dict) and clock.get("period_ns") not in (None, ""):
-        lines.append(f"clock={clock['period_ns']}")
-    part = (spec.get("workflow") or {}).get("part") or spec.get("part")
-    if part:
-        lines.append(f"part={part}")
-    interface_profile = spec.get("interface_profile") if isinstance(spec.get("interface_profile"), dict) else {}
-    if interface_profile.get("burst_support") is True and interface_profile.get("max_burst_len"):
-        lines.extend(["", "[interface]", f"m_axi_max_read_burst_length={int(interface_profile['max_burst_len'])}"])
-    return "\n".join(lines) + "\n"
-
-
-def _cpp_arguments(spec: dict[str, Any]) -> str:
-    args = []
-    for item in spec.get("interfaces", {}).get("arguments", []):
-        if isinstance(item, dict) and item.get("name"):
-            args.append(f'{item.get("type", "int")} {item["name"]}')
-    return ", ".join(args) or "void"
-
-
-def _hls_pragmas(spec: dict[str, Any]) -> str:
-    lines = []
-    pattern = _example_pattern(spec)
-    for item in spec.get("interfaces", {}).get("arguments", []):
-        if not isinstance(item, dict) or not item.get("name"):
-            continue
-        interface = str(item.get("interface") or "s_axilite")
-        if interface == "m_axi":
-            lines.append(f"#pragma HLS INTERFACE m_axi port={item['name']} bundle={item.get('bundle', 'gmem')} depth={_m_axi_depth(spec, item)}")
-        elif interface in {"axis", "ap_fifo", "ap_none"}:
-            lines.append(f"#pragma HLS INTERFACE {interface} port={item['name']}")
-        else:
-            lines.append(f"#pragma HLS INTERFACE s_axilite port={item['name']}")
-    lines.append(f"#pragma HLS INTERFACE {spec.get('interfaces', {}).get('control', 's_axilite')} port=return")
-    if pattern in {"dataflow", "task_graph", "streamofblocks"}:
-        lines.append("#pragma HLS DATAFLOW")
-    if spec.get("pipeline_required", True) and pattern not in {"dataflow", "task_graph", "streamofblocks"} and not _requires_dataflow_pragma(spec):
-        lines.append("#pragma HLS PIPELINE II=1")
-    seen_keys = {_pragma_identity(line) for line in lines}
-    for pragma in _required_pragmas(spec):
-        if "variable=" in pragma:
-            continue
-        pragma_key = _pragma_identity(pragma)
-        if pragma_key in seen_keys:
-            continue
-        if pragma not in lines:
-            lines.append(pragma)
-            seen_keys.add(pragma_key)
-    return "\n".join(f"  {line}" for line in lines)
-
-
-def _pragma_identity(pragma: str) -> tuple[str, str] | tuple[str, str, str]:
-    normalized = " ".join(str(pragma).strip().split())
-    match = re.match(r"#pragma\s+HLS\s+INTERFACE\s+(\S+)\s+port=([A-Za-z_][A-Za-z0-9_]*)", normalized)
-    if match:
-        return ("interface", match.group(2))
-    if normalized.startswith("#pragma HLS PIPELINE"):
-        return ("pipeline", normalized)
-    if normalized.startswith("#pragma HLS DATAFLOW"):
-        return ("dataflow", normalized)
-    return ("pragma", normalized)
-
-
-def _m_axi_depth(spec: dict[str, Any], argument: dict[str, Any]) -> int:
-    if isinstance(argument.get("depth"), int) and int(argument["depth"]) > 0:
-        return int(argument["depth"])
-    performance = spec.get("performance") if isinstance(spec.get("performance"), dict) else {}
-    for key in ("max_length", "vector_length", "depth"):
-        if isinstance(performance.get(key), int) and int(performance[key]) > 0:
-            return int(performance[key])
-    return 1024
-
-
-def _mock_hls_body(spec: dict[str, Any]) -> str:
-    arguments = {
-        str(item.get("name")): item
-        for item in spec.get("interfaces", {}).get("arguments", [])
-        if isinstance(item, dict) and item.get("name")
-    }
-    arg_names = set(arguments)
-    pattern = _example_pattern(spec)
-    if {"input_a", "input_b", "output", "length"}.issubset(arg_names):
-        if pattern == "matmul" and _requires_dataflow_pragma(spec):
-            return """  hls::stream<ap_uint<32> > a_stream;
-  hls::stream<ap_uint<32> > b_stream;
-  hls::stream<ap_uint<32> > out_stream;
-  #pragma HLS STREAM variable=a_stream depth=16
-  #pragma HLS STREAM variable=b_stream depth=16
-  #pragma HLS STREAM variable=out_stream depth=16
-  load_matmul_a(input_a, a_stream, length);
-  load_matmul_b(input_b, b_stream, length);
-  compute_matmul_tile(a_stream, b_stream, out_stream, length);
-  store_matmul(out_stream, output, length);"""
-        if pattern == "matmul" and (_requires_dataflow_pragma(spec) or _requires_partition_pragma(spec, "tile_a") or _requires_partition_pragma(spec, "tile_b")):
-            value_type = _argument_storage_type(arguments["input_a"])
-            return f"""  {value_type} tile_a[4];
-  {value_type} tile_b[4];
-  #pragma HLS ARRAY_PARTITION variable=tile_a complete dim=1
-  #pragma HLS ARRAY_PARTITION variable=tile_b complete dim=1
-  for (int base = 0; base < length; base += 4) {{
-    int chunk = (length - base < 4) ? (length - base) : 4;
-    for (int j = 0; j < 4; ++j) {{
-      #pragma HLS UNROLL
-      tile_a[j] = (j < chunk) ? input_a[base + j] : {value_type}(0);
-      tile_b[j] = (j < chunk) ? input_b[base + j] : {value_type}(0);
-    }}
-    for (int j = 0; j < 4; ++j) {{
-      #pragma HLS UNROLL
-      if (j < chunk) {{
-        output[base + j] = tile_a[j] + tile_b[j];
-      }}
-    }}
-  }}"""
-        if pattern == "tiled_gemm":
-            value_type = _argument_storage_type(arguments["input_a"])
-            return f"""  {value_type} tile_a[4];
-  {value_type} tile_b[4];
-  #pragma HLS ARRAY_PARTITION variable=tile_a complete dim=1
-  #pragma HLS ARRAY_PARTITION variable=tile_b complete dim=1
-  for (int base = 0; base < length; base += 4) {{
-    int chunk = (length - base < 4) ? (length - base) : 4;
-    for (int j = 0; j < 4; ++j) {{
-      #pragma HLS UNROLL
-      tile_a[j] = (j < chunk) ? input_a[base + j] : {value_type}(0);
-      tile_b[j] = (j < chunk) ? input_b[base + j] : {value_type}(0);
-    }}
-    for (int j = 0; j < 4; ++j) {{
-      #pragma HLS UNROLL
-      if (j < chunk) {{
-        output[base + j] = tile_a[j] * tile_b[j];
-      }}
-    }}
-  }}"""
-        if pattern == "vector_lane":
-            value_type = _argument_storage_type(arguments["input_a"])
-            return f"""  {value_type} lane_buf_a[4];
-  {value_type} lane_buf_b[4];
-  #pragma HLS ARRAY_PARTITION variable=lane_buf_a complete dim=1
-  #pragma HLS ARRAY_PARTITION variable=lane_buf_b complete dim=1
-  for (int base = 0; base < length; base += 4) {{
-    int chunk = (length - base < 4) ? (length - base) : 4;
-    for (int j = 0; j < 4; ++j) {{
-      #pragma HLS UNROLL factor=4
-      lane_buf_a[j] = (j < chunk) ? input_a[base + j] : {value_type}(0);
-      lane_buf_b[j] = (j < chunk) ? input_b[base + j] : {value_type}(0);
-    }}
-    for (int j = 0; j < 4; ++j) {{
-      #pragma HLS UNROLL factor=4
-      if (j < chunk) {{
-        output[base + j] = lane_buf_a[j] + lane_buf_b[j];
-      }}
-    }}
-  }}"""
-        if pattern == "fence_ordering":
-            return """  for (int i = 0; i < length; ++i) {
-    ap_uint<32> ordered_writeback = input_a[i] + input_b[i];
-    output[i] = ordered_writeback;
-  }"""
-        return "  for (int i = 0; i < length; ++i) {\n    output[i] = input_a[i] + input_b[i];\n  }"
-    if {"input", "output", "length"}.issubset(arg_names):
-        if _board_source_spec(spec) and pattern in {"fir", "cordic"}:
-            return """  hls::stream<ap_uint<32> > load_stream;
-  hls::stream<ap_uint<32> > result_stream;
-  #pragma HLS STREAM variable=load_stream depth=16
-  #pragma HLS STREAM variable=result_stream depth=16
-  for (int i = 0; i < length; ++i) {
-    #pragma HLS PIPELINE II=1
-    load_stream.write(input[i]);
-  }
-  for (int i = 0; i < length; ++i) {
-    #pragma HLS PIPELINE II=1
-    ap_uint<32> token = load_stream.read();
-    result_stream.write(token + 1);
-  }
-  for (int i = 0; i < length; ++i) {
-    #pragma HLS PIPELINE II=1
-    output[i] = result_stream.read();
-  }"""
-        if _board_source_spec(spec) and pattern == "rle_axis":
-            return """  // Wrapper byte-packet type contract keeps the memory-to-stream ingress reviewable.
-  struct axis_byte_t {
-    ap_uint<8> data;
-    ap_uint<1> last;
-    ap_uint<1> keep;
-    ap_uint<1> strb;
-  };
-  // Wrapper word-packet type contract keeps the stream-to-memory egress reviewable.
-  struct axis_word_t {
-    ap_uint<16> data;
-    ap_uint<1> last;
-    ap_uint<2> keep;
-    ap_uint<2> strb;
-  };
-  // AXIS compatibility note: this wrapper mirrors ap_axiu<8,0,0,0> and ap_axiu<16,0,0,0> keep/strb/last handling at the memory boundary.
-  hls::stream<axis_byte_t> in_stream;
-  hls::stream<axis_word_t> out_stream;
-  #pragma HLS STREAM variable=in_stream depth=16
-  #pragma HLS STREAM variable=out_stream depth=16
-  for (int i = 0; i < length; ++i) {
-    #pragma HLS PIPELINE II=1
-    axis_byte_t in_pkt;
-    in_pkt.data = input[i];
-    in_pkt.keep = -1;
-    in_pkt.strb = -1;
-    in_pkt.last = (i == length - 1) ? 1 : 0;
-    in_stream.write(in_pkt);
-  }
-  for (int i = 0; i < length; ++i) {
-    #pragma HLS PIPELINE II=1
-    axis_byte_t in_pkt = in_stream.read();
-    axis_word_t out_pkt;
-    out_pkt.data = in_pkt.data + 1;
-    out_pkt.keep = -1;
-    out_pkt.strb = -1;
-    out_pkt.last = in_pkt.last;
-    out_stream.write(out_pkt);
-  }
-  for (int i = 0; i < length; ++i) {
-    #pragma HLS PIPELINE II=1
-    axis_word_t out_pkt = out_stream.read();
-    output[i] = out_pkt.data;
-  }"""
-        if pattern == "task_graph":
-            return f"""  hls::stream<ap_uint<32> > task_stream;
-  hls::stream<ap_uint<32> > task_result_stream;
-  hls::stream<int> task_count_stream;
-  #pragma HLS STREAM variable=task_stream depth=16
-  #pragma HLS STREAM variable=task_result_stream depth=16
-  #pragma HLS STREAM variable=task_count_stream depth=2
-  load_{str(spec.get("name") or "kernel")}(input, task_stream, task_count_stream, length);
-  hls::task compute_stage(compute_{str(spec.get("name") or "kernel")}, task_stream, task_result_stream, task_count_stream);
-  store_{str(spec.get("name") or "kernel")}(task_result_stream, output, length);"""
-        if "scale" in arg_names:
-            if _example_pattern(spec) == "array_partition":
-                value_type = _argument_storage_type(arguments["input"])
-                return f"""  {value_type} local_buf[16];
-  // Local partition exposes parallel element access inside each tile.
-  #pragma HLS ARRAY_PARTITION variable=local_buf complete dim=1
-  for (int base = 0; base < length; base += 16) {{
-    int chunk = (length - base < 16) ? (length - base) : 16;
-    for (int j = 0; j < 16; ++j) {{
-      #pragma HLS UNROLL
-      if (j < chunk) {{
-        local_buf[j] = input[base + j];
-      }}
-    }}
-    for (int j = 0; j < 16; ++j) {{
-      #pragma HLS UNROLL
-      if (j < chunk) {{
-        output[base + j] = local_buf[j] * scale;
-      }}
-    }}
-  }}"""
-            if _example_pattern(spec) == "array_reshape":
-                value_type = _argument_storage_type(arguments["input"])
-                return f"""  {value_type} wide_buf[16];
-  // Local reshape widens adjacent element access without also partitioning the buffer.
-  #pragma HLS ARRAY_RESHAPE variable=wide_buf complete dim=1
-  for (int base = 0; base < length; base += 16) {{
-    int chunk = (length - base < 16) ? (length - base) : 16;
-    for (int j = 0; j < 16; ++j) {{
-      #pragma HLS UNROLL
-      if (j < chunk) {{
-        wide_buf[j] = input[base + j];
-      }}
-    }}
-    for (int j = 0; j < 16; ++j) {{
-      #pragma HLS UNROLL
-      if (j < chunk) {{
-        output[base + j] = wide_buf[j] * scale;
-      }}
-    }}
-  }}"""
-            if pattern == "axi4_burst":
-                return "  for (int i = 0; i < length; ++i) {\n    output[i] = input[i] * scale;\n  }"
-            return "  for (int i = 0; i < length; ++i) {\n    output[i] = input[i] * scale;\n  }"
-        if pattern == "line_buffer_stencil":
-            value_type = _argument_storage_type(arguments["input"])
-            return f"""  {value_type} line_buf[3];
-  #pragma HLS ARRAY_PARTITION variable=line_buf complete dim=1
-  for (int i = 0; i < length; ++i) {{
-    line_buf[0] = input[(i == 0) ? 0 : (i - 1)];
-    line_buf[1] = input[i];
-    line_buf[2] = input[(i + 1 < length) ? (i + 1) : (length - 1)];
-    output[i] = line_buf[0] + line_buf[1] + line_buf[2];
-  }}"""
-        if pattern == "reduction_tree":
-            return """  ap_uint<32> tree_accum = 0;
-  for (int i = 0; i < length; i += 4) {
-    #pragma HLS UNROLL factor=4
-    ap_uint<32> partial0 = (i + 0 < length) ? input[i + 0] : ap_uint<32>(0);
-    ap_uint<32> partial1 = (i + 1 < length) ? input[i + 1] : ap_uint<32>(0);
-    ap_uint<32> partial2 = (i + 2 < length) ? input[i + 2] : ap_uint<32>(0);
-    ap_uint<32> partial3 = (i + 3 < length) ? input[i + 3] : ap_uint<32>(0);
-    tree_accum += (partial0 + partial1) + (partial2 + partial3);
-  }
-  output[0] = tree_accum;"""
-        if pattern == "host_kernel_split":
-            return "  for (int i = 0; i < length; ++i) {\n    output[i] = input[i] + 1;\n  }"
-        if pattern == "fft":
-            return """  ap_uint<32> twiddle[4] = {1, 1, 1, 1};
-  #pragma HLS ARRAY_PARTITION variable=twiddle complete dim=1
-  for (int i = 0; i < length; ++i) {
-    output[i] = input[i] + twiddle[i & 3];
-  }"""
-        return "  for (int i = 0; i < length; ++i) {\n    output[i] = input[i] + 1;\n  }"
-    if pattern == "dataflow" and {"input", "output", "rows", "cols"}.issubset(arg_names):
-        return """  hls::stream<ap_uint<32> > read_stream;
-  hls::stream<ap_uint<32> > row_stream;
-  hls::stream<ap_uint<32> > reorder_stream;
-  hls::stream<ap_uint<32> > col_stream;
-  #pragma HLS STREAM variable=read_stream depth=16
-  #pragma HLS STREAM variable=row_stream depth=16
-  #pragma HLS STREAM variable=reorder_stream depth=16
-  #pragma HLS STREAM variable=col_stream depth=16
-  read_block(input, read_stream, rows, cols);
-  row_pass(read_stream, row_stream, rows, cols);
-  transpose_or_reorder(row_stream, reorder_stream, rows, cols);
-  col_pass(reorder_stream, col_stream, rows, cols);
-  write_block(col_stream, output, rows, cols);"""
-    if {"in_stream", "out_stream"}.issubset(arg_names):
-        if pattern == "rle_axis" and "length" in arg_names:
-            in_payload = _stream_payload_type(arguments["in_stream"])
-            out_payload = _stream_payload_type(arguments["out_stream"])
-            return f"""  for (int i = 0; i < length; ++i) {{
-    #pragma HLS PIPELINE II=1
-    {in_payload} in_pkt = in_stream.read();
-    {out_payload} out_pkt;
-    out_pkt.data = in_pkt.data + 1;
-    out_pkt.keep = -1;
-    out_pkt.strb = -1;
-    out_pkt.last = (i == length - 1) ? 1 : 0;
-    out_stream.write(out_pkt);
-  }}"""
-        if pattern in {"dataflow", "task_graph"} and "length" in arg_names:
-            name = str(spec.get("name") or "kernel")
-            stream_name = "task_stream" if pattern == "task_graph" else "mid_stream"
-            result_name = "task_result_stream" if pattern == "task_graph" else "result_stream"
-            if pattern == "task_graph":
-                return f"""  hls::stream<ap_uint<32> > {stream_name};
-  hls::stream<ap_uint<32> > {result_name};
-  hls::stream<int> read_count_stream;
-  hls::stream<int> compute_count_stream;
-  hls::stream<int> write_count_stream;
-  #pragma HLS STREAM variable={stream_name} depth=16
-  #pragma HLS STREAM variable={result_name} depth=16
-  #pragma HLS STREAM variable=read_count_stream depth=2
-  #pragma HLS STREAM variable=compute_count_stream depth=2
-  #pragma HLS STREAM variable=write_count_stream depth=2
-  seed_{name}_counts(length, read_count_stream);
-  hls::task read_stage(read_{name}, in_stream, {stream_name}, read_count_stream, compute_count_stream);
-  hls::task compute_stage(compute_{name}, {stream_name}, {result_name}, compute_count_stream, write_count_stream);
-  hls::task write_stage(write_{name}, {result_name}, out_stream, write_count_stream);"""
-            return f"""  hls::stream<ap_uint<32> > {stream_name};
-  hls::stream<ap_uint<32> > {result_name};
-  #pragma HLS STREAM variable={stream_name} depth=16
-  #pragma HLS STREAM variable={result_name} depth=16
-  read_{name}(in_stream, {stream_name}, length);
-  compute_{name}({stream_name}, {result_name}, length);
-  write_{name}({result_name}, out_stream, length);"""
-        if pattern == "streamofblocks" and "length" in arg_names:
-            return """  ap_uint<32> block_buf[4];
-  #pragma HLS ARRAY_PARTITION variable=block_buf complete dim=1
-  for (int base = 0; base < length; base += 4) {
-    #pragma HLS PIPELINE II=1
-    int chunk = (length - base < 4) ? (length - base) : 4;
-    for (int j = 0; j < 4; ++j) {
-      #pragma HLS UNROLL factor=4
-      block_buf[j] = (j < chunk) ? in_stream.read() : ap_uint<32>(0);
-    }
-    for (int j = 0; j < 4; ++j) {
-      #pragma HLS UNROLL factor=4
-      if (j < chunk) {
-        out_stream.write(block_buf[j] + 1);
-      }
-    }
-  }"""
-        if "length" in arg_names:
-            return "  for (int i = 0; i < length; ++i) {\n    ap_uint<32> value = in_stream.read();\n    out_stream.write(value + 1);\n  }"
-        return "  if (!in_stream.empty()) {\n    ap_uint<32> value = in_stream.read();\n    out_stream.write(value + 1);\n  }"
-    return "  // Mock fallback keeps the top function syntactically complete.\n  return;"
-
-
-def _example_pattern(spec: dict[str, Any]) -> str:
-    profile = spec.get("hls_profile") if isinstance(spec.get("hls_profile"), dict) else {}
-    workflow = spec.get("workflow") if isinstance(spec.get("workflow"), dict) else {}
-    pattern = profile.get("example_pattern") or workflow.get("example_pattern") or ""
-    return str(pattern).strip().lower().replace("-", "_")
-
-
-def _board_source_spec(spec: dict[str, Any]) -> str:
-    workflow = spec.get("workflow") if isinstance(spec.get("workflow"), dict) else {}
-    board = workflow.get("board_acceptance") if isinstance(workflow.get("board_acceptance"), dict) else {}
-    return str(board.get("source_spec") or "").strip()
-
-
-def _required_pragmas(spec: dict[str, Any]) -> list[str]:
-    profile = spec.get("hls_profile") if isinstance(spec.get("hls_profile"), dict) else {}
-    return [str(item) for item in profile.get("required_pragmas", []) or [] if str(item).strip()]
-
-
-def _requires_dataflow_pragma(spec: dict[str, Any]) -> bool:
-    return any("DATAFLOW" in pragma for pragma in _required_pragmas(spec))
-
-
-def _requires_partition_pragma(spec: dict[str, Any], variable: str) -> bool:
-    token = f"variable={variable}"
-    return any("ARRAY_PARTITION" in pragma and token in pragma for pragma in _required_pragmas(spec))
-
-
-def _mock_tolerance_marker(spec: dict[str, Any], comment_language: str, *, indent: str = "") -> str:
-    profile = spec.get("hls_profile") if isinstance(spec.get("hls_profile"), dict) else {}
-    metadata = profile.get("metadata") if isinstance(profile.get("metadata"), dict) else {}
-    tolerance = metadata.get("error_tolerance")
-    if _example_pattern(spec) not in {"fft", "cordic"} or tolerance in (None, "", [], {}):
-        return ""
-    if comment_language == "zh":
-        return f"{indent}// tolerance: 当前模板保留显式误差门限 {tolerance}，供 FFT/CORDIC 自检使用。"
-    return f"{indent}// tolerance: keep the explicit numeric error threshold {tolerance} visible for FFT/CORDIC self-checks."
-
-
-def _stream_payload_type(argument: dict[str, Any]) -> str:
-    raw_type = str(argument.get("type") or "hls::stream<ap_uint<32> >&")
-    cleaned = raw_type.replace("const ", "").replace("&", "").strip()
-    if "<" not in cleaned or ">" not in cleaned:
-        return "ap_uint<32>"
-    return cleaned[cleaned.find("<") + 1 : cleaned.rfind(">")].strip()
-
-
-def _stream_storage_type(argument: dict[str, Any]) -> str:
-    raw_type = str(argument.get("type") or "hls::stream<ap_uint<32> >&")
-    return raw_type.replace("const ", "").replace("&", "").strip()
-
-
-def _mock_vector_scale_cases(spec: dict[str, Any], top: str, vectors: list[dict[str, Any]], comment_language: str) -> str:
-    arguments = {
-        str(item.get("name")): item
-        for item in spec.get("interfaces", {}).get("arguments", [])
-        if isinstance(item, dict) and item.get("name")
-    }
-    interface_depth = max(
-        _m_axi_depth(spec, arguments.get("input", {})),
-        _m_axi_depth(spec, arguments.get("output", {})),
-    )
-    input_type = _argument_storage_type(arguments.get("input", {}))
-    output_type = _argument_storage_type(arguments.get("output", {}))
-    scale_type = _argument_value_type(arguments.get("scale", {}))
-    blocks: list[str] = []
-    for case in vectors:
-        inputs = case.get("inputs", {})
-        values = [float(item) for item in inputs.get("input", [])]
-        expected = [float(item) for item in case.get("expected_outputs", {}).get("output", [])]
-        scale = float(inputs.get("scale", 1))
-        length = int(inputs.get("length", len(values)))
-        array_depth = max(1, interface_depth, len(values), length, len(expected))
-        values_text = ", ".join(_literal_number(item) for item in values) or "0"
-        expected_text = ", ".join(_literal_number(item) for item in expected) or "0"
-        blocks.append(f'''  {{
-    // {_comment(comment_language, f'Run vector case {case["id"]} and compare the observed output.', f'执行向量用例 {case["id"]} 并比较真实输出。')}
-    {input_type} input[{array_depth}] = {{{values_text}}};
-    {output_type} output[{array_depth}] = {{}};
-    const double expected[{max(1, len(expected))}] = {{{expected_text}}};
-    {top}(input, output, {_constructor_expr(scale_type, scale)}, {length});
-    bool pass = true;
-    for (int i = 0; i < {length}; ++i) {{
-      if ((double)output[i] != expected[i]) {{
-        pass = false;
-      }}
-    }}
-    std::cout << "{REFERENCE_RESULT_TAG} {{\\"case_id\\":\\"{case["id"]}\\",\\"status\\":\\"" << (pass ? "PASS" : "FAIL") << "\\",\\"outputs\\":{{\\"output\\":[";
-    for (int i = 0; i < {length}; ++i) {{
-      if (i != 0) std::cout << ",";
-      std::cout << (double)output[i];
-    }}
-    std::cout << "]}},\\"checkpoints\\":{{\\"length\\":{length},\\"first_output\\":" << (double)output[0] << "}}}}\\n";
-    if (!pass) failures++;
-  }}''')
-    return "\n".join(blocks)
-
-
-def _mock_input_output_cases(spec: dict[str, Any], top: str, vectors: list[dict[str, Any]], comment_language: str) -> str:
-    arguments = {
-        str(item.get("name")): item
-        for item in spec.get("interfaces", {}).get("arguments", [])
-        if isinstance(item, dict) and item.get("name")
-    }
-    interface_depth = max(_m_axi_depth(spec, arguments.get("input", {})), _m_axi_depth(spec, arguments.get("output", {})))
-    input_type = _argument_storage_type(arguments.get("input", {}))
-    output_type = _argument_storage_type(arguments.get("output", {}))
-    blocks: list[str] = []
-    for case in vectors:
-        inputs = case.get("inputs", {})
-        values = [float(item) for item in inputs.get("input", [])]
-        expected = [float(item) for item in case.get("expected_outputs", {}).get("output", [])]
-        length = int(inputs.get("length", len(values)))
-        array_depth = max(1, interface_depth, len(values), max(1, len(expected)), length)
-        values_text = ", ".join(_literal_number(item) for item in values) or "0"
-        expected_text = ", ".join(_literal_number(item) for item in expected) or "0"
-        observed_bound = max(1, len(expected))
-        blocks.append(f'''  {{
-    // {_comment(comment_language, f'Run vector case {case["id"]} and compare the observed output.', f'执行向量用例 {case["id"]} 并比较真实输出。')}
-    {input_type} input[{array_depth}] = {{{values_text}}};
-    {output_type} output[{array_depth}] = {{}};
-    const double expected[{observed_bound}] = {{{expected_text}}};
-    {top}(input, output, {length});
-    bool pass = true;
-    for (int i = 0; i < {observed_bound}; ++i) {{
-      if ((double)output[i] != expected[i]) {{
-        pass = false;
-      }}
-    }}
-    std::cout << "{REFERENCE_RESULT_TAG} {{\\"case_id\\":\\"{case["id"]}\\",\\"status\\":\\"" << (pass ? "PASS" : "FAIL") << "\\",\\"outputs\\":{{\\"output\\":[";
-    for (int i = 0; i < {observed_bound}; ++i) {{
-      if (i != 0) std::cout << ",";
-      std::cout << (double)output[i];
-    }}
-    std::cout << "]}},\\"checkpoints\\":{{\\"length\\":{length},\\"first_output\\":" << (double)output[0] << "}}}}\\n";
-    if (!pass) failures++;
-  }}''')
-    return "\n".join(blocks)
-
-
-def _mock_block_transform_cases(spec: dict[str, Any], top: str, vectors: list[dict[str, Any]], comment_language: str) -> str:
-    arguments = {
-        str(item.get("name")): item
-        for item in spec.get("interfaces", {}).get("arguments", [])
-        if isinstance(item, dict) and item.get("name")
-    }
-    interface_depth = max(_m_axi_depth(spec, arguments.get("input", {})), _m_axi_depth(spec, arguments.get("output", {})))
-    input_type = _argument_storage_type(arguments.get("input", {}))
-    output_type = _argument_storage_type(arguments.get("output", {}))
-    blocks: list[str] = []
-    for case in vectors:
-        inputs = case.get("inputs", {})
-        values = [float(item) for item in inputs.get("input", [])]
-        expected = [float(item) for item in case.get("expected_outputs", {}).get("output", [])]
-        rows = int(inputs.get("rows", 1))
-        cols = int(inputs.get("cols", len(values)))
-        total = max(1, rows * cols, len(values), len(expected))
-        values_text = ", ".join(_literal_number(item) for item in values) or "0"
-        expected_text = ", ".join(_literal_number(item) for item in expected) or "0"
-        array_depth = max(1, interface_depth, total)
-        observed_bound = max(1, len(expected))
-        blocks.append(f'''  {{
-    // {_comment(comment_language, f'Run block-transform case {case["id"]} and compare the staged DATAFLOW output.', f'执行二维块变换用例 {case["id"]} 并比较分段 DATAFLOW 输出。')}
-    {input_type} input[{array_depth}] = {{{values_text}}};
-    {output_type} output[{array_depth}] = {{}};
-    const double expected[{observed_bound}] = {{{expected_text}}};
-    {top}(input, output, {rows}, {cols});
-    bool pass = true;
-    for (int i = 0; i < {observed_bound}; ++i) {{
-      if ((double)output[i] != expected[i]) {{
-        pass = false;
-      }}
-    }}
-    std::cout << "{REFERENCE_RESULT_TAG} {{\\"case_id\\":\\"{case["id"]}\\",\\"status\\":\\"" << (pass ? "PASS" : "FAIL") << "\\",\\"outputs\\":{{\\"output\\":[";
-    for (int i = 0; i < {observed_bound}; ++i) {{
-      if (i != 0) std::cout << ",";
-      std::cout << (double)output[i];
-    }}
-    std::cout << "]}},\\"checkpoints\\":{{\\"rows\\":{rows},\\"cols\\":{cols},\\"first_output\\":" << (double)output[0] << "}}}}\\n";
-    if (!pass) failures++;
-  }}''')
-    return "\n".join(blocks)
-
-
-def _mock_multi_m_axi_cases(spec: dict[str, Any], top: str, vectors: list[dict[str, Any]], comment_language: str) -> str:
-    arguments = {
-        str(item.get("name")): item
-        for item in spec.get("interfaces", {}).get("arguments", [])
-        if isinstance(item, dict) and item.get("name")
-    }
-    interface_depth = max(
-        _m_axi_depth(spec, arguments.get("input_a", {})),
-        _m_axi_depth(spec, arguments.get("input_b", {})),
-        _m_axi_depth(spec, arguments.get("output", {})),
-    )
-    input_a_type = _argument_storage_type(arguments.get("input_a", {}))
-    input_b_type = _argument_storage_type(arguments.get("input_b", {}))
-    output_type = _argument_storage_type(arguments.get("output", {}))
-    blocks: list[str] = []
-    for case in vectors:
-        inputs = case.get("inputs", {})
-        a_values = [float(item) for item in inputs.get("input_a", [])]
-        b_values = [float(item) for item in inputs.get("input_b", [])]
-        expected = [float(item) for item in case.get("expected_outputs", {}).get("output", [])]
-        length = int(inputs.get("length", min(len(a_values), len(b_values))))
-        array_depth = max(1, interface_depth, len(a_values), len(b_values), length, len(expected))
-        a_text = ", ".join(_literal_number(item) for item in a_values) or "0"
-        b_text = ", ".join(_literal_number(item) for item in b_values) or "0"
-        expected_text = ", ".join(_literal_number(item) for item in expected) or "0"
-        blocks.append(f'''  {{
-    // {_comment(comment_language, f'Run multi-m_axi case {case["id"]} and compare both memory channels.', f'执行 multi-m_axi 用例 {case["id"]} 并比较两个存储通道。')}
-    {input_a_type} input_a[{array_depth}] = {{{a_text}}};
-    {input_b_type} input_b[{array_depth}] = {{{b_text}}};
-    {output_type} output[{array_depth}] = {{}};
-    const double expected[{max(1, len(expected))}] = {{{expected_text}}};
-    {top}(input_a, input_b, output, {length});
-    bool pass = true;
-    for (int i = 0; i < {length}; ++i) {{
-      if ((double)output[i] != expected[i]) {{
-        pass = false;
-      }}
-    }}
-    std::cout << "{REFERENCE_RESULT_TAG} {{\\"case_id\\":\\"{case["id"]}\\",\\"status\\":\\"" << (pass ? "PASS" : "FAIL") << "\\",\\"outputs\\":{{\\"output\\":[";
-    for (int i = 0; i < {length}; ++i) {{
-      if (i != 0) std::cout << ",";
-      std::cout << (double)output[i];
-    }}
-    std::cout << "]}},\\"checkpoints\\":{{\\"length\\":{length},\\"first_output\\":" << (double)output[0] << "}}}}\\n";
-    if (!pass) failures++;
-  }}''')
-    return "\n".join(blocks)
-
-
-def _argument_storage_type(argument: dict[str, Any]) -> str:
-    return _strip_cpp_storage_type(str(argument.get("type") or "ap_uint<32>"))
-
-
-def _argument_value_type(argument: dict[str, Any]) -> str:
-    return _strip_cpp_storage_type(str(argument.get("type") or "int"))
-
-
-def _strip_cpp_storage_type(raw_type: str) -> str:
-    value = raw_type.replace("const ", "").replace("volatile ", "").strip()
-    value = value.replace("&", "").replace("*", "").strip()
-    return " ".join(value.split()) or "int"
-
-
-def _constructor_expr(cpp_type: str, value: float) -> str:
-    literal = _literal_number(value)
-    if cpp_type in {"int", "unsigned", "unsigned int", "long", "float", "double"}:
-        return literal
-    return f"{cpp_type}({literal})"
-
-
-def _literal_number(value: float) -> str:
-    return str(int(value)) if float(value).is_integer() else repr(float(value))
-
-
-def _mock_axis_cases(top: str, vectors: list[dict[str, Any]], comment_language: str) -> str:
-    blocks: list[str] = []
-    for case in vectors:
-        inputs = case.get("inputs", {})
-        values = [int(item) for item in inputs.get("in_stream", [])]
-        expected = [int(item) for item in case.get("expected_outputs", {}).get("out_stream", [])]
-        length = int(inputs.get("length", len(values)))
-        expected_text = ", ".join(str(item) for item in expected) or "0"
-        writes = "\n".join(f"    in_stream.write(ap_uint<32>({value}));" for value in values)
-        blocks.append(f'''  {{
-    // {_comment(comment_language, f'Run AXI-Stream case {case["id"]} and compare the observed output.', f'执行 AXI-Stream 用例 {case["id"]} 并比较真实输出。')}
-    hls::stream<ap_uint<32> > in_stream;
-    hls::stream<ap_uint<32> > out_stream;
-{writes}
-    const unsigned expected[{max(1, len(expected))}] = {{{expected_text}}};
-    unsigned observed[{max(1, length)}] = {{}};
-    {top}(in_stream, out_stream, {length});
-    bool pass = true;
-    for (int i = 0; i < {length}; ++i) {{
-      if (out_stream.empty()) {{
-        pass = false;
-        observed[i] = 0;
-      }} else {{
-        observed[i] = (unsigned)out_stream.read();
-      }}
-      if (observed[i] != expected[i]) {{
-        pass = false;
-      }}
-    }}
-    std::cout << "{REFERENCE_RESULT_TAG} {{\\"case_id\\":\\"{case["id"]}\\",\\"status\\":\\"" << (pass ? "PASS" : "FAIL") << "\\",\\"outputs\\":{{\\"out_stream\\":[";
-    for (int i = 0; i < {length}; ++i) {{
-      if (i != 0) std::cout << ",";
-      std::cout << observed[i];
-    }}
-    std::cout << "]}},\\"checkpoints\\":{{\\"length\\":{length},\\"first_output\\":" << observed[0] << "}}}}\\n";
-    if (!pass) failures++;
-  }}''')
-    return "\n".join(blocks)
-
-
-def _mock_rle_axis_cases(spec: dict[str, Any], top: str, vectors: list[dict[str, Any]], comment_language: str) -> str:
-    arguments = {
-        str(item.get("name")): item
-        for item in spec.get("interfaces", {}).get("arguments", [])
-        if isinstance(item, dict) and item.get("name")
-    }
-    in_stream_type = _stream_storage_type(arguments.get("in_stream", {}))
-    out_stream_type = _stream_storage_type(arguments.get("out_stream", {}))
-    blocks: list[str] = []
-    for case in vectors:
-        inputs = case.get("inputs", {})
-        values = [int(item) for item in inputs.get("in_stream", [])]
-        expected = [int(item) for item in case.get("expected_outputs", {}).get("out_stream", [])]
-        length = int(inputs.get("length", len(values)))
-        expected_text = ", ".join(str(item) for item in expected) or "0"
-        writes: list[str] = []
-        for index, value in enumerate(values):
-            last_value = 1 if index == max(0, length - 1) else 0
-            writes.extend(
+            # 追加单个文件的 fenced block。
+            list_blocks.extend(
                 [
-                    f"    {_stream_payload_type(arguments.get('in_stream', {}))} in_pkt_{index};",
-                    f"    in_pkt_{index}.data = {value};",
-                    f"    in_pkt_{index}.keep = -1;",
-                    f"    in_pkt_{index}.strb = -1;",
-                    f"    in_pkt_{index}.last = {last_value};",
-                    f"    in_stream.write(in_pkt_{index});",
+                    f"```{str_language} path={str_rel_path}",
+                    dict_file_map[str_rel_path].rstrip(),
+                    "```",
                 ]
             )
-        write_block = "\n".join(writes)
-        blocks.append(f'''  {{
-    // {_comment(comment_language, f'Run AXIS RLE case {case["id"]} and compare payload plus frame markers.', f'执行 AXIS RLE 用例 {case["id"]} 并比较数据与帧边界标记。')}
-    {in_stream_type} in_stream;
-    {out_stream_type} out_stream;
-{write_block}
-    const unsigned expected[{max(1, len(expected))}] = {{{expected_text}}};
-    unsigned observed[{max(1, length)}] = {{}};
-    bool last_seen = false;
-    {top}(in_stream, out_stream, {length});
-    bool pass = true;
-    for (int i = 0; i < {length}; ++i) {{
-      if (out_stream.empty()) {{
-        pass = false;
-        observed[i] = 0;
-      }} else {{
-        auto out_pkt = out_stream.read();
-        observed[i] = (unsigned)out_pkt.data;
-        if (out_pkt.keep == 0 || out_pkt.strb == 0) {{
-          pass = false;
-        }}
-        if (out_pkt.last != 0) {{
-          last_seen = true;
-        }}
-      }}
-      if (observed[i] != expected[i]) {{
-        pass = false;
-      }}
-    }}
-    if (!last_seen) {{
-      pass = false;
-    }}
-    std::cout << "{REFERENCE_RESULT_TAG} {{\\"case_id\\":\\"{case["id"]}\\",\\"status\\":\\"" << (pass ? "PASS" : "FAIL") << "\\",\\"outputs\\":{{\\"out_stream\\":[";
-    for (int i = 0; i < {length}; ++i) {{
-      if (i != 0) std::cout << ",";
-      std::cout << observed[i];
-    }}
-    std::cout << "]}},\\"checkpoints\\":{{\\"length\\":{length},\\"first_output\\":" << observed[0] << "}}}}\\n";
-    if (!pass) failures++;
-  }}''')
-    return "\n".join(blocks)
 
+        # 拼接完整 mock 响应并以换行结尾，匹配真实模型常见输出。
+        return "\n".join(list_blocks) + "\n"
 
-def _mock_task_graph_axis_cases(top: str, vectors: list[dict[str, Any]], comment_language: str) -> str:
-    all_values: list[int] = []
-    case_records: list[dict[str, Any]] = []
-    offset = 0
-    for case in vectors:
-        inputs = case.get("inputs", {})
-        values = [int(item) for item in inputs.get("in_stream", [])]
-        expected = [int(item) for item in case.get("expected_outputs", {}).get("out_stream", [])]
-        length = int(inputs.get("length", len(values)))
-        all_values.extend(values)
-        case_records.append({"id": case["id"], "length": length, "offset": offset, "expected": expected})
-        offset += length
-    total_length = offset
-    writes = "\n".join(f"  in_stream.write(ap_uint<32>({value}));" for value in all_values)
-    case_blocks: list[str] = []
-    for record in case_records:
-        expected_text = ", ".join(str(item) for item in record["expected"]) or "0"
-        start = int(record["offset"])
-        length = int(record["length"])
-        case_blocks.append(f'''  {{
-    // {_comment(comment_language, f'Validate task-graph slice {record["id"]} after one combined kernel transaction.', f'在一次合并 kernel 事务后校验 task-graph 分段 {record["id"]}。')}
-    const unsigned expected[{max(1, len(record["expected"]))}] = {{{expected_text}}};
-    bool pass = true;
-    for (int i = 0; i < {length}; ++i) {{
-      if (observed[{start} + i] != expected[i]) {{
-        pass = false;
-      }}
-    }}
-    std::cout << "{REFERENCE_RESULT_TAG} {{\\"case_id\\":\\"{record["id"]}\\",\\"status\\":\\"" << (pass ? "PASS" : "FAIL") << "\\",\\"outputs\\":{{\\"out_stream\\":[";
-    for (int i = 0; i < {length}; ++i) {{
-      if (i != 0) std::cout << ",";
-      std::cout << observed[{start} + i];
-    }}
-    std::cout << "]}},\\"checkpoints\\":{{\\"length\\":{length},\\"first_output\\":" << observed[{start}] << "}}}}\\n";
-    if (!pass) failures++;
-  }}''')
-    return f'''  // {_comment(comment_language, 'Task-graph cosim uses one top-level invocation so the task actor restart contract stays explicit.', 'task-graph cosim 只做一次顶层调用，以保持 task actor 的重启契约显式可控。')}
-  hls::stream<ap_uint<32> > in_stream;
-  hls::stream<ap_uint<32> > out_stream;
-{writes}
-  unsigned observed[{max(1, total_length)}] = {{}};
-  bool stream_underflow = false;
-  {top}(in_stream, out_stream, {total_length});
-  for (int i = 0; i < {total_length}; ++i) {{
-    if (out_stream.empty()) {{
-      stream_underflow = true;
-      observed[i] = 0;
-    }} else {{
-      observed[i] = (unsigned)out_stream.read();
-    }}
-  }}
-{chr(10).join(case_blocks)}'''
+# 构造 command provider 传给外部命令的 JSON 上下文。
+def _command_context_json(context: GenerationContext) -> str:
+    """
+    将 GenerationContext 的轻量字段序列化为 JSON。
 
+    参数:
+        context: 当前生成尝试上下文，dtype=GenerationContext，unit=workflow state。
+    返回:
+        子进程环境变量使用的 JSON 文本，dtype=str，unit=JSON text。
+    """
 
-def _mock_directio_unit_cases(top: str, vectors: list[dict[str, Any]], comment_language: str) -> str:
-    blocks: list[str] = []
-    for case in vectors:
-        inputs = case.get("inputs", {})
-        values = [int(item) for item in inputs.get("in_stream", [])]
-        expected = [int(item) for item in case.get("expected_outputs", {}).get("out_stream", [])]
-        writes = "\n".join(f"    in_stream.write(ap_uint<32>({value}));" for value in values)
-        expected_text = ", ".join(str(item) for item in expected) or "0"
-        token_count = len(values)
-        blocks.append(f'''  {{
-    // {_comment(comment_language, f'Run free-running direct-I/O case {case["id"]} by invoking the kernel once per token.', f'逐 token 调用 free-running direct-I/O 内核以执行用例 {case["id"]}。')}
-    hls::stream<ap_uint<32> > in_stream;
-    hls::stream<ap_uint<32> > out_stream;
-{writes}
-    const unsigned expected[{max(1, len(expected))}] = {{{expected_text}}};
-    unsigned observed[{max(1, token_count)}] = {{}};
-    bool pass = true;
-    for (int i = 0; i < {token_count}; ++i) {{
-      {top}(in_stream, out_stream);
-      if (out_stream.empty()) {{
-        pass = false;
-        observed[i] = 0;
-      }} else {{
-        observed[i] = (unsigned)out_stream.read();
-      }}
-      if (observed[i] != expected[i]) {{
-        pass = false;
-      }}
-    }}
-    std::cout << "{REFERENCE_RESULT_TAG} {{\\"case_id\\":\\"{case["id"]}\\",\\"status\\":\\"" << (pass ? "PASS" : "FAIL") << "\\",\\"outputs\\":{{\\"out_stream\\":[";
-    for (int i = 0; i < {token_count}; ++i) {{
-      if (i != 0) std::cout << ",";
-      std::cout << observed[i];
-    }}
-    std::cout << "]}},\\"checkpoints\\":{{\\"token_count\\":{token_count},\\"first_output\\":" << observed[0] << "}}}}\\n";
-    if (!pass) failures++;
-  }}''')
-    return "\n".join(blocks)
+    # 只暴露外部命令需要的路径、阶段和 manifest 摘要。
+    dict_context_payload: dict[str, Any] = {
+        "attempt_id": context.attempt_id,  # 让外部命令识别当前尝试批次
+        "stage": context.stage,  # 明确告诉外部命令所处流程阶段
+        "prompt_path": str(context.prompt_path),  # 交给外部命令读取 prompt 的绝对路径
+        "response_path": str(context.response_path),  # 交给外部命令写响应的目标路径
+        "run_dir": str(context.run_dir),  # 暴露本次 run 的根目录
+        "attempt_dir": str(context.attempt_dir),  # 暴露当前尝试的专属产物目录
+        "target": "hls",  # 固定声明目标类型为 HLS
+        "name": context.spec.get("name"),  # 透传规范里的设计名称
+        "manifest": context.manifest,  # 直接携带当前阶段的完整 manifest 结构
+    }  # 命令行 provider 上下文载荷
 
+    # 返回 UTF-8 友好的 JSON 文本，便于中文字段透传。
+    return json.dumps(dict_context_payload, ensure_ascii=False)
 
-def _comment(comment_language: str, english: str, chinese: str) -> str:
-    return chinese if comment_language == "zh" else english
+# 执行 command provider 的外部命令。
+def _run_provider_command(
+    command: list[str],
+    prompt: str,
+    context: GenerationContext,
+    env: dict[str, str],
+    timeout_s: int,
+) -> subprocess.CompletedProcess[str]:
+    """
+    调用外部命令并转换启动类异常。
 
+    参数:
+        command: 已展开命令参数，shape=(n args)，dtype=list[str]，unit=shell command。
+        prompt: 写入 stdin 的提示词，dtype=str，unit=text。
+        context: 当前生成尝试上下文，dtype=GenerationContext，unit=workflow state。
+        env: 子进程环境变量，shape=(n vars)，dtype=dict[str, str]，unit=environment。
+        timeout_s: 命令超时时间，dtype=int，unit=s。
+    返回:
+        subprocess 执行结果，dtype=CompletedProcess[str]，unit=process result。
+    异常:
+        ModelProviderError: 超时或启动失败时抛出。
+    """
 
-def _ensure_hls_line_comment_coverage(text: str, comment_language: str) -> str:
-    lines: list[str] = []
-    raw_lines = text.splitlines()
-    if raw_lines and not _is_comment_only_line(raw_lines[0].strip()):
-        lines.append(f"// {_file_header_comment_for(text, comment_language)}")
-    for raw_line in raw_lines:
-        stripped = raw_line.strip()
-        if not stripped or _is_comment_only_line(stripped):
-            lines.append(raw_line)
-            continue
-        code = _code_without_comment(raw_line).rstrip()
-        code_stripped = code.strip()
-        if _is_trivial_hls_line(code_stripped):
-            lines.append(code)
-            continue
-        if _is_function_signature_line(code_stripped):
-            if not lines or not _is_comment_only_line(lines[-1].strip()):
-                lines.append(f"{_indent_for(raw_line)}// {_function_comment_for(code_stripped, comment_language)}")
-            lines.append(code)
-            continue
-        if _line_has_comment(stripped) and not _has_generic_generated_comment(stripped):
-            lines.append(raw_line)
-            continue
-        lines.append(f"{code} // {_line_comment_for(code_stripped, comment_language)}")
-    return "\n".join(lines) + "\n"
+    # subprocess.run 是 command provider 唯一的外部副作用。
+    try:
 
+        # 使用 run_dir 作为工作目录，保持命令与 workflow 产物相对路径一致。
+        path_work_dir: Path = context.run_dir  # 子进程工作目录
 
-def _line_has_comment(stripped: str) -> bool:
-    return "//" in stripped or "/*" in stripped or "*/" in stripped
+        # 捕获 stdout/stderr 后由 provider 统一解释响应或错误。
+        bool_capture_output: bool = True  # 是否捕获 stdout 和 stderr
 
+        # 文本模式避免调用方手动处理 bytes 编码。
+        bool_text_mode: bool = True  # 是否使用文本模式通信
 
-def _is_comment_only_line(stripped: str) -> bool:
-    return stripped.startswith(("//", "/*", "*"))
+        # 非零退出码需要带 stderr 摘要转换为 ModelProviderError。
+        bool_check_exit_code: bool = False  # 是否由 subprocess 自动抛出非零退出码
 
+        # 调用外部命令并返回原始 CompletedProcess。
+        return subprocess.run(
+            command,
+            cwd=path_work_dir,
+            input=prompt,
 
-def _code_without_comment(line: str) -> str:
-    if "//" in line:
-        return line.split("//", 1)[0]
-    if "/*" in line:
-        return line.split("/*", 1)[0]
-    return line
+            # 输出捕获策略由 provider 统一处理 stdout/stderr。
+            capture_output=bool_capture_output,
+            text=bool_text_mode,
 
-
-def _indent_for(line: str) -> str:
-    return line[: len(line) - len(line.lstrip())]
-
-
-def _has_generic_generated_comment(stripped: str) -> bool:
-    lowered = stripped.lower()
-    return any(
-        text in lowered
-        for text in (
-            "keep the generated hls artifact line reviewable",
-            "preserve the generated data movement or computation step",
-            "open or close the generated hardware scope",
+            # 超时和退出码策略保持 command provider 可控恢复。
+            timeout=timeout_s,
+            check=bool_check_exit_code,
+            env=env,
         )
-    )
 
+    # 超时通常表示外部模型或包装脚本没有按协议返回。
+    except subprocess.TimeoutExpired as exc:
 
-def _is_function_signature_line(stripped: str) -> bool:
-    if not ("(" in stripped and ")" in stripped and (stripped.endswith(";") or stripped.endswith("{"))):
-        return False
-    if stripped.startswith(("hls::stream", "hls::task")):
-        return False
-    if stripped.split("(", 1)[0].strip().split(" ")[0] in {"if", "for", "while", "switch", "return"}:
-        return False
-    return bool(re.match(r"^(?:[\w:<>~,\*&\[\]\s]+)\s+[A-Za-z_]\w*(?:::[A-Za-z_]\w*)?\s*\([^;{}]*\)\s*(?:const\s*)?(?:;|\{)$", stripped))
+        # 把超时统一转换为 provider 错误，便于 workflow 上层重试或失败归档。
+        raise ModelProviderError(f"> ERR: [Python] Command provider timed out after {timeout_s}s.") from exc
 
+    # 启动失败说明命令路径、权限或环境配置不可用。
+    except OSError as exc:
 
-def _is_trivial_hls_line(stripped: str) -> bool:
-    return stripped in {"{", "}", "};", "};"} or stripped.startswith("return ")
+        # 把启动类系统错误统一转换为 provider 错误，避免上层直接暴露底层异常类型。
+        raise ModelProviderError(f"> ERR: [Python] Command provider failed to start: {exc}") from exc
 
+# 提取 command provider 失败摘要。
+def _command_failure_detail(completed_process: subprocess.CompletedProcess[str]) -> str:
+    """
+    从外部命令 stderr/stdout 中提取一行错误摘要。
 
-def _file_header_comment_for(text: str, comment_language: str) -> str:
-    if "int main()" in text:
-        return _comment(comment_language, "Testbench file validates generated HLS cases and PASS/FAIL reporting.", "测试文件验证生成的 HLS 用例和 PASS/FAIL 上报。")
-    if "#pragma once" in text:
-        return _comment(comment_language, "Header file declares the generated Vitis HLS kernel interface.", "头文件声明生成的 Vitis HLS 内核接口。")
-    return _comment(comment_language, "Source file implements the generated Vitis HLS kernel datapath.", "源码文件实现生成的 Vitis HLS 内核数据通路。")
+    参数:
+        completed_process: 外部命令执行结果，dtype=CompletedProcess[str]，unit=process result。
+    返回:
+        一行错误摘要，dtype=str，unit=text。
+    """
 
+    # stderr 优先于 stdout，避免把普通输出误当作错误详情。
+    str_output: str = (completed_process.stderr or completed_process.stdout).strip()  # 命令失败输出
 
-def _function_comment_for(stripped: str, comment_language: str) -> str:
-    if stripped.startswith("int main"):
-        return _comment(comment_language, "Testbench entrypoint prepares cases, calls the kernel, and reports PASS or FAIL.", "测试入口准备用例、调用内核并报告 PASS 或 FAIL。")
-    if stripped.endswith(";"):
-        return _comment(comment_language, "Top function declaration contract records the generated hardware boundary.", "顶层函数声明契约记录生成的硬件边界。")
-    return _comment(comment_language, "Top function contract defines the generated hardware boundary and interface behavior.", "顶层函数契约定义生成的硬件边界和接口行为。")
+    # 有输出时取第一行，避免异常文本过长污染 workflow 报告。
+    if str_output:
 
+        # 返回第一行错误摘要。
+        return str_output.splitlines()[0]
 
-def _line_comment_for(stripped: str, comment_language: str) -> str:
-    if stripped.startswith("#include"):
-        return _comment(comment_language, "Include the dependency required by this HLS artifact.", "引入该 HLS 工件需要的依赖。")
-    if stripped.startswith("#pragma once"):
-        return _comment(comment_language, "Keep this generated declaration header single-included.", "确保生成的声明头文件只被包含一次。")
-    if stripped.startswith("#pragma HLS"):
-        return _comment(comment_language, "Constrain the generated hardware structure according to the confirmed spec.", "按已确认 spec 约束生成的硬件结构。")
-    if stripped.startswith("for "):
-        return _comment(comment_language, "Iterate across the bounded transaction range.", "遍历有界事务范围。")
-    if stripped.startswith("return "):
-        return _comment(comment_language, "Return the deterministic testbench status.", "返回确定性的 testbench 状态。")
-    if "std::cout" in stripped:
-        return _comment(comment_language, "Emit the testbench status marker.", "输出 testbench 状态标记。")
-    if stripped.startswith("hls::stream"):
-        return _comment(comment_language, "Set up the stream buffer for this dataflow transaction.", "为本次 dataflow 事务设置 stream buffer。")
-    if stripped.startswith("hls::task"):
-        return _comment(comment_language, "Set up the task actor for this dataflow transaction.", "为本次 dataflow 事务设置 task actor。")
-    if re.match(r"^(?:const\s+)?(?:ap_u?int<[^>]+>|ap_fixed<[^>]+>|bool|int|unsigned|float|double|size_t)\s+[\w\[\]]+", stripped):
-        return _comment(comment_language, "Set up the local datapath value or buffer for this transaction.", "为本次事务设置局部数据通路值或 buffer。")
-    if "=" in stripped:
-        return _comment(comment_language, "Set up or write the generated datapath value for this transaction.", "为本次事务设置或写入生成的数据通路值。")
-    if "(" in stripped and stripped.endswith(";"):
-        return _comment(comment_language, "Call the generated kernel or helper for this transaction.", "调用本次事务所需的生成内核或辅助函数。")
-    return _comment(comment_language, "Keep this generated HLS step tied to the hardware intent.", "让该生成 HLS 步骤保持与硬件意图一致。")
+    # 没有 stderr/stdout 时至少保留退出码。
+    return f"exit code {completed_process.returncode}"
+
+# 规范化 command provider 的命令模板。
+def _normalize_command(command: str | Sequence[str]) -> list[str]:
+    """
+    将命令字符串或参数序列转换为参数列表。
+
+    参数:
+        command: 外部命令模板，dtype=str or Sequence[str]，unit=shell command。
+    返回:
+        命令参数列表，shape=(n args)，dtype=list[str]，unit=shell command。
+    异常:
+        ModelProviderError: 命令为空时抛出。
+    """
+
+    # 字符串命令按 Windows 兼容模式切分，序列命令逐项转为字符串。
+    list_parts: list[str] = (
+        shlex.split(command, posix=False)  # 字符串命令按 Windows 规则拆分
+        if isinstance(command, str)  # 输入本身是单条命令字符串
+        else [str(obj_item) for obj_item in command]  # 序列命令逐项转成字符串
+    )  # 规范化命令参数
+
+    # 空命令无法启动外部 provider。
+    if not list_parts:
+
+        # 报告空命令错误。
+        raise ModelProviderError("> ERR: [Python] Model command must not be empty.")
+
+    # 返回可传给 subprocess.run 的参数列表。
+    return list_parts
+
+# 展开命令参数中的 GenerationContext 占位符。
+def _expand_part(part: str, context: GenerationContext) -> str:
+    """
+    用当前生成上下文替换命令参数模板中的字段。
+
+    参数:
+        part: 单个命令参数模板，dtype=str，unit=text。
+        context: 当前生成尝试上下文，dtype=GenerationContext，unit=workflow state。
+    返回:
+        展开后的命令参数；格式化失败时返回原文本，dtype=str，unit=text。
+    """
+
+    # 命令模板只提供稳定的 workflow 上下文字段。
+    dict_values: dict[str, str] = {
+        "attempt_id": context.attempt_id,  # 供 format_map 注入尝试编号
+        "stage": context.stage,  # 供 format_map 注入阶段名称
+        "prompt_path": str(context.prompt_path),  # 供 format_map 展开 prompt 路径
+        "response_path": str(context.response_path),  # 供 format_map 展开响应路径
+        "run_dir": str(context.run_dir),  # 供 format_map 展开 run 根目录
+        "attempt_dir": str(context.attempt_dir),  # 供 format_map 展开尝试目录
+        "target": "hls",  # 展开 {target} 占位符
+        "name": str(context.spec.get("name") or ""),  # 供 format_map 展开设计名称
+    }  # 命令参数模板字段
+
+    # format_map 允许命令显式引用上下文字段。
+    try:
+
+        # 返回展开后的命令参数。
+        return part.format_map(dict_values)
+
+    # 模板异常时保留原参数，兼容包含普通花括号的命令。
+    except Exception:
+
+        # 格式化失败时回退原始参数文本，保持命令模板中的普通花括号可透传。
+        return part
+
+# 解析 mock provider 的行为模式。
+def _mock_mode(context: GenerationContext, config: dict[str, Any]) -> str:
+    """
+    从 provider 配置或 workflow spec 中读取 mock 行为模式。
+
+    参数:
+        context: 当前生成尝试上下文，dtype=GenerationContext，unit=workflow state。
+        config: provider 配置字典，shape=(n fields)，dtype=dict[str, Any]，unit=JSON object。
+    返回:
+        mock 行为模式名称，dtype=str，unit=dimensionless。
+    """
+
+    # provider 配置优先级高于 spec.workflow。
+    mock_behavior_config: Any = config.get("mock_behavior")  # provider 级 mock 行为配置
+
+    # 没有 provider 配置时读取 spec.workflow.mock_behavior。
+    if mock_behavior_config is None:
+
+        # workflow 内的 mock_behavior 支持按 stage 配置。
+        mock_behavior_config = (context.spec.get("workflow") or {}).get("mock_behavior")  # 从规范侧回退读取 mock 行为配置
+
+    # 字符串配置直接作为所有阶段模式。
+    if isinstance(mock_behavior_config, str):
+
+        # 返回显式 mock 模式。
+        return mock_behavior_config
+
+    # 字典配置可按 stage、* 或 default 分流。
+    if isinstance(mock_behavior_config, dict):
+
+        # 当前阶段优先，其次通配符，最后 default。
+        stage_mock_behavior_config: Any = mock_behavior_config.get(  # 当前阶段最终采用的 mock 行为
+            context.stage,  # 当前阶段专属 mock 配置
+            mock_behavior_config.get("*", mock_behavior_config.get("default", "success")),  # 阶段未命中时使用通配或默认配置
+        )  # 当前阶段 mock 行为
+
+        # 字典型阶段配置允许把 mode 与其他扩展字段放在一起。
+        if isinstance(stage_mock_behavior_config, dict):
+
+            # 返回当前阶段的 mode 字段。
+            return str(stage_mock_behavior_config.get("mode", "success"))
+
+        # 非空标量配置转为字符串模式。
+        if stage_mock_behavior_config:
+
+            # 返回当前阶段标量模式。
+            return str(stage_mock_behavior_config)
+
+    # 缺省模式生成完整有效响应。
+    return "success"
+
+# 从 manifest 中提取可生成的文件项。
+def _manifest_files(manifest: dict[str, Any]) -> list[dict[str, Any]]:
+    """
+    过滤 manifest.files 中缺少 path 的条目。
+
+    参数:
+        manifest: 阶段产物清单，shape=(n fields)，dtype=dict[str, Any]，unit=JSON object。
+    返回:
+        可生成文件项列表，shape=(n files)，dtype=list[dict[str, Any]]，unit=JSON array。
+    """
+
+    # manifest.files 可能包含脏数据，mock 只处理字典且带 path 的项。
+    list_files: list[dict[str, Any]] = [
+        dict_entry  # 保留原始 manifest 文件条目
+        for dict_entry in manifest.get("files", [])  # 遍历 manifest.files 候选
+        if isinstance(dict_entry, dict) and dict_entry.get("path")  # 仅接受带 path 的字典条目
+    ]  # manifest 有效文件项
+
+    # 返回过滤后的文件项。
+    return list_files
+
+# 根据 mock 模式调整响应文件列表。
+def _mode_adjusted_files(mode: str, files: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """
+    为 spec_issue 等测试模式调整 mock 文件清单。
+
+    参数:
+        mode: mock 行为模式，dtype=str，unit=dimensionless。
+        files: 原始 manifest 文件项，shape=(n files)，dtype=list[dict[str, Any]]，unit=JSON array。
+    返回:
+        调整后的文件项，shape=(n files)，dtype=list[dict[str, Any]]，unit=JSON array。
+    """
+
+    # spec_issue 模式需要至少两个文件，才能安全丢弃一个 testbench。
+    if mode == "spec_issue" and len(files) > 1:
+
+        # 选择 testbench 或最后一个文件作为故意遗漏目标。
+        str_dropped_path: str = _dropped_spec_issue_path(files)  # spec_issue 模式丢弃路径
+
+        # 返回去掉目标文件后的列表，触发后续契约校验。
+        return [dict_entry for dict_entry in files if str(dict_entry["path"]) != str_dropped_path]
+
+    # 其他模式保持 manifest 文件列表不变。
+    return files
+
+# 选择 spec_issue 模式要丢弃的文件路径。
+def _dropped_spec_issue_path(files: list[dict[str, Any]]) -> str:
+    """
+    选择最适合制造 spec/testbench 缺失问题的文件路径。
+
+    参数:
+        files: manifest 文件项，shape=(n files)，dtype=list[dict[str, Any]]，unit=JSON array。
+    返回:
+        要从响应中移除的相对路径，dtype=str，unit=filesystem path。
+    """
+
+    # 优先丢弃 testbench，让契约验证更容易定位测试侧缺失。
+    for dict_entry in files:
+
+        # kind 或文件名包含 _tb. 都视为 testbench 候选。
+        bool_testbench_entry: bool = (
+            dict_entry.get("kind") == "testbench"  # kind 明确声明为 testbench
+            or "_tb." in str(dict_entry["path"]).lower()  # 文件名后缀命中 testbench 约定
+        )  # testbench 文件候选标志
+
+        # 找到 testbench 后立即返回。
+        if bool_testbench_entry:
+
+            # 返回 testbench 路径。
+            return str(dict_entry["path"])
+
+    # 没有 testbench 时退回最后一个文件，保持旧版 next(..., last) 行为。
+    return str(files[-1]["path"])
+
+# 构造 mock 响应中的 manifest 块载荷。
+def _mock_response_manifest(
+    manifest: dict[str, Any],
+    files: list[dict[str, Any]],
+    stage: str,
+) -> dict[str, Any]:
+    """
+    合成 mock 响应第一块 JSON manifest。
+
+    参数:
+        manifest: 原始阶段产物清单，shape=(n fields)，dtype=dict[str, Any]，unit=JSON object。
+        files: 响应实际携带的文件项，shape=(n files)，dtype=list[dict[str, Any]]，unit=JSON array。
+        stage: workflow 阶段名称，dtype=str，unit=dimensionless。
+    返回:
+        mock 响应 manifest，shape=(n fields)，dtype=dict[str, Any]，unit=JSON object。
+    """
+
+    # checks 字段模仿真实模型的审查摘要，供 extractor/workflow 测试消费。
+    dict_checks: dict[str, Any] = {
+        "spec_coverage": [f"Mock provider generated HLS stage {stage} artifacts."],  # 阶段产物覆盖说明
+        "verification_plan": ["Mock response includes deterministic vectors and PASS/FAIL hooks."],  # 验证路径说明
+        "execution_plan": ["Mock response is intended for local workflow tests."],  # 执行用途说明
+        "implementation_assessment": ["Mock HLS artifacts satisfy structural workflow contracts."],  # 结构契约评估
+        "reviewability_assessment": ["Mock artifacts include minimal comments and result markers."],  # 可审阅性评估
+        "assumptions": [],  # 当前阶段的默认假设
+        "known_limitations": ["Mock provider prioritizes workflow determinism over hardware fidelity."],  # mock 方案已知限制
+    }  # mock 响应检查摘要
+
+    # 返回与真实响应 manifest 兼容的结构。
+    return {
+        **manifest,
+        "files": files,
+        "checks": dict_checks,
+    }
+
+# 生成 manifest 的 fenced JSON 块。
+def _manifest_block(manifest: dict[str, Any]) -> list[str]:
+    """
+    将响应 manifest 包装为 fenced JSON 块。
+
+    参数:
+        manifest: mock 响应 manifest，shape=(n fields)，dtype=dict[str, Any]，unit=JSON object。
+    返回:
+        fenced block 行列表，shape=(3 lines)，dtype=list[str]，unit=text lines。
+    """
+
+    # JSON 块保持缩进，便于 extractor 和人工调试读取。
+    str_manifest_json: str = json.dumps(manifest, indent=2, ensure_ascii=False)  # fenced JSON 块中的 manifest 文本
+
+    # 返回 fenced block 三行结构。
+    return ["```json", str_manifest_json, "```"]
+
+# 为当前阶段生成 mock 文件内容映射。
+def _mock_file_contents(context: GenerationContext, files: list[dict[str, Any]]) -> dict[str, str]:
+    """
+    按 workflow 阶段生成 path 到 mock 文件内容的映射。
+
+    参数:
+        context: 当前生成尝试上下文，dtype=GenerationContext，unit=workflow state。
+        files: manifest 文件项，shape=(n files)，dtype=list[dict[str, Any]]，unit=JSON array。
+    返回:
+        文件内容映射，shape=(n files)，dtype=dict[str, str]，unit=text by path。
+    """
+
+    # 当前阶段决定文件内容生成策略。
+    str_stage: str = context.stage  # 提取阶段名，后面据此选择不同的 mock 产物生成路径
+
+    # HLS spec 用于生成参考向量和 HLS mock 代码。
+    dict_spec: dict[str, Any] = context.spec  # 提取规范正文，供各阶段文本生成逻辑共享
+
+    # 各阶段共享同一组确定性 mock 向量。
+    list_vectors: list[dict[str, Any]] = _mock_vectors(dict_spec)  # mock 参考向量
+
+    # tests 阶段只需要输出结构化向量 JSON。
+    if str_stage == "tests":
+
+        # 返回测试向量文件内容。
+        return _mock_tests_file_contents(files, list_vectors)
+
+    # hls 阶段输出头文件、源码、testbench 和 cfg。
+    if str_stage == "hls":
+
+        # hls 阶段要同时补齐头文件、源码、testbench 与 cfg 文本。
+        return _mock_hls_file_contents(context, files, list_vectors)
+
+    # 未知阶段返回空 JSON 占位文件，保持旧版宽松行为。
+    return _default_file_contents(files)
+
+# 生成 tests 阶段的 mock 文件内容。
+def _mock_tests_file_contents(
+    files: list[dict[str, Any]],
+    vectors: list[dict[str, Any]],
+) -> dict[str, str]:
+    """
+    为 tests 阶段生成向量 JSON 文件内容。
+
+    参数:
+        files: manifest 文件项，shape=(n files)，dtype=list[dict[str, Any]]，unit=JSON array。
+        vectors: mock 参考向量，shape=(n cases)，dtype=list[dict[str, Any]]，unit=JSON array。
+    返回:
+        文件内容映射，shape=(n files)，dtype=dict[str, str]，unit=text by path。
+    """
+
+    # tests 阶段载荷保留 case_ids 和完整 cases。
+    dict_payload: dict[str, Any] = {
+        "version": 1,  # payload 协议版本
+        "case_ids": [str(dict_item["id"]) for dict_item in vectors],  # 向量用例编号列表
+        "cases": vectors,  # 完整向量内容
+    }  # tests 阶段向量载荷
+
+    # 预先序列化一次，所有 tests 文件共享相同向量内容。
+    str_payload_text: str = json.dumps(dict_payload, indent=2, ensure_ascii=False) + "\n"  # tests 阶段 JSON 文本
+
+    # 将相同 JSON 写入 manifest 声明的每个文件。
+    dict_contents: dict[str, str] = {
+        str(dict_file["path"]): str_payload_text  # 每个目标路径复用同一份 tests JSON
+        for dict_file in files  # 遍历 tests 阶段输出文件
+    }  # tests 阶段 path 到内容的映射
+
+    # 返回 tests 阶段每个目标文件对应的统一 JSON 文本映射。
+    return dict_contents
+
+# 依据目标后缀组装 hls 阶段的头文件、源码、testbench 与 cfg 文本。
+def _mock_hls_file_contents(
+    context: GenerationContext,
+    files: list[dict[str, Any]],
+    vectors: list[dict[str, Any]],
+) -> dict[str, str]:
+    """
+    为 hls 阶段生成头文件、源码、testbench 和 cfg 内容。
+
+    参数:
+        context: 当前生成尝试上下文，dtype=GenerationContext，unit=workflow state。
+        files: manifest 文件项，shape=(n files)，dtype=list[dict[str, Any]]，unit=JSON array。
+        vectors: mock 参考向量，shape=(n cases)，dtype=list[dict[str, Any]]，unit=JSON array。
+    返回:
+        文件内容映射，shape=(n files)，dtype=dict[str, str]，unit=text by path。
+    """
+
+    # 头文件名用于 HLS 源文件 include。
+    str_header_name: str = _hls_header_name(files)  # HLS mock 头文件名
+
+    # vector hash 写入 testbench，用于跨阶段契约验证。
+    str_vector_hash: str = str((context.vector_contract or {}).get("sha256") or "")  # 读取向量契约里的 sha256 摘要
+
+    # HLS 阶段逐文件生成对应文本。
+    dict_contents: dict[str, str] = {}  # 为 hls 产物累积 path 到文本的结果字典
+
+    # 遍历 manifest 条目，为每个 hls 目标文件生成具体文本。
+    for dict_file in files:
+
+        # 先取出相对路径，再交给后缀判断逻辑决定该生成哪类 hls 文本。
+        str_rel_path: str = str(dict_file["path"])  # 当前 manifest 条目的相对路径
+
+        # 根据文件后缀和 stem 选择 HLS mock 文本生成器。
+        str_file_text: str = _mock_hls_file_text(  # 当前 HLS 目标文件的 mock 文本
+            context,  # 提供当前规范、语言与目录等生成背景
+            files,  # manifest 中声明的全部 hls 文件
+            vectors,  # 当前阶段共用的向量数据
+            str_rel_path,  # 当前正在生成的相对路径
+            str_header_name,  # 头文件 include 名称
+            str_vector_hash,  # testbench 使用的向量摘要
+        )  # 单个 HLS mock 文件文本
+
+        # 保存当前文件内容。
+        dict_contents[str_rel_path] = str_file_text  # HLS 阶段单文件 mock 文本
+
+    # 返回 hls 阶段完整的 path 到文本映射。
+    return dict_contents
+
+# 选择 HLS mock 源文件 include 使用的头文件名。
+def _hls_header_name(files: list[dict[str, Any]]) -> str:
+    """
+    从 manifest 文件中选择 HLS 头文件名。
+
+    参数:
+        files: manifest 文件项，shape=(n files)，dtype=list[dict[str, Any]]，unit=JSON array。
+    返回:
+        头文件名，dtype=str，unit=filesystem filename。
+    """
+
+    # 优先使用 manifest 中第一个 .h/.hpp 文件。
+    for dict_file in files:
+
+        # 当前文件路径用于判断头文件后缀。
+        str_rel_path: str = str(dict_file["path"])  # 取出路径后专门检查是否属于头文件后缀
+
+        # HLS 头文件后缀包括 .h 和 .hpp。
+        if str_rel_path.endswith((".h", ".hpp")):
+
+            # 返回文件名部分供源码 include。
+            return Path(str_rel_path).name
+
+    # 缺少头文件时沿用旧版默认名。
+    return "kernel.h"
+
+# 生成单个 HLS mock 文件文本。
+def _mock_hls_file_text(
+    context: GenerationContext,
+    files: list[dict[str, Any]],
+    vectors: list[dict[str, Any]],
+    rel_path: str,
+    header_name: str,
+    vector_hash: str,
+) -> str:
+    """
+    根据 HLS 文件后缀和 stem 选择 mock 文本。
+
+    参数:
+        context: 当前生成尝试上下文，dtype=GenerationContext，unit=workflow state。
+        files: manifest 文件项，shape=(n files)，dtype=list[dict[str, Any]]，unit=JSON array。
+        vectors: mock 参考向量，shape=(n cases)，dtype=list[dict[str, Any]]，unit=JSON array。
+        rel_path: manifest 文件相对路径，dtype=str，unit=filesystem path。
+        header_name: HLS 头文件名，dtype=str，unit=filesystem filename。
+        vector_hash: 参考向量 sha256，dtype=str，unit=hash text。
+    返回:
+        单个文件的 mock 文本，dtype=str，unit=text。
+    """
+
+    # 文件后缀决定 HLS 产物类型。
+    str_suffix: str = Path(rel_path).suffix.lower()  # HLS 文件后缀
+
+    # 文件 stem 用于区分 C++ kernel 源码和 testbench。
+    str_stem: str = Path(rel_path).stem  # 用于识别 testbench 后缀的文件 stem
+
+    # 头文件走 header mock 模板。
+    if str_suffix in {".h", ".hpp"}:
+
+        # 生成并补齐 HLS 行注释覆盖。
+        return _covered_hls_text(
+            _mock_hls_header_text(context.spec, context.comment_language),
+            context.comment_language,
+        )
+
+    # 非 testbench C/C++ 源码走 kernel source 模板。
+    if str_suffix in {".cpp", ".cc", ".cxx"} and "_tb" not in str_stem:
+
+        # 生成并补齐 kernel 源码行注释覆盖。
+        return _covered_hls_text(
+            _mock_hls_source_text(context.spec, header_name, context.comment_language),
+            context.comment_language,
+        )
+
+    # testbench C/C++ 源码写入向量和 hash 标记。
+    if str_suffix in {".cpp", ".cc", ".cxx"}:
+
+        # testbench 文本要额外写入向量摘要，方便后续做结果对账。
+        return _covered_hls_text(
+            _mock_hls_testbench_text(context.spec, vectors, vector_hash, context.comment_language),
+            context.comment_language,
+        )
+
+    # cfg 文件使用 HLS cfg 模板。
+    if str_suffix == ".cfg":
+
+        # 返回 hls_config.cfg mock 文本。
+        return _mock_hls_cfg_text(context.spec, files)
+
+    # 未识别文件保持旧版空文本占位。
+    return "\n"
+
+# 补齐 HLS mock 文本的行注释覆盖。
+def _covered_hls_text(text: str, comment_language: str) -> str:
+    """
+    对 HLS mock C/C++ 文本应用行注释覆盖规则。
+
+    参数:
+        text: 原始 HLS mock 文本，dtype=str，unit=text。
+        comment_language: 注释语言，dtype=str，unit=dimensionless。
+    返回:
+        已补齐注释覆盖的 HLS 文本，dtype=str，unit=text。
+    """
+
+    # 委托 mock_comment_rendering 保持 C/C++ 注释策略一致。
+    return _ensure_hls_line_comment_coverage(text, comment_language)
+
+# 为未知阶段生成默认文件内容。
+def _default_file_contents(files: list[dict[str, Any]]) -> dict[str, str]:
+    """
+    为非 tests/python/hls 阶段生成默认空 JSON 内容。
+
+    参数:
+        files: manifest 文件项，shape=(n files)，dtype=list[dict[str, Any]]，unit=JSON array。
+    返回:
+        文件内容映射，shape=(n files)，dtype=dict[str, str]，unit=text by path。
+    """
+
+    # 未知阶段保留旧行为，每个文件写入空 JSON。
+    dict_contents: dict[str, str] = {
+        str(dict_file["path"]): "{}\n"  # 每个未知阶段文件写入空 JSON 占位
+        for dict_file in files  # 遍历未知阶段的全部 manifest 条目
+    }  # 默认 path 到内容的映射
+
+    # 返回默认文件内容。
+    return dict_contents

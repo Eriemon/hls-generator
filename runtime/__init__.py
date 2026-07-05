@@ -1,2 +1,2 @@
-"""Runtime package namespace for the HLS generator skill."""
+"""声明 HLS 生成器运行时包的命名空间入口。"""
 

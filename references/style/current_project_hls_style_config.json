@@ -1,0 +1,142 @@
+{
+  "version": 1,
+  "style": "current-project",
+  "target": "hls",
+  "comment_language": "zh",
+  "default_profile": "kernel",
+  "profiles": {
+    "kernel": {
+      "require_chinese_comments": true,
+      "require_file_header": true,
+      "require_blank_line_comments": true,
+      "require_special_statement_spacing": true,
+      "require_declaration_above_comment": true,
+      "require_declaration_inline_comment": true,
+      "inline_comment_max_code_chars": 130,
+      "allow_multiline_inline_comment_exemption": true,
+      "require_function_contract": true,
+      "require_top_port_contract": true,
+      "require_pragma_hardware_intent": true,
+      "require_loop_intent": true,
+      "warn_function_lines": 80,
+      "block_function_lines": 140,
+      "warn_nested_depth": 4,
+      "block_nested_depth": 6,
+      "warn_branch_loop_count": 12,
+      "block_branch_loop_count": 22,
+      "warn_magic_number_count": 6,
+      "block_magic_number_count": 12,
+      "warn_parameter_count": 10,
+      "block_parameter_count": 18,
+      "warn_commented_code_lines": 4,
+      "block_commented_code_lines": 10,
+      "max_line_length": 160
+    },
+    "testbench": {
+      "warn_function_lines": 120,
+      "block_function_lines": 220,
+      "warn_branch_loop_count": 18,
+      "block_branch_loop_count": 32,
+      "require_top_port_contract": false
+    },
+    "header": {
+      "require_declaration_inline_comment": false,
+      "require_top_port_contract": false,
+      "warn_function_lines": 60,
+      "block_function_lines": 100
+    },
+    "streaming": {
+      "warn_function_lines": 95,
+      "block_function_lines": 170,
+      "warn_branch_loop_count": 16,
+      "block_branch_loop_count": 28
+    },
+    "dataflow": {
+      "warn_function_lines": 110,
+      "block_function_lines": 190,
+      "warn_branch_loop_count": 18,
+      "block_branch_loop_count": 34
+    },
+    "host_stub": {
+      "require_top_port_contract": false,
+      "warn_function_lines": 140,
+      "block_function_lines": 260
+    }
+  },
+  "hls_language_adjustments": {
+    "pg033_mapping": "HG005 applies to single-line local declarations and assignments. Long template-heavy or multi-line declarations may be exempted from right-side comments by profile, but HG024 reports them so reviewers add a nearby contract instead.",
+    "typed_prefix_mapping": "Python typed-prefix rules are not applied mechanically to C++. HG014 uses HLS-aware names for ports, streams, AXIS words, buffers, accumulators, indexes, and constants.",
+    "docstring_mapping": "Python docstring contracts become HLS file, function, top-port, array, stream, pragma, loop, and testbench contracts."
+  },
+  "checks": {
+    "require_chinese_comments": true,
+    "require_declaration_inline_comment": true,
+    "require_declaration_above_comment": true,
+    "require_top_port_contract": true
+  },
+  "thresholds": {
+    "inline_comment_max_code_chars": 130,
+    "warn_function_lines": 80,
+    "block_function_lines": 140,
+    "warn_nested_depth": 4,
+    "block_nested_depth": 6,
+    "warn_branch_loop_count": 12,
+    "block_branch_loop_count": 22,
+    "warn_magic_number_count": 6,
+    "block_magic_number_count": 12
+  },
+  "comment_quality": {
+    "banned_generic_comment_phrases": [
+      "generic generated line",
+      "not hardware intent",
+      "keep the generated hls artifact line reviewable",
+      "preserve the generated data movement or computation step",
+      "open or close the generated hardware scope",
+      "do the operation",
+      "perform operation",
+      "process data",
+      "handle data",
+      "main logic",
+      "important code",
+      "generated code",
+      "this line",
+      "定义xxx",
+      "定义变量",
+      "保存变量",
+      "保存结果",
+      "初始化变量",
+      "初始化结果",
+      "计算结果",
+      "处理数据",
+      "主要逻辑",
+      "重要代码",
+      "下方代码",
+      "下方逻辑",
+      "代码块功能",
+      "说明代码",
+      "说明下方代码",
+      "执行函数",
+      "调用函数",
+      "返回结果",
+      "赋值变量",
+      "判断当前分支",
+      "供后续逻辑使用",
+      "当前步骤",
+      "模板",
+      "占位"
+    ],
+    "banned_vague_comment_phrases": [
+      "值",
+      "代码",
+      "结果",
+      "数据",
+      "内容",
+      "逻辑",
+      "步骤",
+      "变量",
+      "函数",
+      "参数",
+      "对象"
+    ]
+  }
+}

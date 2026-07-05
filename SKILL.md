@@ -9,36 +9,41 @@ Use this skill for local AMD-Xilinx/Vitis HLS C/C++ kernel generation. The bundl
 
 ## Workflow
 
-1. On first trigger in a Codex session, run `python -m runtime.hls_generator deps check --json` from this skill directory. If it reports `blocked_dependency`, ask the user whether to install the listed dependencies before continuing; do not degrade or continue past missing required or recommended dependencies.
+1. On first trigger in a Codex session, run `python -m runtime.hls_generator deps check --json` from this skill directory. If it reports `blocked_dependency`, ask the user whether to install the listed required dependencies before continuing. Recommended dependencies warn only; do not treat them as blockers outside the capability path that explicitly requires them.
 2. Start from a confirmed HLS JSON spec or create one with the scaffold command.
 3. Use the facade for local integrations:
    - `run_hls_workflow(...)` for full staged execution or resume.
    - `render_hls_prompt(...)` when a caller owns the model call.
    - `validate_hls_artifacts(...)` before using generated files downstream.
 4. Require a confirmed requirement contract before generation: `pipeline_required`, `streamability`, `interface_family`, `interface_profile`, `confirmed_by_user`, and `confirmation_notes`. When throughput targets, numeric strategy, task parallelism, or device portability are in scope, confirm those constraints before code generation.
-5. Run the fixed HLS pipeline: `requirements -> codegen_plan -> tests -> python -> hls -> report_review -> remote_acceptance`.
-6. Treat generated HLS C/C++ typed comment placement as a hard gate: file headers, function contracts, type contracts, includes, macros, HLS pragmas, loops, datapath steps, and testbench PASS/FAIL behavior must have comments at the required position with matching hardware intent; generic or misplaced comments block validation.
-7. Keep final hardware-facing artifacts limited to HLS C/C++ headers, sources, C++ testbenches, `.cfg` files, and reports. Python models and vectors are validation intermediates.
-8. Validate with AMD-Xilinx tooling. The validator prefers `vitis-run` and falls back to `vitis_hls`; missing local tools block with a remote-server request so the caller can ask the user to choose an `erie-remote-ssh` server with Vitis available.
-9. For Vitis development, simulation, cosim, and debug guidance, follow `runtime_config.json` skill routing: prefer `vitis-developer` when installed, otherwise fall back to `vitis-hls-synthesis`.
+5. Run the fixed default HLS pipeline: `requirements -> codegen_plan -> tests -> hls`. Treat `remote_toolchain_request.json` and `remote_vitis_acceptance.py` as explicit follow-up acceptance helpers, not default generation stages.
+6. Treat generated HLS C/C++ Chinese comment placement as a hard gate: file headers, blank-line-separated lower blocks, function contracts, type contracts, includes, macros, HLS pragmas, loops, variable declarations/assignments, function calls, return statements, datapath steps, vector hashes, and testbench PASS/FAIL behavior must have a blank line plus an immediate Chinese purpose comment where required. Generic, template-like, English, or misplaced comments block validation.
+7. For comment-only HLS rewrites, validate with the AST guard: compare non-comment token fingerprints and normalized AST fingerprints against the baseline artifact tree. Use `--baseline-path` in the CLI or `baseline_path=` in the facade when validating comment-only changes.
+8. Keep final hardware-facing artifacts limited to HLS C/C++ headers, sources, C++ testbenches, `.cfg` files, vectors, and reports. This skill no longer generates or validates Python reference models.
+9. Validate with AMD-Xilinx tooling. Static-only validation reports `static_only=true` and `vitis_executed=false`; do not claim tool execution unless `vitis-run` or `vitis_hls` actually ran. Missing local tools block run/acceptance paths with a remote-server request so the caller can ask the user to choose an `erie-remote-ssh` server with Vitis available.
+10. For Vitis development, simulation, cosim, and debug guidance, follow `runtime_config.json` skill routing: prefer `vitis-developer` when installed, otherwise fall back to `vitis-hls-synthesis`.
 
 ## Local Commands
 
 For source-repository validation only, run the bundled smoke validator from the repository root:
 
 ```powershell
-python .\smoke\run_smoke.py
+python .\tests\smoke\run_smoke.py
 ```
 
 Use the runtime CLI from the skill directory or another workspace. Pick an explicit writable output directory when you need generated specs, prompts, or validation JSON:
 
 ```powershell
 python -m runtime.hls_generator config --path
+python -m runtime.hls_generator selfcheck --json
 python -m runtime.hls_generator deps check --json
 python -m runtime.hls_generator deps request --out <output-dir>\skill_dependency_request.json
 python -m runtime.hls_generator scaffold --target hls --name vector_scale --out <output-dir>\hls\spec.json
-python -m runtime.hls_generator prompt --target hls --spec <output-dir>\hls\spec.json --out <output-dir>\hls\prompt.md
+python -m runtime.hls_generator prompt --target hls --spec <output-dir>\hls\spec.json --out <output-dir>\hls\prompt.md --confirm-requirements --confirmation-notes "<user-confirmed HLS contract>"
 python -m runtime.hls_generator validate --target hls --spec <output-dir>\hls\spec.json --path <output-dir>\hls\generated --readiness static --no-external
+python -m runtime.hls_generator validate --target hls --spec <output-dir>\hls\spec.json --path <output-dir>\hls\commented --baseline-path <output-dir>\hls\baseline --readiness static --no-external
+python -m runtime.hls_generator readability-gate --target hls --path <output-dir>\hls\generated --profile kernel --style current-project --json
+python -m runtime.hls_generator comment-plan --target hls --path <output-dir>\hls\commented --baseline-path <output-dir>\hls\baseline --out <output-dir>\hls\reports\hls_comment_rewrite_plan.json
 ```
 
 When local `vitis-run`/`vitis_hls` is missing, inspect the workflow's `remote_toolchain_request.json`, ask the user to choose a configured `erie-remote-ssh` build server and, when needed, a separate validation server, then use the remote acceptance helper:
@@ -47,7 +52,7 @@ When local `vitis-run`/`vitis_hls` is missing, inspect the workflow's `remote_to
 python .\scripts\python\remote\remote_vitis_acceptance.py --mode link --server <erie-server>
 python .\scripts\python\remote\remote_vitis_acceptance.py --mode vitis --server <erie-server> --profile <configured-profile> --readiness <execute|implement|cosim>
 python .\scripts\python\remote\remote_vitis_acceptance.py --mode vitis --build-server <erie-build-server> --validate-server <erie-validate-server> --vitis-version <shared-version> --readiness <execute|implement|cosim>
-python .\scripts\python\remote\remote_vitis_acceptance.py --mode board --server <erie-server> --platform-name <platform-name> --remote-platform-root <remote-platform-root> --remote-xpfm <remote-xpfm> --example-spec <board-runnable-example> --comment-language <en|zh> --json
+python .\scripts\python\remote\remote_vitis_acceptance.py --mode board --server <erie-server> --platform-name <platform-name> --remote-platform-root <remote-platform-root> --remote-xpfm <remote-xpfm> --example-spec <board-runnable-example> --comment-language zh --json
 python .\scripts\python\validation\confidence_loop.py --server <erie-server> --vitis-version <shared-version> --readiness cosim --remote-parallelism 3 --json-out ..\..\reports\confidence-loop\latest-remote.json
 ```
 
@@ -94,7 +99,11 @@ deleted after a successful run.
 - Load `references/hls-project-structure-patterns.md` before changing project structure patterns such as minimal Vitis kernel flow, host-kernel-package staging, kernel variant trees, or hotspot-file organization rules.
 - Load `references/hls-device-migration-strategy.md` before changing target-part migration guidance, QoR comparison rules, or floating-point/fixed-point portability advice.
 - Load `references/hls-library-policy.md` before changing HLS include choices, advanced HLS library usage, or generated library examples.
-- Load `references/hls-comment-style.md` before changing generated C/C++ comment language, comment coverage, or comment validation rules.
+- Load `references/hls-comment-style.md` before changing generated C/C++ or workflow Python comment language, spacing, coverage, or validation rules.
+- Load `references/hls-ast-comment-guard.md` before changing comment-only rewrite validation, AST provider selection, or parser fallback behavior.
+- Load `references/hls_readability_rules.md` before changing `HGxxx` rule semantics, severity defaults, profile thresholds, HLS naming rules, or comment-plan behavior.
+- Load `references/hls_dispatcher.md` before changing generate/modify/explain routing or comment-only rewrite policy.
+- Load `references/hls_readability_gate.md` before changing local readability acceptance commands or report section names.
 - Load `references/remote-board-platform-upload.md` before handling uploaded remote U55C platform/xpfm payloads or when board validation is blocked on a missing platform package.
 - Load `references/hls-tutorial-derived-templates.md` before changing family-to-template mapping policy, 2D block-transform skeletons, or report-driven optimization cues distilled from the curated reference corpus.
 - Use `assets/examples/` for minimal HLS memory, burst, stencil, reduction, tiled-GEMM, lane-packed, task-graph, stream-of-blocks, free-running, fence-ordering, stream, partition, dataflow, multi-`m_axi`, and numeric-strategy specs.
@@ -106,11 +115,11 @@ deleted after a successful run.
 - HLS-generated RTL/Verilog interface, export, cosim, and debug issues are in scope when they trace back to Vitis HLS code, pragmas, configuration, or reports.
 - Pure handwritten Verilog/SystemVerilog debug is not led by this skill; use vivado-debug, vivado-sim, vivado-analysis, or RTL-focused skills for those tasks.
 - Do not use local non-HLS hardware tools as validation substitutes.
-- Do not modify files outside this repository, except for the governed source-repository validation directories `smoke/`, `tests/`, and `reports/`.
+- Do not modify files outside this repository, except for the governed source-repository validation directories `tests/` (including `tests/smoke/`) and `reports/`.
 - Keep path and Vitis-tool policy in `runtime/hls_generator/runtime_config.json`; update `references/configuration.md` when the policy changes.
-- Keep skill dependencies in `runtime/hls_generator/runtime_config.json`; missing required or recommended dependencies are blocking. Install only after the user confirms, then restart Codex so new skill metadata is loaded.
+- Keep skill dependencies in `runtime/hls_generator/runtime_config.json`; missing required dependencies block only their matching capability path, while missing recommended dependencies remain warnings. Install only after the user confirms, then restart Codex so new skill metadata is loaded.
 - If `vitis-developer` is installed, dependency installation must not install `vitis-hls-synthesis` from FPGA-Agent-Skills; the remaining Vivado skills are still required.
 - Use `erie-remote-ssh` for remote SSH checks; do not copy server-list details into this skill.
 - If local Vitis tools are unavailable, prefer requesting a remote erie server over weakening validation or substituting non-HLS tools. Discover and present erie server choices before connecting.
-- When comment language is `auto`, use the user's `~/.hls-generator/config.json`; if it has no saved language, ask the user to choose English (`en`) or Chinese (`zh`) before generation.
+- When comment language is `auto`, use Chinese (`zh`) by default. Do not block generation on a language-choice prompt; this project requires Chinese comments.
 - Do not claim Vitis validation passed unless `vitis-run` or `vitis_hls` actually ran.

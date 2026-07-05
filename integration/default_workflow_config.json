@@ -2,7 +2,7 @@
   "target": "hls",
   "readiness": "execute",
   "max_attempts": 3,
-  "comment_language": "auto",
+  "comment_language": "zh",
   "model_provider": "command",
   "stop_on_human": true,
   "run_external": true,
