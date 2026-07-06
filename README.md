@@ -119,6 +119,12 @@ That command rebuilds `dist/erie-hls-generator-v0.2.6/` and `dist/erie-hls-gener
 - Keeps HLS-generated RTL debug in scope only when issues trace back to HLS code, pragmas, configuration, or reports.
 - Uses remote acceptance helpers when local Vitis tooling is unavailable instead of weakening validation claims.
 
+## Authors And Affiliation
+
+HLS Generator is maintained by Jiyuan Liu and He Li.
+
+The authors are with the School of Electronic Science and Engineering, Southeast University, and are affiliated with the Heterogeneous Intelligence and Quantum Computing Laboratory (HIQC).
+
 ## Contact
 
 For questions, collaboration, or academic use, contact: [erie@seu.edu.cn](mailto:erie@seu.edu.cn).

@@ -119,6 +119,12 @@ python .\scripts\python\release\prepare_release.py --version 0.2.6
 - HLS 生成 RTL 的调试仅在问题能回溯到 HLS 代码、pragma、配置或报告时属于本 Skill 范围。
 - 当本地缺少 Vitis 工具时，优先走远程验收辅助，而不是降低验证口径。
 
+## 作者与机构
+
+HLS Generator 由 Jiyuan Liu 和 He Li 维护。
+
+两位作者隶属于东南大学电子科学与工程学院，并与东南大学异构智能与量子计算实验室（HIQC）相关。
+
 ## 联系方式
 
 问题、合作或学术使用，请联系：[erie@seu.edu.cn](mailto:erie@seu.edu.cn)。
