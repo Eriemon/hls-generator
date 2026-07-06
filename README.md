@@ -24,48 +24,15 @@
 
 HLS Generator is a public skill repository for HLS task routing, prompt scaffolding, artifact validation, readability governance, and remote acceptance support around AMD/Xilinx Vitis HLS work.
 
-## What Changed From v0.2.3 To v0.2.6
+## What It Is For
 
-- The public entry moved from the old `runtime.*` layer to `python -m scripts.python.cli.hls_generator ...`.
-- The repository layout now follows the zip payload structure: Python implementation is split by function under `scripts/python/*`, with dedicated `cli`, `config`, `generation`, `hls_quality_gate`, `integration`, `remote`, `task_dispatcher`, `validation`, and `workflow` domains.
-- The old public compatibility layer is gone from the repository and release package. `runtime/`, `integration/`, `pyproject.toml`, and `VERSION` are no longer published as the public interface.
-- Version truth is now unified in `scripts/python/config/version.py`; the README, rebuilt release zip, git tag, and GitHub release all track `0.2.6` / `v0.2.6`.
-- Release assets are rebuilt from the updated repository by `scripts/python/release/prepare_release.py` instead of trusting a prepacked upstream archive.
-- Public-boundary rules remain strict: `<REDACTED_LOCAL_PATH>` stays redacted, and local-only validation data such as `.settings/`, `*.local.json`, `*.remote.json`, `reports/`, `tests/`, `smoke*`, caches, and private server fingerprints stay out of both the repository and the release zip.
+Use this repository when an agent needs help with:
 
-## Skill Architecture
-
-<p align="center">
-  <img src="docs/assets/architecture.svg" alt="HLS Generator skill architecture" width="100%">
-</p>
-
-## Workflow
-
-<p align="center">
-  <img src="docs/assets/workflow.svg" alt="HLS Generator workflow" width="100%">
-</p>
-
-## Repository Map
-
-| Path | Purpose |
-| --- | --- |
-| `SKILL.md` | Agent-facing routing, workflow, constraints, and reference-loading rules. |
-| `agents/openai.yaml` | Skill metadata for host UIs. |
-| `assets/examples/` | Reusable structured HLS specs and minimal examples. |
-| `assets/templates/` | Reusable HLS JSON template families. |
-| `assets/validation-board/` | Board-side payload helpers used by remote validation flows. |
-| `references/` | On-demand policy, workflow, optimization, configuration, and remote-validation guidance. |
-| `scripts/python/cli/` | Public CLI entry implementation. |
-| `scripts/python/config/` | Runtime configuration, dependency manifests, and version truth. |
-| `scripts/python/generation/` | Prompt, scaffold, and artifact generation helpers. |
-| `scripts/python/hls_quality_gate/` | HLS readability and semantic gate logic. |
-| `scripts/python/integration/` | Stable local facade used by other tools and scripts. |
-| `scripts/python/quality_gate/` | Public Python-quality gate wrappers. |
-| `scripts/python/release/` | Release rebuild and packaging helpers. |
-| `scripts/python/remote/` | Remote Vitis and board-acceptance helpers. |
-| `scripts/python/task_dispatcher/` | Request classification and workflow entry wrappers. |
-| `scripts/python/validation/` | Local confidence, artifact, and readiness validation helpers. |
-| `scripts/python/workflow/` | Staged HLS workflow orchestration. |
+- Vitis HLS C/C++ kernels, headers, and testbenches.
+- AXI memory, AXI4-Stream, native scalar, and custom interface contracts.
+- `PIPELINE`, `DATAFLOW`, `ARRAY_PARTITION`, `STREAM`, and related pragma decisions.
+- HLS configuration, Tcl rendering, report collection, and toolchain readiness checks.
+- Debugging HLS-generated RTL issues that trace back to HLS code, pragmas, configuration, or reports.
 
 ## Install
 
@@ -94,17 +61,47 @@ python -m scripts.python.cli.hls_generator validate --target hls --spec .\out\hl
 python -m scripts.python.cli.hls_generator readability-gate --target hls --path .\out\hls\generated --profile kernel --style current-project --json
 ```
 
-The old public entrypoints are retired. Do not rely on `python -m runtime.hls_generator`, `hls-gen`, or `pip install` metadata from older releases as the public integration contract for `v0.2.6`.
+If you are doing comment-only HLS rewrites, keep a baseline tree and pass `--baseline-path` to validation and readability checks so token and AST equivalence are verified before accepting the rewrite.
 
-## Release Rebuild
+## Repository Map
 
-Rebuild the public release asset from the updated repository:
+| Path | Purpose |
+| --- | --- |
+| `SKILL.md` | Agent-facing routing, workflow, constraints, and reference-loading rules. |
+| `agents/openai.yaml` | Skill metadata for host UIs. |
+| `assets/examples/` | Reusable structured HLS specs and minimal examples. |
+| `assets/templates/` | Reusable HLS JSON template families. |
+| `assets/validation-board/` | Board-side payload helpers used by remote validation flows. |
+| `references/` | On-demand policy, workflow, optimization, configuration, and remote-validation guidance. |
+| `scripts/python/cli/` | Public CLI entry implementation. |
+| `scripts/python/config/` | Runtime configuration, dependency manifests, and version truth. |
+| `scripts/python/generation/` | Prompt, scaffold, and artifact generation helpers. |
+| `scripts/python/hls_quality_gate/` | HLS readability and semantic gate logic. |
+| `scripts/python/integration/` | Stable local facade used by other tools and scripts. |
+| `scripts/python/quality_gate/` | Public Python-quality gate wrappers. |
+| `scripts/python/release/` | Release rebuild and packaging helpers. |
+| `scripts/python/remote/` | Remote Vitis and board-acceptance helpers. |
+| `scripts/python/task_dispatcher/` | Request classification and workflow entry wrappers. |
+| `scripts/python/validation/` | Local confidence, artifact, and readiness validation helpers. |
+| `scripts/python/workflow/` | Staged HLS workflow orchestration. |
 
-```powershell
-python .\scripts\python\release\prepare_release.py --version 0.2.6
-```
+## v0.2.6 Notes
 
-That command rebuilds `dist/erie-hls-generator-v0.2.6/` and `dist/erie-hls-generator-v0.2.6.zip`. The rebuilt asset is the release truth for `v0.2.6`.
+- The public entry is now `python -m scripts.python.cli.hls_generator ...`.
+- The old public compatibility layer is no longer published: `runtime/`, the old top-level `integration/`, `pyproject.toml`, and `VERSION` were removed from the public repository interface.
+- Version truth is unified in `scripts/python/config/version.py`.
+
+## Skill Architecture
+
+<p align="center">
+  <img src="docs/assets/architecture.svg" alt="HLS Generator skill architecture" width="100%">
+</p>
+
+## Workflow
+
+<p align="center">
+  <img src="docs/assets/workflow.svg" alt="HLS Generator workflow" width="100%">
+</p>
 
 ## Public Repository Boundary
 
@@ -128,6 +125,23 @@ The authors are with the School of Electronic Science and Engineering, Southeast
 ## Contact
 
 For questions, collaboration, or academic use, contact: [erie@seu.edu.cn](mailto:erie@seu.edu.cn).
+
+## Citation
+
+If this skill helps your research, teaching, or engineering workflow, please cite it:
+
+```bibtex
+@software{liu_2026_hls_generator,
+  author       = {Jiyuan Liu and He Li},
+  title        = {{HLS Generator}: An Agent Skill for Vitis HLS Workflows},
+  year         = {2026},
+  version      = {0.2.6},
+  date         = {2026-07-06},
+  url          = {https://github.com/Eriemon/hls-generator},
+  license      = {Apache-2.0},
+  note         = {Agent skill package for structured AMD/Xilinx Vitis HLS workflows}
+}
+```
 
 ## License
 

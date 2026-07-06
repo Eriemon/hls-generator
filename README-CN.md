@@ -24,26 +24,44 @@
 
 HLS Generator 是一个公开 Skill 仓库，面向 HLS 任务分流、prompt scaffold、产物校验、可读性治理，以及围绕 AMD/Xilinx Vitis HLS 的远程验收辅助。
 
-## 从 v0.2.3 到 v0.2.6 更新了什么
+## 适用场景
 
-- 公开入口从旧的 `runtime.*` 层迁移到 `python -m scripts.python.cli.hls_generator ...`。
-- 仓库结构改为严格跟随新版载荷：Python 实现按功能拆分到 `scripts/python/*`，分别承载 `cli`、`config`、`generation`、`hls_quality_gate`、`integration`、`remote`、`task_dispatcher`、`validation`、`workflow` 等域。
-- 旧公开兼容层已经从仓库和 release 包中下线。`runtime/`、`integration/`、`pyproject.toml`、`VERSION` 不再作为对外公开接口发布。
-- 版本真值统一收口到 `scripts/python/config/version.py`；README、重建后的 release zip、git tag 和 GitHub release 全部对齐到 `0.2.6` / `v0.2.6`。
-- 发布资产改为由更新后的仓库通过 `scripts/python/release/prepare_release.py` 重新构建，而不是直接信任上游现成压缩包。
-- 公开边界继续严格执行：`<REDACTED_LOCAL_PATH>` 保持脱敏占位；`.settings/`、`*.local.json`、`*.remote.json`、`reports/`、`tests/`、`smoke*`、缓存以及私有 server 指纹不会进入公开仓库和 release zip。
+当 Agent 需要处理下面这些事情时，可以使用这个仓库：
 
-## Skill 架构
+- Vitis HLS C/C++ kernel、头文件和 testbench。
+- AXI memory、AXI4-Stream、native scalar 和自定义接口契约。
+- `PIPELINE`、`DATAFLOW`、`ARRAY_PARTITION`、`STREAM` 等 pragma 决策。
+- HLS 配置、Tcl 渲染、报告收集和工具链就绪检查。
+- 能回溯到 HLS 代码、pragma、配置或报告的 HLS 生成 RTL 问题。
 
-<p align="center">
-  <img src="docs/assets/architecture-cn.svg" alt="HLS Generator Skill 架构" width="100%">
-</p>
+## 安装
 
-## 工作流
+直接告诉你的 AI 助手安装 [https://github.com/Eriemon/hls-generator](https://github.com/Eriemon/hls-generator)
 
-<p align="center">
-  <img src="docs/assets/workflow-cn.svg" alt="HLS Generator 工作流" width="100%">
-</p>
+手动准备方式：
+
+```powershell
+git clone https://github.com/Eriemon/hls-generator.git
+cd .\hls-generator
+```
+
+如果要作为 Codex skill 使用，把仓库放入宿主 skill 搜索路径后重启宿主。
+
+## 快速开始
+
+从仓库根目录使用公开 CLI 入口：
+
+```powershell
+python -m scripts.python.cli.hls_generator --version
+python -m scripts.python.cli.hls_generator config --path
+python -m scripts.python.cli.hls_generator deps check --json
+python -m scripts.python.cli.hls_generator scaffold --target hls --name vector_scale --out .\out\hls\spec.json
+python -m scripts.python.cli.hls_generator prompt --target hls --spec .\out\hls\spec.json --out .\out\hls\prompt.md --confirm-requirements --confirmation-notes "user-confirmed HLS contract"
+python -m scripts.python.cli.hls_generator validate --target hls --spec .\out\hls\spec.json --path .\out\hls\generated --readiness static --no-external
+python -m scripts.python.cli.hls_generator readability-gate --target hls --path .\out\hls\generated --profile kernel --style current-project --json
+```
+
+如果只是做注释改写，请保留 baseline 目录，并在校验和可读性检查中传入 `--baseline-path`，先完成 token 和 AST 等价验证，再接受改写结果。
 
 ## 仓库结构
 
@@ -67,44 +85,23 @@ HLS Generator 是一个公开 Skill 仓库，面向 HLS 任务分流、prompt sc
 | `scripts/python/validation/` | 本地 confidence、产物与 readiness 校验辅助。 |
 | `scripts/python/workflow/` | 分阶段 HLS 工作流编排。 |
 
-## 安装
+## v0.2.6 说明
 
-直接告诉你的 AI 助手安装 [https://github.com/Eriemon/hls-generator](https://github.com/Eriemon/hls-generator)
+- 当前公开入口是 `python -m scripts.python.cli.hls_generator ...`。
+- 旧公开兼容层已经下线：`runtime/`、旧顶层 `integration/`、`pyproject.toml` 和 `VERSION` 不再属于公开仓库接口。
+- 版本真值统一收口到 `scripts/python/config/version.py`。
 
-手动准备方式：
+## Skill 架构
 
-```powershell
-git clone https://github.com/Eriemon/hls-generator.git
-cd .\hls-generator
-```
+<p align="center">
+  <img src="docs/assets/architecture-cn.svg" alt="HLS Generator Skill 架构" width="100%">
+</p>
 
-如果要作为 Codex skill 使用，把仓库放入宿主 skill 搜索路径后重启宿主。
+## 工作流
 
-## 快速开始
-
-从仓库根目录使用新的公开 CLI 入口：
-
-```powershell
-python -m scripts.python.cli.hls_generator --version
-python -m scripts.python.cli.hls_generator config --path
-python -m scripts.python.cli.hls_generator deps check --json
-python -m scripts.python.cli.hls_generator scaffold --target hls --name vector_scale --out .\out\hls\spec.json
-python -m scripts.python.cli.hls_generator prompt --target hls --spec .\out\hls\spec.json --out .\out\hls\prompt.md --confirm-requirements --confirmation-notes "user-confirmed HLS contract"
-python -m scripts.python.cli.hls_generator validate --target hls --spec .\out\hls\spec.json --path .\out\hls\generated --readiness static --no-external
-python -m scripts.python.cli.hls_generator readability-gate --target hls --path .\out\hls\generated --profile kernel --style current-project --json
-```
-
-旧公开入口已经下线，不要再把 `python -m runtime.hls_generator`、`hls-gen` 或旧版 `pip install` 元数据当作 `v0.2.6` 的公开集成契约。
-
-## Release 重建
-
-从更新后的仓库重建公开发布资产：
-
-```powershell
-python .\scripts\python\release\prepare_release.py --version 0.2.6
-```
-
-这条命令会重建 `dist/erie-hls-generator-v0.2.6/` 与 `dist/erie-hls-generator-v0.2.6.zip`。这份重建产物才是 `v0.2.6` 的发布真值。
+<p align="center">
+  <img src="docs/assets/workflow-cn.svg" alt="HLS Generator 工作流" width="100%">
+</p>
 
 ## 公开仓库边界
 
@@ -128,6 +125,23 @@ HLS Generator 由 Jiyuan Liu 和 He Li 维护。
 ## 联系方式
 
 问题、合作或学术使用，请联系：[erie@seu.edu.cn](mailto:erie@seu.edu.cn)。
+
+## 引用
+
+如果这个 skill 对你的研究、教学或工程流程有帮助，请引用：
+
+```bibtex
+@software{liu_2026_hls_generator,
+  author       = {Jiyuan Liu and He Li},
+  title        = {{HLS Generator}: An Agent Skill for Vitis HLS Workflows},
+  year         = {2026},
+  version      = {0.2.6},
+  date         = {2026-07-06},
+  url          = {https://github.com/Eriemon/hls-generator},
+  license      = {Apache-2.0},
+  note         = {Agent skill package for structured AMD/Xilinx Vitis HLS workflows}
+}
+```
 
 ## 许可证
 
