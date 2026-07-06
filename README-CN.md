@@ -103,12 +103,6 @@ python -m scripts.python.cli.hls_generator readability-gate --target hls --path 
   <img src="docs/assets/workflow-cn.svg" alt="HLS Generator 工作流" width="100%">
 </p>
 
-## 使用注意事项
-
-- `references/remote-board-platform-upload.md` 里的示例使用 `<REDACTED_LOCAL_PATH>`，不会放入真实本地路径。
-- `.settings/`、`*.local.json`、`*.remote.json`、reports、tests、smoke 输出和缓存这类本地专用文件不属于公开仓库载荷，也不会放进 release zip。
-- 只有实际运行 `vitis-run` 或 `vitis_hls` 后，才应该声称完成了 Vitis 执行验证。
-
 ## 范围
 
 - 负责生成和验证面向 Vitis HLS 的产物，不负责手写 RTL。

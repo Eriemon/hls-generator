@@ -103,12 +103,6 @@ If you are doing comment-only HLS rewrites, keep a baseline tree and pass `--bas
   <img src="docs/assets/workflow.svg" alt="HLS Generator workflow" width="100%">
 </p>
 
-## Notes
-
-- `references/remote-board-platform-upload.md` uses `<REDACTED_LOCAL_PATH>` in examples instead of real local filesystem paths.
-- Local-only files such as `.settings/`, `*.local.json`, `*.remote.json`, reports, tests, smoke outputs, and caches are not part of the published repository payload or release zip.
-- Vitis execution should only be claimed when `vitis-run` or `vitis_hls` actually ran.
-
 ## Scope
 
 - Generates and validates Vitis HLS-oriented artifacts, not handwritten RTL.
