@@ -5,61 +5,29 @@
 from __future__ import annotations
 
 # 标准库导入覆盖 JSON、进程、路径和归档扫描。
-import argparse
 import json
 import os
 import re
 import shutil
 import subprocess
-import sys
 import zipfile
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 # 记录本地 confidence 默认围绕的技能根目录。
 SKILL_ROOT = Path(__file__).resolve().parents[3]  # 技能根目录路径
 
-# confidence helper 目录供本地包装 CLI 委托到 confidence_loop 时复用。
-MODULE_DIR = Path(__file__).resolve().parent  # validation helper 模块目录
-
-# 脚本按文件路径直接执行时，需要先暴露技能根和当前 helper 目录。
-def _configure_import_path() -> None:
-    """把技能根目录和 validation helper 目录加入模块搜索路径。
-
-    参数:
-        无。
-
-    返回:
-        无；函数只在必要时更新 ``sys.path``。
-    """
-
-    # 按优先级依次注入 helper 目录和技能根目录，兼容脚本直跑入口。
-    for path_entry in (MODULE_DIR, SKILL_ROOT):
-
-        # sys.path 使用字符串路径，因此先统一规整成文本。
-        str_path_entry = str(path_entry)  # 待注入的模块搜索路径文本
-
-        # 仅在缺失时前插，避免重复污染导入顺序。
-        if str_path_entry not in sys.path:
-
-            # 把当前仓库里的 helper/runtime 放到最前面，避免误用其他安装副本。
-            sys.path.insert(0, str_path_entry)
-
-# runtime 与 integration 导入前必须先完成脚本直跑所需的路径自举。
-_configure_import_path()
-
 # runtime 与 integration 模块由调用入口提前配置导入路径。
-from runtime.hls_generator import __version__
+from scripts.python.config.version import __version__
 
 # HLS 适配层提供 mock 工作流和生成产物校验入口。
-from integration.hls_adapter import (
+from scripts.python.integration.hls_adapter import (
     run_hls_workflow,
     validate_hls_artifacts,
 )
 
 # runtime 配置入口负责解析技能内固定目录。
-from runtime.hls_generator.config import (
+from scripts.python.config.hls_config import (
     generated_roots,
     repo_root as configured_repo_root,
     skill_config_path,
@@ -67,10 +35,7 @@ from runtime.hls_generator.config import (
 )
 
 # 依赖检查器复用 runtime 的技能依赖配置。
-from runtime.hls_generator.skill_dependencies import check_skill_dependencies
-
-# workspace helper 负责本地 confidence 输出 JSON 的生成目录边界校验。
-from runtime.hls_generator.workspace import require_configured_output_path
+from scripts.python.config.skill_dependencies import check_skill_dependencies
 
 # 记录禁止出现在 release 文本扫描中的引用词。
 FORBIDDEN_REFERENCE_TERMS = ("vitis-hls-introductory-examples",)  # 禁用引用扫描配置
@@ -1537,260 +1502,6 @@ def _resolve_json_output(path_text: str) -> Path:
 
     # 返回相对于仓库根归一化后的绝对输出路径。
     return (repo_root() / path_output_path).resolve()
-
-# confidence_local 只覆盖公开仓库里可直接验证的本地 gate，因此单独维护轻量 CLI。
-def _build_argument_parser() -> argparse.ArgumentParser:
-    """构造公开仓库本地 confidence gate 的命令行参数解析器。
-
-    参数:
-        无。
-
-    返回:
-        已注册本地 gate 相关 CLI 参数的解析器。
-    """
-
-    # parser 负责声明公开仓库本地 confidence 的稳定 CLI 协议。
-    parser = argparse.ArgumentParser(description="Run Erie HLS Generator public-repo local confidence gates.")  # 本地 confidence CLI 解析器
-
-    # gate subprocess 超时用于 quick_validate 包装命令。
-    parser.add_argument(
-        "--gate-timeout-s",
-        type=int,
-        default=900,
-        help="Timeout for the quick_validate command gate.",
-    )
-
-    # JSON 输出文件路径用于落盘本地 confidence 摘要。
-    parser.add_argument("--json-out", help="Optional JSON output path inside the skill workspace.")
-
-    # 调试时允许跳过 quick_validate，避免入口修复阶段递归阻断。
-    parser.add_argument("--skip-quick-validate", action="store_true")
-
-    # 返回完成参数注册的解析器。
-    return parser
-
-# 默认 run_root 固定落在技能仓库的 reports/confidence-local 下，保持生成物边界清晰。
-def _create_run_root() -> Path:
-    """创建本轮本地 confidence 使用的报告目录。
-
-    参数:
-        无。
-
-    返回:
-        当前运行专属的 reports/confidence-local 子目录。
-    """
-
-    # 使用 UTC 时间戳和 pid 生成稳定且不冲突的报告目录名。
-    str_run_id = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')}-pid{os.getpid()}"  # 本轮本地 confidence 运行标识
-
-    # 公开仓库的本地 confidence 产物统一落在技能仓库内的 reports/confidence-local 下。
-    path_run_root = SKILL_ROOT / "reports" / "confidence-local" / str_run_id  # 本轮本地 confidence 报告目录
-
-    # 先创建目录，供样例 gate 和 forward test 后续写入。
-    path_run_root.mkdir(parents=True, exist_ok=True)
-
-    # 返回本轮报告目录路径。
-    return path_run_root
-
-# 轻量命令 gate 统一通过这里执行，保持返回结构与其他 gate 一致。
-def _record_command_gate(
-    dict_gates: dict[str, dict[str, Any]],
-    gate_name: str,
-    command: list[str],
-    *,
-    cwd: Path,
-    timeout_s: int,
-) -> None:
-    """执行单个本地命令 gate 并写入 gate 汇总字典。
-
-    参数:
-        dict_gates: 本轮 gate 聚合字典。
-        gate_name: 当前 gate 在结果中的键名。
-        command: 需要执行的命令参数列表。
-        cwd: 命令执行目录。
-        timeout_s: 命令超时秒数。
-
-    返回:
-        无；结果会直接写入 ``dict_gates``。
-    """
-
-    # 调用统一命令执行包装并把结果挂到聚合字典。
-    dict_gates[gate_name] = _run_command(command, cwd=cwd, timeout_s=timeout_s)
-
-# 本地 confidence 只保留公开仓库可直接验证的 gate 集合。
-def _run_local_gates(namespace_args: argparse.Namespace, path_run_root: Path) -> tuple[dict[str, dict[str, Any]], list[str]]:
-    """执行公开仓库本地 confidence 需要的全部 gate。
-
-    参数:
-        namespace_args: 已解析的 CLI 参数。
-        path_run_root: 本轮本地 confidence 的报告目录。
-
-    返回:
-        gate 结果字典，以及样例 gate 实际覆盖到的 spec 列表。
-    """
-
-    # dict_gates 汇总所有本地 confidence 子 gate 的结构化结果。
-    dict_gates: dict[str, dict[str, Any]] = {}  # 本地 confidence gate 聚合结果
-
-    # quick_validate 仍负责技能结构和关键入口的快速自检。
-    if not namespace_args.skip_quick_validate:
-
-        # 按当前公开仓库技能根路径调用 quick_validate。
-        _record_command_gate(
-            dict_gates,
-            "quick_validate",
-            [sys.executable, "scripts/python/validation/quick_validate.py", str(SKILL_ROOT)],
-            cwd=SKILL_ROOT,
-            timeout_s=namespace_args.gate_timeout_s,
-        )
-
-    # 技能依赖一致性 gate 检查 runtime_config 和当前安装态是否漂移。
-    dict_gates["skill_dependencies"] = _skill_dependency_gate()
-
-    # 版权术语扫描只覆盖当前技能根目录，不扩展到工作区外部。
-    dict_gates["copyright_term_scan"] = _copyright_term_scan(root=SKILL_ROOT)
-
-    # 发布敏感扫描先只检查技能源码根；release zip 会在正式重建后单独复验。
-    dict_gates["release_sensitivity_scan"] = _release_sensitivity_scan(root=SKILL_ROOT)
-
-    # 禁用引用名称扫描覆盖技能根文本内容。
-    dict_gates["forbidden_reference_names"] = _forbidden_reference_name_scan()
-
-    # 样例 mock validation 负责验证随包 example spec 的本地生成链路。
-    tuple_example_validation = _validate_examples(path_run_root)  # 样例 gate 返回的结果与 spec 覆盖列表
-
-    # 保存样例 gate 的结构化结果。
-    dict_gates["example_mock_validation"] = tuple_example_validation[0]
-
-    # list_example_specs 记录本轮样例 gate 实际覆盖到的 spec 名称。
-    list_example_specs = tuple_example_validation[1]  # 样例 mock validation 覆盖的 spec 列表
-
-    # 注释策略 gate 覆盖 comment-only 相关的正负样例门禁。
-    dict_gates["comment_policy"] = _comment_policy_gate(path_run_root)
-
-    # forward test 覆盖一组更接近真实交付的代表性 HLS 规格。
-    dict_gates["forward_test"] = _forward_test_gate(path_run_root)
-
-    # 返回所有 gate 结果和样例覆盖列表。
-    return dict_gates, list_example_specs
-
-# gate 汇总器把结构化结果折叠成本地 confidence 最终 payload。
-def _build_payload(
-    dict_gates: dict[str, dict[str, Any]],
-    list_example_specs: list[str],
-    path_run_root: Path,
-) -> tuple[dict[str, Any], int]:
-    """根据本地 gate 结果生成最终 JSON payload 和退出码。
-
-    参数:
-        dict_gates: 本轮本地 confidence 的全部 gate 结果。
-        list_example_specs: 样例 gate 实际覆盖到的 spec 列表。
-        path_run_root: 本轮本地 confidence 报告目录。
-
-    返回:
-        最终 JSON payload，以及应返回给 shell 的退出码。
-    """
-
-    # 汇总所有非 passed gate 名称，供最终状态和残余风险同时复用。
-    list_failed_gate_names = [
-        str_gate_name
-        for str_gate_name, dict_gate in dict_gates.items()
-        if str(dict_gate.get("status") or "") != PASS_STATUS
-    ]  # 未通过 gate 名称列表
-
-    # 只有全部 gate 通过时，才给出本地高信心状态。
-    str_confidence_status = "local_high_confidence" if not list_failed_gate_names else "needs_attention"  # 本地 confidence 总状态
-
-    # 未通过 gate 会逐项展开为残余风险说明。
-    list_residual_risks = [
-        f"Local confidence gate did not pass: {str_gate_name}."
-        for str_gate_name in list_failed_gate_names
-    ]  # 本地 confidence 残余风险列表
-
-    # 组装对 CLI 和 JSON 落盘都稳定的最终 payload。
-    dict_payload = {
-        "version": 1,
-        "confidence_status": str_confidence_status,
-        "confidence_scope": "local",
-        "run_root": str(path_run_root),
-        "gates": dict_gates,
-        "example_specs": list_example_specs,
-        "residual_risks": list_residual_risks,
-    }  # 本地 confidence 最终 JSON 载荷
-
-    # 返回 payload 和对应退出码。
-    return dict_payload, 0 if not list_failed_gate_names else 1
-
-# JSON 输出路径需要保持在技能工作区的生成目录边界内。
-def _write_payload_outputs(dict_payload: dict[str, Any], json_out: str | None) -> None:
-    """输出本地 confidence payload，并按需写入 JSON 文件。
-
-    参数:
-        dict_payload: 最终本地 confidence JSON 载荷。
-        json_out: 可选 JSON 输出路径。
-
-    返回:
-        无。
-    """
-
-    # 调用方显式要求写盘时，先解析并创建目标路径。
-    if json_out:
-
-        # workspace 输出路径只允许落在当前技能仓库允许的生成目录里。
-        path_output = require_configured_output_path(Path(json_out), purpose="local confidence json output")  # 本地 confidence JSON 输出路径
-
-        # 先创建父目录，保证后续 JSON 写入成功。
-        path_output.parent.mkdir(parents=True, exist_ok=True)
-
-        # 把结构化 payload 以稳定格式写入文件。
-        path_output.write_text(
-            json.dumps(dict_payload, indent=2, ensure_ascii=False) + "\n",
-            encoding="utf-8",
-        )
-
-    # stdout 保持单个 JSON 文档协议，便于后续自动化消费。
-    sys.stdout.write(json.dumps(dict_payload, indent=2, ensure_ascii=False) + "\n")
-
-# main 执行公开仓库本地 confidence 的全部可用 gate，并输出 JSON 结果。
-def main(argv: list[str] | None = None) -> int:
-    """执行公开仓库本地 confidence gate。
-
-    参数:
-        argv: 可选 CLI 参数列表；为空时使用当前进程参数。
-
-    返回:
-        本地 confidence 的进程退出码。
-    """
-
-    # 先解析 CLI 参数，冻结本轮 gate 的执行配置。
-    namespace_args = _build_argument_parser().parse_args(argv)  # 当前本地 confidence CLI 参数
-
-    # 为本轮 gate 创建独立报告目录，避免多次运行互相覆盖。
-    path_run_root = _create_run_root()  # 当前本地 confidence 报告目录
-
-    # 执行全部公开仓库可用的本地 gate。
-    tuple_gate_result = _run_local_gates(namespace_args, path_run_root)  # gate 结果与样例覆盖列表
-
-    # 拆出 gate 聚合结果，供 payload 汇总复用。
-    dict_gates = tuple_gate_result[0]  # 本地 confidence gate 聚合结果
-
-    # 拆出样例覆盖列表，写入最终 payload。
-    list_example_specs = tuple_gate_result[1]  # 样例 gate 实际覆盖到的 spec 列表
-
-    # 组装最终 payload 和退出码。
-    tuple_payload_result = _build_payload(dict_gates, list_example_specs, path_run_root)  # 最终 payload 与退出码
-
-    # 提取最终 JSON 载荷，供 stdout 和可选文件写入。
-    dict_payload = tuple_payload_result[0]  # 本地 confidence 最终 JSON 载荷
-
-    # 提取最终 CLI 退出码。
-    int_returncode = tuple_payload_result[1]  # 本地 confidence 最终退出码
-
-    # 输出最终 payload，并按需落盘 JSON 文件。
-    _write_payload_outputs(dict_payload, namespace_args.json_out)
-
-    # 返回给 shell 的最终退出码。
-    return int_returncode
 
 # 脚本入口把 main 返回值转换成进程退出码，供 CLI 和自动化直接消费。
 if __name__ == "__main__":

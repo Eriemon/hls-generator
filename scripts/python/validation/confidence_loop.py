@@ -21,7 +21,7 @@ from typing import Any, Callable
 # 记录当前脚本所在目录，供 helper 模块导入路径注入复用。
 MODULE_DIR = Path(__file__).resolve().parent  # 当前脚本模块目录
 
-# 记录当前技能根目录，供 runtime 和 validation 模块导入复用。
+# 记录当前技能根目录，供 scripts.python 和 validation 模块导入复用。
 SKILL_ROOT = Path(__file__).resolve().parents[3]  # 当前技能根目录路径
 
 # 把给定目录提前放进 sys.path，确保按文件执行时也能解析同仓库模块。
@@ -44,10 +44,24 @@ def _prepend_import_path(path_entry: Path) -> None:
         # 该调用推进当前 confidence gate 的副作用步骤。
         sys.path.insert(0, str_path_entry)
 
+# _path_arg 保持命令里的 repo 相对路径使用稳定的正斜杠文本。
+def _path_arg(path_entry: Path) -> str:
+    """把 Path 转成命令参数里稳定的 POSIX 斜杠文本。
+
+    参数:
+        path_entry: 要写入命令参数的路径对象。
+
+    返回:
+        适合 subprocess argv 的正斜杠路径文本。
+    """
+
+    # as_posix 保持跨平台命令契约稳定，避免 Windows 反斜杠扰动测试与报告。
+    return path_entry.as_posix()
+
 # 本脚本以文件路径方式运行时，需要先暴露同目录 helper 模块。
 _prepend_import_path(MODULE_DIR)
 
-# runtime 包位于技能根目录，confidence_local 导入前必须可见。
+# scripts.python 包位于技能根目录，confidence_local 导入前必须可见。
 _prepend_import_path(SKILL_ROOT)
 
 # 本地 confidence 模块提供可 monkeypatch 的门禁包装函数。
@@ -60,13 +74,28 @@ import confidence_remote as _cr
 import confidence_report as _cp
 
 # runtime 版本号用于定位 dist 发布产物和报告版本上下文。
-from runtime.hls_generator import __version__
+from scripts.python.config.version import __version__
 
 # PASS_STATUS 统一表示 confidence 子门禁通过状态。
 PASS_STATUS = "passed"  # 质量门通过状态文本
 
 # 所有远端验收都复用同一个 skill 内脚本入口。
-REMOTE_VITIS_ACCEPTANCE_SCRIPT = "scripts/python/remote/remote_vitis_acceptance.py"  # 远端验收脚本路径
+REMOTE_VITIS_ACCEPTANCE_SCRIPT = Path("scripts") / "python" / "remote" / "remote_vitis_acceptance.py"  # 远端验收脚本路径
+
+# smoke gate 固定走技能测试目录下的 smoke 入口。
+SMOKE_GATE_SCRIPT = Path("tests") / "smoke" / "run_smoke.py"  # 本地 smoke 脚本路径
+
+# quick_validate 负责技能目录结构和关键资源快速自检。
+QUICK_VALIDATE_SCRIPT = Path("scripts") / "python" / "validation" / "quick_validate.py"  # quick_validate 脚本路径
+
+# verify_agents 负责 AGENTS 指令治理验证。
+VERIFY_AGENTS_SCRIPT = Path("scripts") / "python" / "governance" / "verify_agents.py"  # AGENTS 治理脚本路径
+
+# manage_docs verify 负责 handoff、memory 和文档治理验证。
+MANAGE_DOCS_SCRIPT = Path("scripts") / "python" / "governance" / "manage_docs.py"  # 文档治理脚本路径
+
+# manage_dirs verify 负责目录契约治理验证。
+MANAGE_DIRS_SCRIPT = Path("scripts") / "python" / "governance" / "manage_dirs.py"  # 目录治理脚本路径
 
 # 这些错误片段表示 SSH 或远端命令出现了可重试的瞬时失败。
 TRANSIENT_REMOTE_FAILURE_MARKERS = (  # 瞬时远端失败关键字
@@ -648,7 +677,7 @@ def _run_remote(server: str, readiness: str, spec_name: str, *, vitis_version: s
     """
 
     # 远端 Vitis 命令先固定解释器与脚本入口，再补齐服务器、深度和样例参数。
-    list_command = [sys.executable, REMOTE_VITIS_ACCEPTANCE_SCRIPT]  # Vitis 远端脚本入口
+    list_command = [sys.executable, _path_arg(REMOTE_VITIS_ACCEPTANCE_SCRIPT)]  # Vitis 远端脚本入口
 
     # 单机模式需要显式声明 Vitis 执行模式和目标服务器。
     list_command.extend(["--mode", "vitis", "--server", server])  # 单机服务器与 Vitis 执行模式
@@ -686,7 +715,7 @@ def _run_remote_pytest(server: str) -> dict[str, Any]:
     """
 
     # 先建立远端验收脚本的基础 argv，后面只追加 pytest 路由参数。
-    list_command = [sys.executable, REMOTE_VITIS_ACCEPTANCE_SCRIPT]  # 远端验收脚本基础 argv
+    list_command = [sys.executable, _path_arg(REMOTE_VITIS_ACCEPTANCE_SCRIPT)]  # 远端验收脚本基础 argv
 
     # 单机模式固定把 pytest 路由到声明的目标服务器。
     list_command.extend(["--mode", "pytest", "--server", server, "--json"])  # 单机 pytest 路由参数
@@ -706,7 +735,7 @@ def _run_remote_smoke(server: str) -> dict[str, Any]:
     """
 
     # smoke gate 需要同 pytest 一样绑定当前源码快照。
-    list_command = [sys.executable, REMOTE_VITIS_ACCEPTANCE_SCRIPT]  # 远端 smoke 脚本基础 argv
+    list_command = [sys.executable, _path_arg(REMOTE_VITIS_ACCEPTANCE_SCRIPT)]  # 远端 smoke 脚本基础 argv
 
     # 单机 smoke 必须落在 AGENTS 路由解析出的服务器上。
     list_command.extend(["--mode", "smoke", "--server", server, "--json"])  # 单机 smoke argv 路由片段
@@ -735,7 +764,7 @@ def _run_remote_board(
     """
 
     # board 命令除了样例与服务器信息，还要显式传入上板专用超时。
-    list_command = [sys.executable, REMOTE_VITIS_ACCEPTANCE_SCRIPT]  # 真实上板命令入口
+    list_command = [sys.executable, _path_arg(REMOTE_VITIS_ACCEPTANCE_SCRIPT)]  # 真实上板命令入口
 
     # 单机 board 验收必须固定为真实上板模式并绑定目标服务器。
     list_command.extend(["--mode", "board", "--server", server])  # 单机服务器与真实上板模式
@@ -784,7 +813,7 @@ def _run_split_remote(
     """
 
     # split 命令先固定解释器与脚本入口，再写入双机拓扑参数。
-    list_command = [sys.executable, REMOTE_VITIS_ACCEPTANCE_SCRIPT]  # 双机拓扑命令入口
+    list_command = [sys.executable, _path_arg(REMOTE_VITIS_ACCEPTANCE_SCRIPT)]  # 双机拓扑命令入口
 
     # split 拓扑需要同时声明 Vitis 模式、构建服务器和验证服务器。
     list_command.extend(["--mode", "vitis", "--build-server", build_server, "--validate-server", validate_server])  # 双机拓扑路由参数
@@ -823,7 +852,7 @@ def _run_split_remote_pytest(build_server: str, validate_server: str) -> dict[st
     """
 
     # split pytest 继续复用同一脚本入口，但执行目标固定在 validate 服务器。
-    list_command = [sys.executable, REMOTE_VITIS_ACCEPTANCE_SCRIPT]  # split pytest 命令入口
+    list_command = [sys.executable, _path_arg(REMOTE_VITIS_ACCEPTANCE_SCRIPT)]  # split pytest 命令入口
 
     # 同时保留 split 双机路由事实，并让远端脚本在 validate 服务器执行 pytest。
     list_command.extend(  # split pytest 路由参数
@@ -854,7 +883,7 @@ def _run_split_remote_smoke(build_server: str, validate_server: str) -> dict[str
     """
 
     # split smoke 借 validate 节点提供和 pytest 相同的执行侧证据。
-    list_command = [sys.executable, REMOTE_VITIS_ACCEPTANCE_SCRIPT]  # split smoke 远端脚本入口命令
+    list_command = [sys.executable, _path_arg(REMOTE_VITIS_ACCEPTANCE_SCRIPT)]  # split smoke 远端脚本入口命令
 
     # build 节点只作为拓扑事实保留，实际 smoke 命令由 validate 节点承接。
     list_command.extend(  # split smoke build/validate 路由片段
@@ -948,7 +977,7 @@ def _run_remote_acceptance(
     # link 预检命令只验证 SSH、工作区和远端脚本入口，不进入样例执行阶段。
     list_link_command = [  # link 预检命令
         sys.executable,  # 调用当前 Python 解释器执行远端包装脚本
-        REMOTE_VITIS_ACCEPTANCE_SCRIPT,  # 远端 Vitis 验收包装脚本路径
+        _path_arg(REMOTE_VITIS_ACCEPTANCE_SCRIPT),  # 远端 Vitis 验收包装脚本路径
         "--mode",  # 指定远端脚本执行模式的参数名
         "link",  # 只做连通性和入口检查，不跑样例
         "--server",  # 指定目标服务器的参数名
@@ -1785,7 +1814,7 @@ def _create_run_root() -> Path:
     """
 
     # str_run_id 使用 UTC 时间戳和 pid 避免并发运行互相覆盖。
-    str_run_id = f"{dt.datetime.utcnow().strftime('%Y%m%dT%H%M%S%fZ')}-pid{os.getpid()}"  # 运行标识
+    str_run_id = f"{dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')}-pid{os.getpid()}"  # 运行标识
 
     # reports/confidence-loop/<run-id> 是本轮治理产物的唯一落点。
     path_run_root = repo_root() / "reports" / "confidence-loop" / str_run_id  # 本轮报告目录
@@ -1821,6 +1850,65 @@ def _record_command_gate(
     # dict_gates[gate_name] 保存当前命令 gate 的结构化执行结果。
     dict_gates[gate_name] = _run_command(list_command, cwd=cwd, timeout_s=timeout_s)  # 质量门输出载荷
 
+# _record_remote_smoke_and_pytest_gates 负责登记远端 smoke 与 remote_pytest。
+def _record_remote_smoke_and_pytest_gates(
+    dict_gates: dict[str, dict[str, Any]],
+    namespace_args: argparse.Namespace,
+    *,
+    split_requested: bool,
+    remote_requested: bool,
+) -> None:
+    """在路由契约通过后登记远端 smoke 与 remote_pytest gate。
+
+    参数:
+        dict_gates: confidence loop 的 gate 聚合字典。
+        namespace_args: 已解析的 CLI 参数。
+        split_requested: 是否请求 build/validate 分离拓扑。
+        remote_requested: 是否请求任何真实远端验收。
+
+    返回:
+        无。
+    """
+
+    # 路由契约未通过或本轮未请求真实远端时，不登记任何远端 Python gate。
+    if dict_gates["route_contract"]["status"] != PASS_STATUS or not remote_requested:
+
+        # 此分支明确表示本轮没有进入远端 Python gate 执行阶段。
+        return
+
+    # skip_smoke 用于把必需 smoke gate 改由远端执行，以遵守“pytest 只在远端跑”的约束。
+    if namespace_args.skip_smoke:
+
+        # split 拓扑下的 smoke 固定跑在 validate 服务器。
+        if split_requested:
+
+            # split 拓扑会把 smoke 日志固定沉淀到最终验收服务器。
+            dict_gates["smoke"] = _run_split_remote_smoke(  # split smoke gate 直接记录验收端证据
+                namespace_args.build_server,  # build 端仅用于补齐 split 路由拓扑
+                namespace_args.validate_server,  # validate 端实际承载 smoke 执行与日志
+            )
+
+        # 单机拓扑时，直接在命中的 route_contract server 跑远端 smoke。
+        else:
+
+            # 单机模式把 smoke 直接落在 route_contract 命中的同一台服务器。
+            dict_gates["smoke"] = _run_remote_smoke(namespace_args.server)  # 单机 smoke gate 直接复用命中的远端服务器
+
+    # remote_pytest 是最终信心里的完整远端 Python 回归证据。
+    if split_requested:
+
+        # split 模式的远端 pytest 需要同时覆盖 build 和 validate 两台机器的最新树。
+        dict_gates["remote_pytest"] = _run_split_remote_pytest(  # split remote_pytest gate 汇总双机 Python 回归
+            namespace_args.build_server,  # build 端校验构建机上的最新树与脚本入口
+            namespace_args.validate_server,  # validate 端补齐验收机上的最新树回归证据
+        )
+
+    # 单机拓扑直接在命中的 route_contract server 执行完整远端 pytest。
+    else:
+
+        # 单机模式只需在 route_contract 选中的服务器上完成整套远端 Python 回归。
+        dict_gates["remote_pytest"] = _run_remote_pytest(namespace_args.server)  # 单机 remote_pytest gate 复用同一台远端服务器
+
 # _run_local_command_gates 执行可跳过的本地基础 gate。
 def _run_local_command_gates(dict_gates: dict[str, dict[str, Any]], namespace_args: argparse.Namespace) -> None:
     """执行 smoke、compileall 和 quick_validate 三个本地 gate。
@@ -1840,19 +1928,19 @@ def _run_local_command_gates(dict_gates: dict[str, dict[str, Any]], namespace_ar
         _record_command_gate(
             dict_gates,
             "smoke",
-            [sys.executable, "tests/smoke/run_smoke.py"],
+            [sys.executable, _path_arg(SMOKE_GATE_SCRIPT)],
             cwd=repo_root(),
             timeout_s=namespace_args.gate_timeout_s,
         )
 
-    # compileall 只验证 runtime 包能否完成导入编译。
+    # compileall 只验证迁移后的 Python 功能域能否完成语法编译。
     if not namespace_args.skip_compileall:
 
-        # 运行 runtime compileall，确保技能核心包可导入编译。
+        # 运行 scripts/python compileall，确保技能核心功能域可语法编译。
         _record_command_gate(
             dict_gates,
             "compileall",
-            [sys.executable, "-m", "compileall", "runtime/hls_generator"],
+            [sys.executable, "-m", "compileall", "scripts/python"],
             cwd=SKILL_ROOT,
             timeout_s=namespace_args.gate_timeout_s,
         )
@@ -1864,7 +1952,7 @@ def _run_local_command_gates(dict_gates: dict[str, dict[str, Any]], namespace_ar
         _record_command_gate(
             dict_gates,
             "quick_validate",
-            [sys.executable, "scripts/python/validation/quick_validate.py", str(SKILL_ROOT)],
+            [sys.executable, _path_arg(QUICK_VALIDATE_SCRIPT), str(SKILL_ROOT)],
             cwd=SKILL_ROOT,
             timeout_s=namespace_args.gate_timeout_s,
         )
@@ -1890,7 +1978,7 @@ def _run_governance_gates(dict_gates: dict[str, dict[str, Any]], timeout_s: int)
     _record_command_gate(
         dict_gates,
         "verify_agents",
-        [sys.executable, "scripts/python/governance/verify_agents.py", str(repo_root())],
+        [sys.executable, _path_arg(VERIFY_AGENTS_SCRIPT), str(repo_root())],
         cwd=SKILL_ROOT,
         timeout_s=timeout_s,
     )
@@ -1899,7 +1987,7 @@ def _run_governance_gates(dict_gates: dict[str, dict[str, Any]], timeout_s: int)
     _record_command_gate(
         dict_gates,
         "manage_docs_verify",
-        [sys.executable, "scripts/python/governance/manage_docs.py", "verify", str(repo_root())],
+        [sys.executable, _path_arg(MANAGE_DOCS_SCRIPT), "verify", str(repo_root())],
         cwd=SKILL_ROOT,
         timeout_s=timeout_s,
     )
@@ -1908,7 +1996,7 @@ def _run_governance_gates(dict_gates: dict[str, dict[str, Any]], timeout_s: int)
     _record_command_gate(
         dict_gates,
         "manage_dirs_verify",
-        [sys.executable, "scripts/python/governance/manage_dirs.py", "verify", str(repo_root())],
+        [sys.executable, _path_arg(MANAGE_DIRS_SCRIPT), "verify", str(repo_root())],
         cwd=SKILL_ROOT,
         timeout_s=timeout_s,
     )
@@ -2113,41 +2201,13 @@ def _run_remote_gates(
     # 把声明分区结果写入 gate 聚合器，供最终报告和 board gate 继续消费。
     dict_gates["board_acceptance_declarations"] = dict_board_partition  # board_acceptance 声明结果
 
-    # 路由契约通过且确实请求远端时，先记录远端 pytest gate。
-    if dict_route_contract_gate["status"] == PASS_STATUS and bool_remote_requested:
-
-        # 当调用方为遵守远端 pytest 约束跳过本地 smoke 时，用远端 smoke 补齐必需 gate。
-        if namespace_args.skip_smoke:
-
-            # split 拓扑下 smoke 固定在 validate 服务器执行，并保留 build/validate 事实。
-            if bool_split_remote_requested:
-
-                # 远端 smoke 结果直接填入必需的 smoke gate。
-                dict_gates["smoke"] = _run_split_remote_smoke(  # split 拓扑下的远端 smoke 结果
-                    namespace_args.build_server,  # 仅用于保留 split 拓扑事实的 build 服务器
-                    namespace_args.validate_server,  # smoke 实际执行所在的 validate 服务器
-                )
-
-            # 无 split 拓扑时，route_contract 的单机 server 就是 smoke 执行点。
-            else:
-
-                # smoke gate 使用远端结果补齐，不再依赖本地 pytest。
-                dict_gates["smoke"] = _run_remote_smoke(namespace_args.server)  # 单机远端 smoke 结果
-
-        # remote_pytest 是最终信心里的完整远端 Python 回归证据。
-        if bool_split_remote_requested:
-
-            # split pytest 仍需记录 build 节点，便于报告解释拓扑来源。
-            dict_gates["remote_pytest"] = _run_split_remote_pytest(  # split 拓扑下的 remote_pytest gate 结果
-                namespace_args.build_server,  # pytest 报告中的 split 构建侧身份
-                namespace_args.validate_server,  # pytest 真正执行的验证侧服务器
-            )
-
-        # 单机 pytest 没有 build/validate 拆分，直接使用 route_contract server。
-        else:
-
-            # 完整 tests 目录回归结果写入 remote_pytest gate。
-            dict_gates["remote_pytest"] = _run_remote_pytest(namespace_args.server)  # 单机完整远端 pytest 结果
+    # 路由契约通过后，根据拓扑登记远端 smoke 与 remote_pytest。
+    _record_remote_smoke_and_pytest_gates(
+        dict_gates,
+        namespace_args,
+        split_requested=bool_split_remote_requested,
+        remote_requested=bool_remote_requested,
+    )
 
     # 路由契约通过后才允许真正触发远端 Vitis 阶段。
     if dict_route_contract_gate["status"] == PASS_STATUS:

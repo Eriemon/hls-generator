@@ -80,7 +80,7 @@ def main(argv: list[str] | None = None) -> int:
     _configure_import_path()
 
     # 运行期导入避免路径修正之前解析项目包
-    from runtime.hls_generator.task_dispatcher import HlsDispatchDecision, classify_hls_task
+    from scripts.python.task_dispatcher.hls_task_classifier import HlsDispatchDecision, classify_hls_task
 
     # 解析 CLI 参数，得到请求文本和可选路径边界
     args = build_parser().parse_args(argv)  # 命令行参数对象

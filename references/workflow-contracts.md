@@ -112,7 +112,7 @@ and `acceptance_required=true`. A report may only set `vitis_executed=true`
 after the runtime has actually launched the selected AMD-Xilinx tool command.
 
 External validation uses AMD-Xilinx tooling only. Tool order and command
-templates come from `runtime/hls_generator/runtime_config.json`; the default
+templates come from `scripts/python/config/runtime_config.json`; the default
 policy prefers `vitis-run` and falls back to `vitis_hls`. The runtime creates a
 temporary run-local Tcl script, executes `csim`, `csynth`, and `cosim` as the
 requested readiness level requires, and removes the temporary files after

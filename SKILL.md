@@ -5,11 +5,11 @@ description: Use when working on HLS development, HLS design, HLS modification, 
 
 # Erie HLS Generator
 
-Use this skill for local AMD-Xilinx/Vitis HLS C/C++ kernel generation. The bundled runtime lives in `runtime/hls_generator`, and the stable local facade is `integration/hls_adapter.py`.
+Use this skill for local AMD-Xilinx/Vitis HLS C/C++ kernel generation. Python implementation is split by function under `scripts/python/cli`, `scripts/python/config`, `scripts/python/generation`, `scripts/python/hls_quality_gate`, `scripts/python/remote`, `scripts/python/task_dispatcher`, `scripts/python/validation`, and `scripts/python/workflow`; the stable local facade is `scripts/python/integration/hls_adapter.py`.
 
 ## Workflow
 
-1. On first trigger in a Codex session, run `python -m runtime.hls_generator deps check --json` from this skill directory. If it reports `blocked_dependency`, ask the user whether to install the listed required dependencies before continuing. Recommended dependencies warn only; do not treat them as blockers outside the capability path that explicitly requires them.
+1. On first trigger in a Codex session, run `python -m scripts.python.cli.hls_generator deps check --json` from this skill directory. If it reports `blocked_dependency`, ask the user whether to install the listed required dependencies before continuing. Recommended dependencies warn only; do not treat them as blockers outside the capability path that explicitly requires them.
 2. Start from a confirmed HLS JSON spec or create one with the scaffold command.
 3. Use the facade for local integrations:
    - `run_hls_workflow(...)` for full staged execution or resume.
@@ -31,19 +31,19 @@ For source-repository validation only, run the bundled smoke validator from the 
 python .\tests\smoke\run_smoke.py
 ```
 
-Use the runtime CLI from the skill directory or another workspace. Pick an explicit writable output directory when you need generated specs, prompts, or validation JSON:
+Use the functional CLI from the skill directory or another workspace. Pick an explicit writable output directory when you need generated specs, prompts, or validation JSON:
 
 ```powershell
-python -m runtime.hls_generator config --path
-python -m runtime.hls_generator selfcheck --json
-python -m runtime.hls_generator deps check --json
-python -m runtime.hls_generator deps request --out <output-dir>\skill_dependency_request.json
-python -m runtime.hls_generator scaffold --target hls --name vector_scale --out <output-dir>\hls\spec.json
-python -m runtime.hls_generator prompt --target hls --spec <output-dir>\hls\spec.json --out <output-dir>\hls\prompt.md --confirm-requirements --confirmation-notes "<user-confirmed HLS contract>"
-python -m runtime.hls_generator validate --target hls --spec <output-dir>\hls\spec.json --path <output-dir>\hls\generated --readiness static --no-external
-python -m runtime.hls_generator validate --target hls --spec <output-dir>\hls\spec.json --path <output-dir>\hls\commented --baseline-path <output-dir>\hls\baseline --readiness static --no-external
-python -m runtime.hls_generator readability-gate --target hls --path <output-dir>\hls\generated --profile kernel --style current-project --json
-python -m runtime.hls_generator comment-plan --target hls --path <output-dir>\hls\commented --baseline-path <output-dir>\hls\baseline --out <output-dir>\hls\reports\hls_comment_rewrite_plan.json
+python -m scripts.python.cli.hls_generator config --path
+python -m scripts.python.cli.hls_generator selfcheck --json
+python -m scripts.python.cli.hls_generator deps check --json
+python -m scripts.python.cli.hls_generator deps request --out <output-dir>\skill_dependency_request.json
+python -m scripts.python.cli.hls_generator scaffold --target hls --name vector_scale --out <output-dir>\hls\spec.json
+python -m scripts.python.cli.hls_generator prompt --target hls --spec <output-dir>\hls\spec.json --out <output-dir>\hls\prompt.md --confirm-requirements --confirmation-notes "<user-confirmed HLS contract>"
+python -m scripts.python.cli.hls_generator validate --target hls --spec <output-dir>\hls\spec.json --path <output-dir>\hls\generated --readiness static --no-external
+python -m scripts.python.cli.hls_generator validate --target hls --spec <output-dir>\hls\spec.json --path <output-dir>\hls\commented --baseline-path <output-dir>\hls\baseline --readiness static --no-external
+python -m scripts.python.cli.hls_generator readability-gate --target hls --path <output-dir>\hls\generated --profile kernel --style current-project --json
+python -m scripts.python.cli.hls_generator comment-plan --target hls --path <output-dir>\hls\commented --baseline-path <output-dir>\hls\baseline --out <output-dir>\hls\reports\hls_comment_rewrite_plan.json
 ```
 
 When local `vitis-run`/`vitis_hls` is missing, inspect the workflow's `remote_toolchain_request.json`, ask the user to choose a configured `erie-remote-ssh` build server and, when needed, a separate validation server, then use the remote acceptance helper:
@@ -116,8 +116,8 @@ deleted after a successful run.
 - Pure handwritten Verilog/SystemVerilog debug is not led by this skill; use vivado-debug, vivado-sim, vivado-analysis, or RTL-focused skills for those tasks.
 - Do not use local non-HLS hardware tools as validation substitutes.
 - Do not modify files outside this repository, except for the governed source-repository validation directories `tests/` (including `tests/smoke/`) and `reports/`.
-- Keep path and Vitis-tool policy in `runtime/hls_generator/runtime_config.json`; update `references/configuration.md` when the policy changes.
-- Keep skill dependencies in `runtime/hls_generator/runtime_config.json`; missing required dependencies block only their matching capability path, while missing recommended dependencies remain warnings. Install only after the user confirms, then restart Codex so new skill metadata is loaded.
+- Keep path and Vitis-tool policy in `scripts/python/config/runtime_config.json`; update `references/configuration.md` when the policy changes.
+- Keep skill dependencies in `scripts/python/config/runtime_config.json`; missing required dependencies block only their matching capability path, while missing recommended dependencies remain warnings. Install only after the user confirms, then restart Codex so new skill metadata is loaded.
 - If `vitis-developer` is installed, dependency installation must not install `vitis-hls-synthesis` from FPGA-Agent-Skills; the remaining Vivado skills are still required.
 - Use `erie-remote-ssh` for remote SSH checks; do not copy server-list details into this skill.
 - If local Vitis tools are unavailable, prefer requesting a remote erie server over weakening validation or substituting non-HLS tools. Discover and present erie server choices before connecting.

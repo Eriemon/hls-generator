@@ -20,7 +20,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 # workspace root 上下文用于复用 HLS workflow 生成本地验收资产。
-from runtime.hls_generator.workspace import use_workspace_root
+from scripts.python.config.workspace import use_workspace_root
 
 # 远端验收状态常量统一来自 common 模块。
 from remote_acceptance_common import (
@@ -89,17 +89,26 @@ PATH_VITIS_HLS_EXECUTABLE = PurePosixPath("bin") / "vitis_hls"  # profile.expect
 # 远端补 source Vitis_HLS 环境时使用 setupEnv.sh。
 PATH_VITIS_HLS_ENV_SCRIPT = PurePosixPath("bin") / "setupEnv.sh"  # 远端补 source Vitis_HLS 环境时使用的脚本路径
 
+# 远端 XRT 与 Xilinx 工具都从统一的绝对根目录常量逐段拼接。
+PATH_POSIX_ROOT = PurePosixPath("/")  # 远端绝对路径拼接时统一复用的 Posix 根目录
+
+# /opt/xilinx/xrt 承载 XRT 二进制和环境脚本。
+PATH_XRT_ROOT = PATH_POSIX_ROOT / "opt" / "xilinx" / "xrt"  # 远端 XRT 安装根目录
+
+# XRT 可执行文件统一从 bin 目录派生。
+PATH_XRT_BIN_DIR = PATH_XRT_ROOT / "bin"  # 远端 XRT 可执行文件所在目录
+
 # 远端 XRT 工具路径来自项目已知安装位置。
-PATH_XRT_SMI = PurePosixPath("/opt/xilinx/xrt/bin/xrt-smi")  # 远端 xrt-smi 绝对路径
+PATH_XRT_SMI = PATH_XRT_BIN_DIR / "xrt-smi"  # 远端 xrt-smi 绝对路径
 
 # 远端 XRT 环境脚本来自项目已知安装位置。
-PATH_XRT_SETUP = PurePosixPath("/opt/xilinx/xrt/setup.sh")  # 远端 XRT 环境脚本绝对路径
+PATH_XRT_SETUP = PATH_XRT_ROOT / "setup.sh"  # 远端 XRT 环境脚本绝对路径
 
 # 板卡管理信息采集统一走远端 xbmgmt。
-PATH_XBMGMT = PurePosixPath("/opt/xilinx/xrt/bin/xbmgmt")  # 远端采集板卡管理信息时调用的绝对路径
+PATH_XBMGMT = PATH_XRT_BIN_DIR / "xbmgmt"  # 远端采集板卡管理信息时调用的绝对路径
 
 # 默认 Xilinx 工具根目录用于构造 fallback 的 Vitis_HLS 路径。
-PATH_XILINX_TOOLS_ROOT = PurePosixPath("/tools/Xilinx")  # 默认 Xilinx 工具安装根目录
+PATH_XILINX_TOOLS_ROOT = PATH_POSIX_ROOT / "tools" / "Xilinx"  # 默认 Xilinx 工具安装根目录
 
 # 安装根目录中的 Vitis 产品目录名用于路径替换。
 STR_VITIS_PRODUCT_DIR = "Vitis"  # 安装路径中的 Vitis 产品段
@@ -532,41 +541,22 @@ def _prepare_split_vitis_context(
     # validate_server 负责硬件存在性和第二阶段验收。
     str_validate_server = str(topology["validate_server"])  # Vitis 验收服务器
 
-    # 两端都必须通过基础预检。
-    helper.preflight(str_build_server, settings=path_settings)
-
-    # validate 端预检确认硬件验收目标可访问。
-    helper.preflight(str_validate_server, settings=path_settings)
-
-    # build 端软件扫描提供 Vitis 候选版本。
-    helper.scan_software(str_build_server, settings=path_settings)
-
-    # validate 端软件扫描用于共享版本求交。
-    helper.scan_software(str_validate_server, settings=path_settings)
-
-    # 两端候选版本来自各自 server-list 软件扫描。
-    list_build_candidates = _vitis_version_candidates(config, path_settings, str_build_server)  # build 端软件扫描得到的 Vitis 版本候选
-
-    # validate 端的候选列表决定硬件验收机能否和 build 机锁定到同一 Vitis 版本。
-    list_validate_candidates = _vitis_version_candidates(config, path_settings, str_validate_server)  # 验收机扫描得到的可用版本列表
-
-    # split mode 要求两端使用同一个 Vitis 版本。
-    str_shared_version = _select_shared_vitis_version(args, list_build_candidates, list_validate_candidates)  # 两端可同时加载的 Vitis 版本号
-
-    # build 端 profile 来自候选、缓存或配置 fallback。
-    dict_build_profile = _resolve_profile_for_version(  # build 阶段用于 settings/tool/part 的 profile 字段集合
-        str_build_server,  # build 端先按共享版本反查本机可用的 profile 字段
-        list_build_candidates,  # build 端扫描结果决定可回填的版本与安装路径
-        dict_profiles,  # validate 端按共享版本补字段时引用的 profile 表
-        str_shared_version,  # 两端已经协商完成的共享 Vitis 版本
+    # 先完成两端预检与软件扫描，再进入共享版本协商。
+    _prepare_split_server_inventory(  # split 两端预检和软件扫描的统一入口
+        helper,  # 仍由同一个 ErieHelper 负责对两台机器执行预检与扫描
+        path_settings,  # 两台机器共用同一份 overlay，确保扫描口径一致
+        str_build_server,  # build 端需要先通过预检并产出软件候选
+        str_validate_server,  # validate 端也必须通过预检并产出软件候选
     )
 
-    # validate 端要独立解析同版本 profile，确认硬件验收阶段也能加载相同工具链。
-    dict_validate_profile = _resolve_profile_for_version(  # validation 阶段额外核对本机 settings 与 tool 字段
-        str_validate_server,  # validate 端独立解析共享版本对应的 profile 字段
-        list_validate_candidates,  # validate 端扫描结果决定验收机能否加载同版本工具链
-        dict_profiles,  # 本地配置文件里声明的 profile 表
-        str_shared_version,  # split 流程要求两端一致的 Vitis 版本
+    # 两端候选版本、共享版本和 profile 解析打包成单个上下文，避免主流程函数继续增长。
+    dict_split_profile_context = _resolve_split_profile_context(  # split 模式共用的版本协商和 profile 解析结果
+        args,  # 共享版本选择仍然遵循当前 CLI 指定的 version/allow-fallback 语义
+        config,  # 候选版本和 profile fallback 仍从当前远端验收配置读取
+        path_settings,  # 两端共享同一份 overlay，保证版本候选来自同一视图
+        str_build_server,  # build 端需要独立反查共享版本对应的 profile
+        str_validate_server,  # validate 端也必须确认同版本工具链真实存在
+        dict_profiles,  # 本地配置文件里的 profile 表仍作为 fallback 输入
     )
 
     # target_part 优先来自 CLI，其次来自 validate/build profile 或远端硬件记录。
@@ -574,51 +564,258 @@ def _prepare_split_vitis_context(
         args,  # CLI 可能显式覆盖 split 流程最终使用的 FPGA part
         path_settings,  # 远端 target part hint 解析仍依赖同一份 settings overlay
         str_validate_server,  # 最终硬件验收服务器也用于 target_part 推断
-        dict_validate_profile,  # validate 端 profile 提供优先级更高的硬件事实
-        dict_build_profile,  # build 端 profile 作为 validate 未声明时的回退来源
+        dict_split_profile_context["validate_profile"],  # validate 端 profile 提供优先级更高的硬件事实
+        dict_split_profile_context["build_profile"],  # build 端 profile 作为 validate 未声明时的回退来源
     )
 
-    # 缺 target_part 时生成治理阻断请求。
-    if not str_target_part:
+    # target_part 缺失时立即返回阻断结果，避免后续 profile/workdir 逻辑继续展开。
+    dict_missing_target_part_result = _maybe_build_missing_split_target_part_result(  # target_part 缺失时的 early_result 包装
+        args,  # 复用当前 CLI 参数生成缺字段阻断报告
+        path_run_dir,  # 当前 split run 目录仍是阻断报告的落盘位置
+        dict_profiles,  # profile 表仍用于提示需要补齐的配置字段
+        topology,  # split 拓扑字段仍要带回报告
+        dict_split_profile_context["shared_version"],  # 报告中保留已经协商完成的共享 Vitis 版本
+        str_target_part,  # 只有为空时才返回 early_result
+    )
 
-        # 阻断结果仍包含 split topology 和共享版本字段。
-        dict_blocked = _missing_split_target_part_result(  # 提示用户补齐 FPGA part 的 profile 阻断报告
-            args,  # 复用 CLI 字段生成用户可操作的 target_part 缺失请求
-            path_run_dir,  # 缺字段请求直接落盘到当前 split run 目录
+    # 命中 target_part 缺失时直接返回，避免后续继续探测 workdir。
+    if dict_missing_target_part_result is not None:
 
-            # profile 表用于生成配置缺失请求。
-            dict_profiles,  # 当前配置文件里的 profile 定义集合
-            topology,  # split 拓扑和 build/validate 服务器布局
+        # 命中缺失 target_part 的早停场景后，直接把 early_result 交回入口。
+        return dict_missing_target_part_result
 
-            # build/validate 服务器字段写入 split 阻断报告。
-            str_build_server,  # 需要修正 profile 的构建服务器
-            str_validate_server,  # 需要核对板卡目标的验收服务器
-            str_shared_version,  # 两端已经选定的共享 Vitis 版本
-        )
+    # build/validate 两端 workdir 用统一 helper 探测，避免主流程继续拉长。
+    dict_split_workdirs = _resolve_split_workdirs(  # split 两端远端 workspace 根目录探测结果
+        helper,  # 仍通过同一个 ErieHelper 查询两台服务器的 workspace
+        path_settings,  # 两台服务器读取同一份 overlay，避免 workspace 视图不一致
+        str_build_server,  # build 端 workdir 承载构建阶段远端目录布局
+        str_validate_server,  # validate 端 workdir 承载硬件验收与归档目录布局
+    )
 
-        # 返回 early_result 交给入口统一写报告。
-        return dict(
-            run_dir=path_run_dir,
-            early_result=dict_blocked,
-        )
+    # 把 split 最终上下文按证据目录、共享拓扑和双端 workdir 三组字段交给 helper 收口。
+    return _build_split_vitis_context_result(
+        dict_profiles=dict_profiles,  # 原样回写的 profile 定义快照
+        path_run_dir=path_run_dir,  # 当前 split 验收 run 目录
+        path_settings=path_settings,  # split 两端共享的 Erie overlay
 
-    # target_part 写入两端 profile，供 Tcl 生成和报告使用。
+        # 共享拓扑与版本协商结果决定后续两阶段使用哪套服务器与工具链。
+        topology=topology,  # build/validate 两台机器的角色映射
+        dict_split_profile_context=dict_split_profile_context,  # 共享版本与基础 profile 解析结果
+        str_target_part=str_target_part,  # 两端已经确认的统一 FPGA part
+
+        # 双端 workdir 会继续决定远端构建目录与验收归档目录布局。
+        dict_split_workdirs=dict_split_workdirs,  # build/validate 两端远端 workspace 根目录
+    )
+
+# split 两端的软件候选、共享版本和 profile 解析都聚合在这里，避免主流程函数过长。
+def _resolve_split_profile_context(
+    args: argparse.Namespace,
+    config: dict[str, Any],
+    path_settings: Path,
+    str_build_server: str,
+    str_validate_server: str,
+    dict_profiles: dict[str, Any],
+) -> dict[str, Any]:
+    """
+    解析 split Vitis mode 需要的候选版本与两端 profile。
+
+    :param args: CLI 参数。
+    :param config: 远端验收配置。
+    :param path_settings: split 两端共享的 Erie overlay。
+    :param str_build_server: 构建服务器名。
+    :param str_validate_server: 验收服务器名。
+    :param dict_profiles: 配置文件里的 profile 表。
+    :return: 包含候选版本、共享版本与两端 profile 的上下文字典。
+    """
+
+    # build 侧的版本候选用于决定哪些工具链版本值得参与共享版本求交。
+    list_build_candidates = _vitis_version_candidates(  # build 端软件扫描得到的 Vitis 版本候选
+        config,  # 候选版本仍从当前远端验收配置视图读取
+        path_settings,  # build 端扫描结果要从共享 overlay 对应的 server-list 中取值
+        str_build_server,  # build 端先生成自己的版本候选列表
+    )
+
+    # validate 侧单独保留一份候选，后面要确认硬件验收机能否加载同版本工具链。
+    list_validate_candidates = _vitis_version_candidates(  # 验收机扫描得到的可用版本列表
+        config,  # validate 端读取同一份配置视图，避免候选口径漂移
+        path_settings,  # validate 端同样从共享 overlay 的 server-list 解析候选
+        str_validate_server,  # validate 端独立生成自己的版本候选列表
+    )
+
+    # 共享版本是 split build/validate 两端都能真实加载的交集结果。
+    str_shared_version = _select_shared_vitis_version(  # 两端可同时加载的 Vitis 版本号
+        args,  # 共享版本选择仍遵循 CLI version/allow-fallback 语义
+        list_build_candidates,  # build 端候选决定共享版本上界
+        list_validate_candidates,  # validate 端候选决定共享版本是否可在验收机加载
+    )
+
+    # build profile 负责把共享版本落到具体 tool_path、settings 和 part 字段上。
+    dict_build_profile = _resolve_profile_for_version(  # build 阶段用于 settings/tool/part 的 profile 字段集合
+        str_build_server,  # build 端先按共享版本反查本机可用的 profile 字段
+        list_build_candidates,  # build 端扫描结果决定可回填的版本与安装路径
+        dict_profiles,  # build 端缺字段时仍从本地 profile 表回填
+        str_shared_version,  # 两端已经协商完成的共享 Vitis 版本
+    )
+
+    # validate profile 单独解析是为了证明第二阶段不会依赖 build 机的安装事实。
+    dict_validate_profile = _resolve_profile_for_version(  # validation 阶段额外核对本机 settings 与 tool 字段
+        str_validate_server,  # validate 端独立解析共享版本对应的 profile 字段
+        list_validate_candidates,  # validate 端扫描结果决定验收机能否加载同版本工具链
+        dict_profiles,  # 本地配置文件里声明的 profile 表
+        str_shared_version,  # split 流程要求两端一致的 Vitis 版本
+    )
+
+    # 返回主流程后续还会复用的协商结果。
+    return dict(
+        build_candidates=list_build_candidates,
+        validate_candidates=list_validate_candidates,
+        shared_version=str_shared_version,
+        build_profile=dict_build_profile,
+        validate_profile=dict_validate_profile,
+    )
+
+# split 模式要先把 build/validate 两端的预检与软件扫描都准备好，后面才能做版本求交。
+def _prepare_split_server_inventory(
+    helper: "ErieHelper",
+    path_settings: Path,
+    str_build_server: str,
+    str_validate_server: str,
+) -> None:
+    """
+    预检 split 模式使用的两台远端服务器，并刷新各自的软件扫描结果。
+
+    :param helper: 远端执行 helper。
+    :param path_settings: split 两端共享的 Erie overlay。
+    :param str_build_server: 构建服务器名。
+    :param str_validate_server: 验收服务器名。
+    :return: 无业务返回值；仅通过 helper 刷新两台服务器的预检与软件扫描状态。
+    """
+
+    # build 端必须先通过基础预检，否则后续软件扫描和构建阶段都没有意义。
+    helper.preflight(str_build_server, settings=path_settings)
+
+    # validate 端的预检单独执行，用于确认硬件验收目标在开始前就可访问。
+    helper.preflight(str_validate_server, settings=path_settings)
+
+    # build 端软件扫描为共享版本协商提供第一侧候选集合。
+    helper.scan_software(str_build_server, settings=path_settings)
+
+    # validate 端软件扫描补齐第二侧候选集合，确保共享版本来自真实交集。
+    helper.scan_software(str_validate_server, settings=path_settings)
+
+# split 模式的 build/validate 两端都要先探测远端 workspace 根目录，后面才能落远端构建与验收工件。
+def _resolve_split_workdirs(
+    helper: "ErieHelper",
+    path_settings: Path,
+    str_build_server: str,
+    str_validate_server: str,
+) -> dict[str, str]:
+    """
+    探测 split build/validate 两端的远端 workspace 根目录。
+
+    :param helper: 远端执行 helper。
+    :param path_settings: split 两端共享的 Erie overlay。
+    :param str_build_server: 构建服务器名。
+    :param str_validate_server: 验收服务器名。
+    :return: 包含 build_workdir 与 validate_workdir 的字典。
+    """
+
+    # build 端 workdir 决定构建阶段远端目录布局。
+    str_build_workdir = _probe_remote_workdir(str_build_server, path_settings, helper)  # build 端远端 workspace 根目录
+
+    # validate 端 workdir 决定验收阶段远端目录布局。
+    str_validate_workdir = _probe_remote_workdir(str_validate_server, path_settings, helper)  # validate 端用于硬件验收与归档的远端 workspace 根目录
+
+    # 返回主流程后续要直接写入报告与阶段上下文的两端 workspace。
+    return dict(
+        build_workdir=str_build_workdir,
+        validate_workdir=str_validate_workdir,
+    )
+
+# split target_part 缺失时要尽早返回带报告路径的 early_result，避免主流程函数继续拉长。
+def _maybe_build_missing_split_target_part_result(
+    args: argparse.Namespace,
+    path_run_dir: Path,
+    dict_profiles: dict[str, Any],
+    topology: dict[str, Any],
+    str_shared_version: str,
+    str_target_part: str,
+) -> dict[str, Any] | None:
+    """
+    在 split target_part 缺失时生成 early_result；若 target_part 已存在则返回 None。
+
+    :param args: CLI 参数。
+    :param path_run_dir: 当前 split run 目录。
+    :param dict_profiles: 配置文件里的 profile 表。
+    :param topology: split 拓扑字典。
+    :param str_shared_version: 两端已经协商完成的共享 Vitis 版本。
+    :param str_target_part: 当前 split 流程解析出的 target_part。
+    :return: target_part 缺失时返回带 run_dir/early_result 的字典，否则返回 None。
+    """
+
+    # target_part 已存在时无需生成阻断报告，主流程继续正常下探。
+    if str_target_part:
+
+        # target_part 已存在时显式返回 None，通知主流程继续正常下探。
+        return None
+
+    # 缺 target_part 时生成治理阻断请求，并保留 split 拓扑与共享版本字段。
+    dict_blocked = _missing_split_target_part_result(  # 提示用户补齐 FPGA part 的 profile 阻断报告
+        args,  # 复用 CLI 字段生成用户可操作的 target_part 缺失请求
+        path_run_dir,  # 缺字段请求直接落盘到当前 split run 目录
+
+        # profile 表用于生成配置缺失请求。
+        dict_profiles,  # 当前配置文件里的 profile 定义集合
+        topology,  # split 拓扑和 build/validate 服务器布局
+
+        # build/validate 服务器字段写入 split 阻断报告。
+        str(topology["build_server"]),  # 需要修正 profile 的构建服务器
+        str(topology["validate_server"]),  # 需要核对板卡目标的验收服务器
+        str_shared_version,  # 两端已经选定的共享 Vitis 版本
+    )
+
+    # 返回 early_result 交给入口统一写报告。
+    return dict(
+        run_dir=path_run_dir,
+        early_result=dict_blocked,
+    )
+
+# split 最终上下文字段在这里统一收口，避免主流程函数继续堆叠结果拼装细节。
+def _build_split_vitis_context_result(
+    dict_profiles: dict[str, Any], path_run_dir: Path, path_settings: Path,
+    topology: dict[str, Any], dict_split_profile_context: dict[str, Any],
+    str_target_part: str, dict_split_workdirs: dict[str, str],
+) -> dict[str, Any]:
+    """
+    组装 split Vitis mode 返回给主流程入口的最终上下文字典。
+
+    :param dict_profiles: split 两端共用的 profile 定义快照。
+    :param path_run_dir: 当前 split 验收 run 目录。
+    :param path_settings: split 两端共享的 Erie overlay。
+    :param topology: build/validate 两台服务器的角色映射。
+    :param dict_split_profile_context: 共享版本与双端 profile 解析结果。
+    :param str_target_part: 两端已经协商完成的统一 FPGA part。
+    :param dict_split_workdirs: build/validate 两端远端 workspace 根目录。
+    :return: 包含 split 执行后续阶段所需字段的上下文字典。
+    """
+
+    # target_part 要写回 build profile，保证 Tcl 生成与报告都引用同一 FPGA part。
     dict_build_profile = {  # build 阶段写入统一 FPGA part 的 profile 副本
-        **dict_build_profile,  # 继承 build 端已解析的 settings、tool 与 version 字段
+        **dict_split_profile_context["build_profile"],  # 继承 build 端已解析的 settings、tool 与 version 字段
         "target_part": str_target_part,  # build 端 Tcl 与报告统一使用协商后的 FPGA part
     }
 
-    # validate profile 必须使用同一 target_part，保证第二阶段 Tcl 与 build 阶段产物一致。
+    # validate profile 同样写回 target_part，保证第二阶段与 build 产物使用同一器件目标。
     dict_validate_profile = {  # validation 阶段沿用 build 端相同的 FPGA part 约束
-        **dict_validate_profile,  # 保留 validate 端本机探测出的 tool_path 与安装路径绑定信息
+        **dict_split_profile_context["validate_profile"],  # 保留 validate 端本机探测出的 tool_path 与安装路径绑定信息
         "target_part": str_target_part,  # 验收端强制复用 build 阶段确认过的 FPGA part
     }
 
-    # build 端 workdir 决定构建阶段远端目录。
-    str_build_workdir = _probe_remote_workdir(str_build_server, path_settings, helper)  # build 端远端 workspace 根目录
+    # 从拓扑里解出两端服务器名，后续结果结构继续沿用既有 build/validate 字段名。
+    str_build_server = str(topology["build_server"])  # split 结果结构里的构建服务器字段
 
-    # validate 端 workdir 决定验收阶段远端目录。
-    str_validate_workdir = _probe_remote_workdir(str_validate_server, path_settings, helper)  # validate 端用于硬件验收与归档的远端 workspace 根目录
+    # 验收服务器字段同样从拓扑里解出，保持最终结果结构与既有字段名兼容。
+    str_validate_server = str(topology["validate_server"])  # split 结果结构里的验收服务器字段
 
     # 返回 split mode 后续阶段所需上下文。
     return dict(
@@ -629,18 +826,18 @@ def _prepare_split_vitis_context(
         # split 拓扑中的服务器和候选版本。
         build_server=str_build_server,
         validate_server=str_validate_server,
-        build_candidates=list_build_candidates,
-        validate_candidates=list_validate_candidates,
+        build_candidates=dict_split_profile_context["build_candidates"],
+        validate_candidates=dict_split_profile_context["validate_candidates"],
 
         # 共享版本和 part 约束两端生成同一 HLS Tcl。
-        shared_version=str_shared_version,
+        shared_version=dict_split_profile_context["shared_version"],
         target_part=str_target_part,
         build_profile=dict_build_profile,
         validate_profile=dict_validate_profile,
 
         # 两端 workdir 用于生成各自远端目录布局。
-        build_workdir=str_build_workdir,
-        validate_workdir=str_validate_workdir,
+        build_workdir=dict_split_workdirs["build_workdir"],
+        validate_workdir=dict_split_workdirs["validate_workdir"],
     )
 
 # 构造 split mode 缺少 target_part 时的阻断报告。
@@ -2735,13 +2932,13 @@ def _start_remote_vitis_job(
         dict_phase_context["readiness"],  # runner 内部执行的 readiness 等级
     )  # 远端 Vitis 执行命令
 
-    # detached job 允许长时间 Vitis 执行不阻塞 SSH 会话。
+    # 长时间 Vitis 验收需要保留运行中的 job，避免被 sweep 当成可回收自动测试。
     return helper.exec_detached(
         dict_phase_context["server"],
         f"run Vitis HLS {dict_phase_context['phase_label']}",
         str_command,
         settings=dict_phase_context["settings"],
-        task_purpose="automated_test",
+        task_purpose="user_initiated",
     )
 
 # 等待远端 Vitis job，并在失败时汇总状态输出和 tail 日志。

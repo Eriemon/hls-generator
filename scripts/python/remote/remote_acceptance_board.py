@@ -716,13 +716,13 @@ def _prepare_board_job_execution(
         dict_local_package["board_metadata"],  # runner 需要的 top function 与 host 模板元数据
     )
 
-    # 通过 detached job 执行真实板级编译、链接和 host-run。
+    # 长时间板级验收需要保留运行中的 job，避免被 sweep 当成可回收自动测试。
     dict_detached = helper.exec_detached(  # 远端后台 job 描述
         dict_readiness["server"],  # 执行 board acceptance 的目标服务器
         "run board-level HLS acceptance",  # detached job 的用途标签
         str_command,  # 实际执行的远端命令
         settings=dict_readiness["settings"],  # detached job 使用的项目设置
-        task_purpose="automated_test",  # 自动化板级扫例必须声明可自动清理的 detached 用途
+        task_purpose="user_initiated",  # 长跑板级任务声明为需显式保留的 detached 用途
     )
 
     # board link 和 host-run 可能较慢，因此保留至少 5400 秒等待窗口。

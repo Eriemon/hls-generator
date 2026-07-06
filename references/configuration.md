@@ -8,7 +8,7 @@
 - [Remote Validation Policy](#remote-validation-policy)
 - [Inspection](#inspection)
 
-The runtime configuration lives at `runtime/hls_generator/runtime_config.json`.
+The runtime configuration lives at `scripts/python/config/runtime_config.json`.
 Keep this file inside the skill root. To test an alternate config, set
 `HLS_GENERATOR_RUNTIME_CONFIG` to another JSON file under this same skill root.
 
@@ -100,9 +100,9 @@ Use these commands from the skill root or another workspace. Choose an
 explicit writable output directory for generated request/spec artifacts:
 
 ```powershell
-python -m runtime.hls_generator deps check --json
-python -m runtime.hls_generator deps request --out <output-dir>\skill_dependency_request.json
-python -m runtime.hls_generator deps install --all
+python -m scripts.python.cli.hls_generator deps check --json
+python -m scripts.python.cli.hls_generator deps request --out <output-dir>\skill_dependency_request.json
+python -m scripts.python.cli.hls_generator deps install --all
 ```
 
 `deps install` does not overwrite existing skill directories. If an installed
@@ -192,11 +192,11 @@ containing the matching `.xpfm`.
 Print the active config:
 
 ```powershell
-python -m runtime.hls_generator config
+python -m scripts.python.cli.hls_generator config
 ```
 
 Print only the active config path:
 
 ```powershell
-python -m runtime.hls_generator config --path
+python -m scripts.python.cli.hls_generator config --path
 ```

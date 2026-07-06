@@ -27,13 +27,13 @@ from typing import Any, Callable, Iterator
 # 当前脚本既可作为模块导入，也可作为文件直接执行。
 path_module_dir = Path(__file__).resolve().parent  # 当前 remote 脚本目录
 
-# skill 根目录用于直接执行脚本时导入 runtime 包。
+# skill 根目录用于直接执行脚本时导入 scripts.python 包。
 path_skill_root = Path(__file__).resolve().parents[3]  # erie-hls-generator 技能根目录
 
 # 直接按文件路径加载 facade 时，也要能解析同目录 short import 与 skill 内包导入。
 site.addsitedir(str(path_module_dir))
 
-# 把技能根目录一并加入 site 路径，保证脚本直跑时也能解析 runtime 包。
+# 把技能根目录一并加入 site 路径，保证脚本直跑时也能解析 scripts.python 包。
 site.addsitedir(str(path_skill_root))
 
 # 优先使用 package 路径导入，脚本直跑时回退到同目录短导入。
@@ -1059,7 +1059,7 @@ def _sha256_file(path_file: Path) -> str:
     """
 
     # 分块读取避免对较大的源码快照一次性占用内存。
-    hash_sha256: Any = hashlib.sha256()  # 远端 pytest 源码快照归档的 sha256 累积器
+    sha256_file_hasher: Any = hashlib.sha256()  # 远端 pytest 源码快照归档的 sha256 累积器
 
     # 以二进制方式读取归档内容。
     with path_file.open("rb") as file_obj:
@@ -1068,10 +1068,10 @@ def _sha256_file(path_file: Path) -> str:
         for bytes_chunk in iter(lambda: file_obj.read(1024 * 1024), b""):
 
             # 当前块纳入归档摘要，供结果报告复核上传内容。
-            hash_sha256.update(bytes_chunk)
+            sha256_file_hasher.update(bytes_chunk)
 
     # 返回标准十六进制摘要。
-    return hash_sha256.hexdigest()
+    return sha256_file_hasher.hexdigest()
 
 # 上传并解压当前源码快照，返回远端 pytest 实际执行根目录。
 def _prepare_remote_pytest_source_snapshot(

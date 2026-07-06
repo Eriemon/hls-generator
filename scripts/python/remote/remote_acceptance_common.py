@@ -37,27 +37,27 @@ from typing import Any
 # 当前 remote 脚本目录用于兼容同目录短导入。
 MODULE_DIR = Path(__file__).resolve().parent  # remote 脚本目录
 
-# skill 根目录用于直接运行子入口时导入 integration/runtime 包。
+# skill 根目录用于直接运行子入口时导入 scripts.python 包。
 SKILL_ROOT = Path(__file__).resolve().parents[3]  # erie-hls-generator 技能根目录
 
 # 直接执行旧入口时仍需兼容历史短模块导入路径。
 site.addsitedir(str(MODULE_DIR))
 
-# runtime 与 integration 包位于 skill 根目录之下。
+# scripts.python 包位于 skill 根目录之下。
 site.addsitedir(str(SKILL_ROOT))
 
 # HLS workflow adapter 用于生成远端验收前置工件。
-from integration.hls_adapter import run_hls_workflow
+from scripts.python.integration.hls_adapter import run_hls_workflow
 
 # board acceptance 配置负责渲染 host scaffold 与运行 profile。
-from runtime.hls_generator.board_acceptance import (
+from scripts.python.remote.board_acceptance import (
     BOARD_RUNNABLE_PROFILE,
     board_acceptance_config,
     resolve_host_template_path,
 )
 
 # U55C 平台 payload 工具只处理本地 payload 校验和归档。
-from runtime.hls_generator.board_platform_payload import (
+from scripts.python.remote.board_platform_payload import (
     U55C_PLATFORM_NAME,
     default_local_u55c_payload_root,
     prepare_local_u55c_platform_archive,
@@ -65,7 +65,7 @@ from runtime.hls_generator.board_platform_payload import (
 )
 
 # runtime 配置函数读取 skill 治理配置和 Vitis 超时阈值。
-from runtime.hls_generator.config import (
+from scripts.python.config.hls_config import (
     remote_validation_config,
     repo_root,
     skill_config_path,
@@ -75,10 +75,10 @@ from runtime.hls_generator.config import (
 )
 
 # 远端目录契约生成 runs/backups/conda 等标准路径。
-from runtime.hls_generator.remote_directory_contract import remote_directory_layout_for_workdir
+from scripts.python.remote.remote_directory_contract import remote_directory_layout_for_workdir
 
 # 恢复工具用于从历史 run id 和远端输出补齐本地报告。
-from runtime.hls_generator.remote_recovery import (
+from scripts.python.remote.remote_recovery import (
     field_from_equals_output,
     infer_target_part_from_platform_selection,
     recover_example_spec,
@@ -87,10 +87,10 @@ from runtime.hls_generator.remote_recovery import (
 )
 
 # 依赖检查保证远端验收前本地 skill 依赖完整。
-from runtime.hls_generator.skill_dependencies import SkillDependencyError, require_skill_dependencies
+from scripts.python.config.skill_dependencies import SkillDependencyError, require_skill_dependencies
 
 # 用户配置读写保存 Vitis 版本和 board 平台选择。
-from runtime.hls_generator.user_config import (
+from scripts.python.config.user_config import (
     get_board_platform_selection,
     get_vitis_selection,
     set_board_platform_selection,
@@ -99,7 +99,7 @@ from runtime.hls_generator.user_config import (
 )
 
 # readiness 等级定义由 Vitis 验收入口共享。
-from runtime.hls_generator.validation import READINESS_LEVELS
+from scripts.python.validation.hls_artifacts import READINESS_LEVELS
 
 # 成功状态被多个入口用于退出码判断。
 PASS_STATUS = "passed"  # 远端验收通过状态
@@ -283,7 +283,8 @@ class ErieHelper:
 
     # 创建 request 后立即执行，统一返回 request 文件路径。
     def request_and_run(
-        self, settings: Path, server: str, operation: str, payload: list[str] | str, reason: str
+        self, settings: Path, server: str, operation: str, payload: list[str] | str, reason: str, *,
+        request_timeout_s: int | None = None,
     ) -> str:
         """创建 erie request 并按治理要求执行。
 
@@ -293,6 +294,7 @@ class ErieHelper:
             operation: 请求类型，支持 mkdir、delete 和 command。
             payload: 请求负载。
             reason: 写入 request 的人工可读原因。
+            request_timeout_s: 可选 request 控制超时；为空时沿用默认封顶策略。
 
         返回:
             str: 生成的 request 文件路径。
@@ -301,88 +303,154 @@ class ErieHelper:
             RemoteAcceptanceError: 请求类型不受支持或 erie 子命令失败时抛出。
         """
 
-        # mkdir request 只创建远端目录。
-        if operation == "mkdir":
+        # 先收敛本轮 request 控制超时，便于普通步骤继续使用封顶值、长任务显式申请更大窗口。
+        int_request_timeout_s = self._request_timeout(request_timeout_s)  # 当前 request 创建与执行共用的控制超时
 
-            # 创建目录 request 后，stdout 会带回这次 request 的本地落盘路径。
-            str_request_stdout = self._run(  # 保存 mkdir request 返回的 request 路径输出
-                [
-                    "request-mkdir",  # 生成远端目录创建 request 的子命令
-                    "--settings",  # 指定 mkdir request 使用的 settings 选项
-                    str(settings),  # mkdir request 要读取的本地 settings 文件
-                    "--server",  # 把建目录请求绑定到目标远端服务器字段
-                    server,  # 目录创建动作最终会发往这台远端机器
-                    "--path",  # 声明下一项是这次要创建的远端目录路径
-                    payload[0],  # 本次 mkdir 要创建的远端目录
-                    "--reason",  # 声明下一项写入 mkdir request 的审计原因
-                    reason,  # 把建目录原因写入 request 审计记录
-                ]
-            )
+        # request-command 系列没有独立 timeout 参数，先把 overlay 默认值抬到控制平面需要的下限。
+        path_request_settings = self._ensure_request_settings_timeout(settings, timeout_s=int_request_timeout_s)  # command request 创建前写回控制平面的 SSH 默认超时
 
-        # delete request 需要保留 recursive 开关位置。
-        elif operation == "delete":
-
-            # 先构造删除 request 的基础骨架，后面只在需要时插入递归开关。
-            args = [  # delete request 的稳定参数骨架
-                "request-delete",  # 生成远端删除 request 的子命令
-                "--settings",  # 指向这次删除动作要读取的 settings 文件
-                str(settings),  # 删除 request 继续沿用当前 overlay settings
-                "--server",  # 声明删除动作要提交到哪台远端主机
-                server,  # 真正执行删除的目标远端服务器名称
-                    "--path",  # 声明下一项是这次要删除的远端路径
-                payload[0],  # 本次 delete 要删除的远端路径
-                "--reason",  # 下一项会记录“为什么要删这个路径”的审计文本
-                reason,  # 把删除原因带进 request 的留痕字段
-            ]
-
-            # 递归删除必须显式透传 recursive 标记。
-            if "--recursive" in payload:
-
-                # recursive 标记插到 reason 前，保持 CLI 参数顺序稳定。
-                args.insert(-2, "--recursive")
-
-            # delete request 的 stdout 同样承载 request 路径。
-            str_request_stdout = self._run(args)  # delete request 原始输出
-
-        # command request 是远端验收 payload 的主要执行形式。
-        elif operation == "command":
-
-            # command request 需要把列表 payload 拼成单条 shell 命令。
-            str_request_command = payload if isinstance(payload, str) else " ".join(payload)  # 提交给 request-command 的 shell 命令串
-
-            # 创建命令 request 后，stdout 会回传 request 文件路径供后续执行。
-            str_request_stdout = self._run(  # 保存命令 request 的 request 路径输出
-                [
-                    "request-command",  # 生成远端命令执行 request 的子命令
-                    "--settings",  # 指向命令 request 要读取的 overlay settings
-                    str(settings),  # 命令 request 继续复用当前 run 的 settings
-                    "--server",  # 声明命令 payload 要提交到哪台远端主机
-                    server,  # 远端 shell 命令最终运行在这台服务器上
-                    "--reason",  # 下一项承接这次远端命令的操作说明，便于 request 审计复盘
-                    reason,  # 把命令执行原因写入 request 审计字段
-                    "--",  # 把后续内容视为远端 shell 命令正文而非 erie 选项
-                    str_request_command,  # 需要在远端实际执行的 shell 命令
-                ]
-            )
-
-        # 未知 request 类型必须立刻暴露给调用者。
-        else:
-
-            # operation 不在受支持集合内时直接拒绝，避免创建错误 request。
-            raise RemoteAcceptanceError(f"> ERR: [Python] unsupported request operation: {operation}")
+        # 用单次 helper 调用封装 request 创建，主流程只保留验收语义。
+        str_request_stdout = self._create_request_stdout(path_request_settings, server, operation, payload, reason)  # 当前 request 创建阶段返回的原始 stdout 文本
 
         # request stdout 中的路径用于后续 run-request 执行。
         str_request_path = _parse_request_path(str_request_stdout)  # 当前 request 文件的本地落盘路径
 
+        # 重试资格只依赖 request 语义，先在这里收敛成单个整型值。
+        int_retry_count = 1 if self._is_idempotent_request(operation, reason) else 0  # 当前 request 允许的额外重试次数
+
         # 幂等请求允许对超时状态进行一次保守重试。
         self._run_request_execute(
-            settings,
+            path_request_settings,
             str_request_path,
-            retries=1 if self._is_idempotent_request(operation, reason) else 0,
+            request_timeout_s=int_request_timeout_s,
+            retries=int_retry_count,
         )
 
         # 调用方需要记录 request 路径作为验收证据。
         return str_request_path
+
+    # request 参数拼装拆到单独 helper，避免主流程被 CLI 细节淹没。
+    def _create_request_stdout(
+        self,
+        settings: Path,
+        server: str,
+        operation: str,
+        payload: list[str] | str,
+        reason: str,
+    ) -> str:
+        """创建指定类型的 request，并返回原始 stdout。
+
+        参数:
+            settings: 当前 request 要读取的 settings overlay 路径。
+            server: 接收 request 的目标远端服务器名称。
+            operation: 请求类型，支持 mkdir、delete 和 command。
+            payload: request 负载；mkdir/delete 使用路径列表，command 使用命令文本或命令片段列表。
+            reason: 写入 request 审计字段的人工可读原因。
+
+        返回:
+            str: erie request 子命令返回的原始 stdout。
+
+        异常:
+            RemoteAcceptanceError: 请求类型不受支持时抛出。
+        """
+
+        # mkdir request 只需要目录路径本身。
+        if operation == "mkdir":
+
+            # 直接返回 mkdir request 的原始 stdout，供主流程继续解析 request 路径。
+            return self._run(
+                [
+                    "request-mkdir",
+                    "--settings",
+                    str(settings),
+                    "--server",
+                    server,
+                    "--path",
+                    payload[0],
+                    "--reason",
+                    reason,
+                ]
+            )
+
+        # delete request 需要保留 recursive 开关位置。
+        if operation == "delete":
+
+            # delete 分支复用独立参数骨架，避免主 helper 混入插旗细节。
+            return self._run(self._build_delete_request_args(settings, server, payload, reason))
+
+        # command request 是远端验收 payload 的主要执行形式。
+        if operation == "command":
+
+            # command request 需要把列表 payload 拼成单条 shell 命令。
+            str_request_command = payload if isinstance(payload, str) else " ".join(payload)  # 当前 command request 要提交给远端 shell 的命令文本
+
+            # command 分支把命令正文交给 erie request-command，并把原始 stdout 交回主流程解析。
+            return self._run(
+                [
+                    "request-command",
+                    "--settings",
+                    str(settings),
+                    "--server",
+                    server,
+                    "--reason",
+                    reason,
+                    "--",
+                    str_request_command,
+                ]
+            )
+
+        # 未知 request 类型必须立刻暴露给调用者。
+        raise RemoteAcceptanceError(f"> ERR: [Python] unsupported request operation: {operation}")
+
+    # delete request 需要在固定骨架上按位置插入 recursive 标记。
+    def _build_delete_request_args(
+        self,
+        settings: Path,
+        server: str,
+        payload: list[str] | str,
+        reason: str,
+    ) -> list[str]:
+        """构造 request-delete 命令参数。
+
+        参数:
+            settings: delete request 要读取的 settings overlay 路径。
+            server: 执行 delete request 的目标远端服务器名称。
+            payload: delete request 负载，首项为目标路径，可选附带 `--recursive`。
+            reason: 写入 delete request 审计字段的人工可读原因。
+
+        返回:
+            list[str]: 可直接传给 erie request-delete 的参数序列。
+        """
+
+        # 只有显式要求递归删除时才插入 recursive 开关。
+        if "--recursive" in payload:
+
+            # 递归删除需要把 recursive 标记固定插在 reason 之前。
+            return [
+                "request-delete",
+                "--settings",
+                str(settings),
+                "--server",
+                server,
+                "--path",
+                payload[0],
+                "--recursive",
+                "--reason",
+                reason,
+            ]
+
+        # 非递归删除直接返回基础参数骨架。
+        return [
+            "request-delete",
+            "--settings",
+            str(settings),
+            "--server",
+            server,
+            "--path",
+            payload[0],
+            "--reason",
+            reason,
+        ]
 
     # 上传本地 payload 到远端并立即执行 request。
     def request_upload_and_run(
@@ -401,12 +469,18 @@ class ErieHelper:
             str: 生成并执行的 request 文件路径。
         """
 
+        # request-upload 同样没有独立 timeout 参数，先把 overlay 默认值抬到上传控制流需要的下限。
+        int_upload_request_timeout = max(self.timeout, self._request_timeout())  # 上传 request 创建阶段需要的 SSH 默认超时下限
+
+        # 单行赋值便于 current-project 规则稳定识别右侧语义注释。
+        path_request_settings = self._ensure_request_settings_timeout(settings, timeout_s=int_upload_request_timeout)  # 上传控制流已抬升超时的 settings
+
         # 上传 request 会把本地 payload 送到远端活动 run，并带回 request 文件路径。
         str_request_stdout = self._run(  # 保存 upload request 的 request 路径输出
             [
                 "request-upload",  # 生成本地文件上传 request 的子命令
                 "--settings",  # 指向上传动作要读取的 overlay settings
-                str(settings),  # 上传 request 继续沿用本轮 run 的 settings
+                str(path_request_settings),  # 上传 request 继续沿用本轮 run 的 settings
                 "--server",  # 声明文件会被推送到哪台远端服务器
                 server,  # 本地 payload 最终要传输到这台远端主机
                 "--local",  # 声明下一项是本地待上传 payload 的文件路径
@@ -426,7 +500,7 @@ class ErieHelper:
             [
                 "run-request",  # 立即执行刚刚创建好的 upload request
                 "--settings",  # 指向 upload request 执行阶段要读取的 settings
-                str(settings),  # run-request 阶段继续复用上传前的同一份 overlay
+                str(path_request_settings),  # run-request 阶段继续复用上传前的同一份 overlay
                 "--request",
                 str_request_path,  # 本轮 upload 对应的 request 文件
                 "--execute",
@@ -446,7 +520,7 @@ class ErieHelper:
         command: str,
         *,
         settings: Path | None = None,
-        # 自动化调用通过此字段声明 detached job 用途。
+        # 调用方通过此字段声明 detached job 的保留/清理语义。
         task_purpose: str | None = None,
     ) -> dict[str, Any]:
         """启动远端 detached job 并返回 job 元数据。
@@ -456,7 +530,7 @@ class ErieHelper:
             reason: 写入 detached job 的人工可读原因。
             command: 通过 bash -lc 执行的远端命令文本。
             settings: 可选覆盖 settings 文件路径。
-            task_purpose: 可选 detached job 用途；自动化流程应显式传 `automated_test`。
+            task_purpose: 可选 detached job 用途；长跑验收通常传 `user_initiated`，可回收自动任务显式传 `automated_test`。
 
         返回:
             dict[str, Any]: 包含 job_id、remote_job_dir、manifest 和 output 的元数据。
@@ -479,7 +553,7 @@ class ErieHelper:
             reason,  # 把 detached 提交原因写进远端审计信息
         ]
 
-        # 自动化流程需要显式传入 task purpose，避免残留 job 被记成 user_initiated。
+        # 调用方需要显式传入 task purpose，避免残留 job 落入错误的治理语义。
         if task_purpose:
 
             # 透传 detached job 用途，交给 erie-remote-ssh 选择残留 job 清理策略。
@@ -569,9 +643,9 @@ class ErieHelper:
             str_status = _field_from_output(str_last_output, "status")  # 当前轮询得到的 job 状态
 
             # 终态直接返回给调用方写入报告。
-            if str_status in {"succeeded", "failed", "not_found"}:
+            if str_status in {"succeeded", "failed", "cancelled", "not_found"}:
 
-                # 成功、失败和 not_found 都属于终态，直接交给上层处理。
+                # 成功、失败、取消和 not_found 都属于终态，直接交给上层处理。
                 return {"status": str_status, "output": str_last_output, "returncode": int_returncode}
 
             # 非零退出码中只有短暂 SSH 失败允许继续轮询。
@@ -652,20 +726,89 @@ class ErieHelper:
         # status 轮询超时比总超时更保守，避免单次查询卡死。
         return min(max(int(self.timeout), 30), 180)
 
-    # 约束 run-request 执行超时，保证 request 执行窗口稳定。
-    def _request_timeout(self) -> int:
+    # 约束 run-request 执行超时，普通 request 保持封顶，长任务可显式申请更大窗口。
+    def _request_timeout(self, request_timeout_s: int | None = None) -> int:
 
-        """计算 run-request 子命令使用的超时秒数。
+        """计算 request 控制平面使用的超时秒数。
 
         参数:
-            无。
+            request_timeout_s: 可选 request 控制超时覆写值。
 
         返回:
-            约束在 30 到 180 秒之间的 request 执行超时值。
+            默认分支约束在 30 到 180 秒之间；显式覆写时只保留 30 秒最小边界。
         """
 
-        # request 执行超时与 status 轮询共用同一安全边界。
+        # 显式覆写时保留调用方给出的长超时，供 archive 这类大工件迁移复用。
+        if request_timeout_s is not None:
+
+            # 长耗时 request 只保留最小 30 秒边界，不再强行压回 180 秒。
+            return max(int(request_timeout_s), 30)
+
+        # 普通 request 执行超时与 status 轮询共用同一安全边界。
         return min(max(int(self.timeout), 30), 180)
+
+    # request-* CLI 缺少显式 timeout 参数时，使用当前 run 的 overlay settings 托底 SSH 默认超时。
+    def _ensure_request_settings_timeout(self, settings: Path, *, timeout_s: int) -> Path:
+
+        """确保 request 创建阶段读取到足够的 ssh.default_timeout。
+
+        参数:
+            settings: 本轮 request 要复用的 settings overlay 路径。
+            timeout_s: request 创建阶段至少需要的 SSH 默认超时秒数。
+
+        返回:
+            Path: 已校正过 ssh.default_timeout 的 settings 路径。
+
+        异常:
+            RemoteAcceptanceError: settings 无法读取、解析或回写时抛出。
+        """
+
+        # request timeout 至少保留正整数，避免把无效值写回 overlay。
+        int_target_timeout = max(int(timeout_s), 1)  # request 创建阶段需要的最小 SSH 默认超时
+
+        # 先读取并回写当前 run 的隔离配置，确保 request 创建阶段看到提升后的默认超时。
+        try:
+
+            # 读取当前 overlay，确保 request-* 子命令看到的是本轮隔离配置而不是基础 defaults。
+            dict_settings = json.loads(settings.read_text(encoding="utf-8"))  # 本轮 request 复用的可变 settings 字典
+
+            # 缺失 ssh 字段时先补空字典，保证 default_timeout 有稳定落点。
+            dict_ssh_settings = dict_settings.setdefault("ssh", {})  # request timeout 回写目标 ssh 配置
+
+            # 先把已有默认超时解析成整数，便于和当前 request 所需下限比较。
+            try:
+
+                # 现有 default_timeout 可能来自字符串或整数配置，这里统一解析成 int 比较。
+                int_current_timeout = int(dict_ssh_settings.get("default_timeout", 0))  # overlay 当前的 SSH 默认超时
+
+            # 遇到非法旧值时按缺失处理，让新的 request 超时下限稳定覆盖回去。
+            except (TypeError, ValueError):
+
+                # 非法旧值按缺失处理，让新的安全超时可以稳定覆盖回去。
+                int_current_timeout = 0  # 解析失败时回退到缺省超时
+
+            # 已满足当前 request 等待窗口时直接复用原文件，避免无意义重写。
+            if int_current_timeout >= int_target_timeout:
+
+                # 现有 overlay 已足够支撑 request 创建阶段，无需继续改写文件。
+                return settings
+
+            # 把 SSH 默认超时抬到当前 request 控制流要求的下限，避免 request-* 偷吃基础 20 秒。
+            dict_ssh_settings["default_timeout"] = int_target_timeout  # request 创建阶段写回 overlay 的 SSH 默认超时
+
+            # 以稳定 JSON 形式写回同一份 overlay，确保后续 run-request 继续复用同一路径。
+            settings.write_text(json.dumps(dict_settings, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+        # 遇到配置读写或 JSON 解析失败时立刻停止，避免远端验收继续沿用未知超时配置。
+        except (OSError, json.JSONDecodeError) as exc:
+
+            # settings 读写失败时直接报出当前路径，避免远端验收继续使用未知超时配置。
+            raise RemoteAcceptanceError(
+                f"> ERR: [Python] failed to refresh request timeout in settings overlay: {settings}: {exc}"
+            ) from exc
+
+        # 返回原路径，调用方继续按当前 run 的 overlay settings 使用即可。
+        return settings
 
     # 该判断只依赖传入参数，不读取实例状态，因此保持为静态工具函数。
     @staticmethod
@@ -702,13 +845,21 @@ class ErieHelper:
         )
 
     # 执行 request 文件，并按需要在超时场景做有限次重试。
-    def _run_request_execute(self, settings: Path, request_path: str, *, retries: int = 0) -> str:
+    def _run_request_execute(
+        self,
+        settings: Path,
+        request_path: str,
+        *,
+        request_timeout_s: int | None = None,
+        retries: int = 0,
+    ) -> str:
 
         """执行 request 文件并返回最终输出。
 
         参数:
             settings: erie settings 文件路径。
             request_path: 待执行的 request 文件路径。
+            request_timeout_s: 可选 request 执行超时；为空时沿用默认封顶策略。
             retries: 允许的额外重试次数。
 
         返回:
@@ -719,7 +870,7 @@ class ErieHelper:
         """
 
         # run-request 使用专门的 request 超时，不直接复用总超时。
-        int_timeout_s = self._request_timeout()  # run-request 超时秒数
+        int_timeout_s = self._request_timeout(request_timeout_s)  # run-request 超时秒数
 
         # run-request 参数顺序保持稳定，方便把失败命令原样复现出来。
         args = [  # run-request 的稳定命令骨架
@@ -1015,10 +1166,10 @@ def _prepare_erie_server_list_copy(config: dict[str, Any]) -> Path:
     path_config_copies_dir.mkdir(parents=True, exist_ok=True)
 
     # 目标副本名带时间戳和随机后缀，避免覆盖历史证据。
-    path_target_copy = (  # 当前 server list 快照要写入的唯一文件路径
-        path_config_copies_dir  # 副本固定落到 remote-validation 的配置快照目录
-        / f"{dt.datetime.utcnow().strftime('%Y%m%dT%H%M%S%fZ')}-{uuid.uuid4().hex[:8]}-server_list.local.json"  # 文件名同时编码 UTC 时间戳和随机后缀
-    )
+    path_target_copy = path_config_copies_dir / (  # 当前 server list 快照要写入的唯一文件路径
+        f"{dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')}"
+        f"-{uuid.uuid4().hex[:8]}-server_list.local.json"
+    )  # 文件名同时编码 UTC 时间戳和随机后缀
 
     # 复制原始 server list，供本轮验收留痕与复现。
     shutil.copy2(path_source_path, path_target_copy)
@@ -1296,7 +1447,7 @@ def _probe_fpga_presence(server: str, settings: Path, helper: ErieHelper) -> dic
     """
 
     # 通过 lspci + grep 读取是否存在 Xilinx 设备证据。
-    list_command = [
+    list_command = [  # FPGA 存在性探测命令
         "bash",  # 用 bash 承接多段 lspci/grep 探测逻辑
         "-lc",  # 通过登录 shell 运行整段 FPGA 探测脚本
         "if lspci | grep -iq 'xilinx'; then "
@@ -1331,7 +1482,7 @@ def _probe_target_part_hint(server: str, settings: Path, helper: ErieHelper) -> 
     """
 
     # 组合基于固件目录的 target part 探测命令。
-    list_command = [
+    list_command = [  # target part 固件目录探测命令
         "bash",  # 用 bash 承接多段固件目录判断逻辑
         "-lc",  # 通过登录 shell 运行 target part 推断脚本
         "if [ -d /opt/xilinx/firmware/u55c ] || [ -d /tools/Xilinx/firmware/u55c ]; "
@@ -1425,7 +1576,7 @@ def _probe_hardware_fingerprint(
         str_xbmgmt_probe = "xbmgmt examine 2>/dev/null || true"  # 仅使用 PATH 中默认 xbmgmt 的探测脚本
 
     # 汇总 CPU、PCIe、固件和管理工具的联合探测命令。
-    list_command = [
+    list_command = [  # U55C 硬件指纹联合探测命令
         "bash",  # 用 bash 承接多段 CPU/板卡联合探测逻辑
         "-lc",  # 通过登录 shell 执行硬件指纹收集脚本
         f"{str_source_settings}"
@@ -1531,7 +1682,7 @@ def _probe_board_toolchain(server: str, settings: Path, helper: ErieHelper, prof
         str_source_xrt = ""  # board 工具链探测不追加额外 XRT 初始化
 
     # 组合 board 验收所需的 v++、g++ 和 XRT 探测命令。
-    list_command = [
+    list_command = [  # board 工具链联合探测命令
         "bash",  # 用 bash 承接 v++/g++/XRT 联合探测脚本
         "-lc",  # 通过登录 shell 运行 board 工具链探测逻辑
         f"source {shlex.quote(str_settings_script)} >/dev/null 2>&1 || true; "
@@ -2322,9 +2473,17 @@ def _archive_remote_run(helper: ErieHelper, settings: Path, server: str, layout:
         f"&& mv {str_active_run_arg} {str_backup_run_arg}"
     )  # 远端 run 归档命令
 
+    # board run 归档会移动 bitstream、日志和构建目录，控制平面需要和板级总超时保持一致。
+    int_archive_request_timeout = max(helper.timeout, 5400)  # 远端 run 归档 request 的控制超时
+
     # 返回归档命令的 request 路径，便于最终报告关联该次迁移操作。
     return helper.request_and_run(
-        settings, server, "command", str_archive_command, "archive verified remote run into governed backups directory"
+        settings,
+        server,
+        "command",
+        str_archive_command,
+        "archive verified remote run into governed backups directory",
+        request_timeout_s=int_archive_request_timeout,
     )
 
 # 为当前 run 生成独立的 erie settings overlay，隔离请求和下载目录。

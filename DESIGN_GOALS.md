@@ -27,11 +27,11 @@ The validator must prefer the first configured Vitis tool and then fall back thr
 
 ## Skill Design Pattern
 
-This skill follows the standard Skill structure: `SKILL.md` for concise routing and workflow instructions, `agents/openai.yaml` for UI metadata, `references/` for details loaded on demand, `assets/` for examples, `runtime/` for deterministic workflow code, and `integration/` for stable local APIs. Source-repository validation now lives at the repository root in `smoke/`, `tests/`, and `reports/`.
+This skill follows the standard Skill structure: `SKILL.md` for concise routing and workflow instructions, `agents/openai.yaml` for UI metadata, `references/` for details loaded on demand, `assets/` for examples, and `scripts/python/` for deterministic implementation code. Python implementation is split by function into `cli/`, `config/`, `generation/`, `hls_quality_gate/`, `integration/`, `remote/`, `task_dispatcher/`, `validation/`, and `workflow/`; `scripts/python/integration/hls_adapter.py` remains the stable local API facade. Source-repository validation lives at the repository root in `smoke/`, `tests/`, and `reports/`.
 
 The design uses the local Skill-pattern reference reviewed during planning:
 
-- Tool Wrapper: wrap Vitis HLS command execution and report parsing behind deterministic runtime helpers.
+- Tool Wrapper: wrap Vitis HLS command execution and report parsing behind deterministic functional helpers.
 - Generator: produce a fixed manifest plus HLS files from a structured spec.
 - Reviewer: validate generated HLS artifacts with static checks, interface-contract checks, testbench checks, and Vitis report checks.
 - Inversion: require confirmed requirements and interface choices before generation.
@@ -49,6 +49,6 @@ The design uses the local Skill-pattern reference reviewed during planning:
 
 All development must stay inside the current repository directory; the formal Skill root is `skills/erie-hls-generator/` so the folder name still matches `name: erie-hls-generator` while following the canonical `skills/<skill-name>/` layout. Git is the source of change tracking for this directory. Use commit-sized changes, keep generated caches ignored, and never modify sibling or external folders while implementing this skill.
 
-Runtime path policy, generated-output roots, protected source areas, Vitis tool command templates, and validation timeouts are centralized in `runtime/hls_generator/runtime_config.json` and described in `references/configuration.md`. Avoid adding new hard-coded machine paths to scripts or Skill instructions.
+Runtime path policy, generated-output roots, protected source areas, Vitis tool command templates, and validation timeouts are centralized in `scripts/python/config/runtime_config.json` and described in `references/configuration.md`. Avoid adding new hard-coded machine paths to scripts or Skill instructions.
 
 Remote validation must go through the configured `erie-remote-ssh` helper and its server-list JSON. UC-style link checks prove SSH helper connectivity only; they do not count as Vitis acceptance unless the remote profile exposes the expected AMD-Xilinx HLS tool and the HLS readiness run completes.

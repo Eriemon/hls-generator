@@ -31,8 +31,8 @@ from typing import Any, cast
 # 主技能根目录固定为 skill body，所有发布输入都从这里向下收敛。
 SKILL_ROOT = Path(__file__).resolve().parents[3]  # 主技能根目录
 
-# 仓库根目录负责 dist、reports 与 git 元数据查询边界。
-REPO_ROOT = SKILL_ROOT.parents[1]  # 当前仓库根目录
+# 公开仓库直接以技能根作为仓库根，dist 与 git 元数据都应收口到当前仓库。
+REPO_ROOT = SKILL_ROOT  # 当前仓库根目录
 
 # 包名同时用于发布目录、zip 文件名和收据中的 package 字段。
 PACKAGE_NAME = "erie-hls-generator"  # 发布包名
@@ -84,17 +84,14 @@ EXCLUDED_GLOBS = (
 
 # 发布收据里需要保留建议验证命令，提醒安装后如何做最低限度回归检查。
 VALIDATION_COMMANDS = [
-    r"python .\tests\smoke\run_smoke.py",  # smoke 回归命令
-    r"python -m compileall .\skills\erie-hls-generator\runtime\hls_generator",  # runtime 语法编译检查
+    r"python -m scripts.python.cli.hls_generator --version",  # 公开 CLI 版本核对命令
+    r"python -m scripts.python.cli.hls_generator selfcheck --json",  # 公开 CLI 自检命令
+    r"python -m compileall .\scripts\python",  # Python 功能域语法编译检查
     (
-        r"python %CODEX_HOME%\skills\.system\skill-creator\scripts\quick_validate.py "
-        r".\skills\erie-hls-generator"
-    ),  # 安装前 quick_validate 命令
-    (
-        r"python .\skills\erie-hls-generator\scripts\python\validation\confidence_loop.py "
+        r"python .\scripts\python\validation\confidence_loop.py "
         r"--server <remote-hls-validation-primary> --vitis-version <configured-vitis-version> "
         r"--readiness cosim --remote-parallelism 3 --json-out "
-        r".\reports\confidence-loop\latest-remote.json"
+        r".\tmp\validation\hls-generator\latest-remote.json"
     ),  # 远端 confidence loop 命令
 ]  # 发布后建议保留的验证命令
 
@@ -186,18 +183,18 @@ def prepare_release(version: str, dist_root: Path) -> dict[str, object]:
             f"> ERR: [Python] Release version must be explicit SemVer X.Y.Z, got {str_version!r}."
         )
 
-    # runtime 版本是技能源码侧对外声明的权威版本。
-    str_source_version = _read_runtime_version()  # runtime 源码版本号
+    # 版本模块是技能源码侧对外声明的权威版本。
+    str_source_version = _read_source_version()  # 源码版本号
 
     # CLI 版本校验可以防止命令行入口与 runtime 元数据脱节。
     str_cli_version = _read_cli_version()  # CLI 暴露版本号
 
-    # runtime 版本与发布目标不一致时，安装后 API 元数据会漂移。
+    # 源码版本与发布目标不一致时，安装后 API 元数据会漂移。
     if str_source_version != str_version:
 
         # 源码版本不匹配时拒绝继续，避免打出自相矛盾的 release。
         raise ReleaseError(
-            "> ERR: [Python] runtime/hls_generator/__init__.py version "
+            "> ERR: [Python] scripts/python/config/version.py version "
             f"{str_source_version!r} does not match release version {str_version!r}."
         )
 
@@ -284,10 +281,10 @@ def _load_skill_dependencies_config() -> Callable[[], list[dict[str, Any]]]:
         无。
 
     Returns:
-        指向 `runtime.hls_generator.config.skill_dependencies_config` 的可调用对象。
+        指向 `scripts.python.config.hls_config.skill_dependencies_config` 的可调用对象。
 
     Raises:
-        ImportError: runtime 配置模块导入失败时由底层导入逻辑向上传递。
+        ImportError: 配置模块导入失败时由底层导入逻辑向上传递。
         AttributeError: 配置模块缺少目标函数时由底层属性访问向上传递。
     """
 
@@ -300,7 +297,7 @@ def _load_skill_dependencies_config() -> Callable[[], list[dict[str, Any]]]:
     # 只在真正需要时导入配置模块，避免模块导入副作用提前发生。
     return cast(
         Callable[[], list[dict[str, Any]]],
-        importlib.import_module("runtime.hls_generator.config").skill_dependencies_config,
+        importlib.import_module("scripts.python.config.hls_config").skill_dependencies_config,
     )
 
 # `_validate_skill_dependency_manifest` 把原始依赖配置收敛成可发布摘要。
@@ -383,26 +380,26 @@ def _validate_skill_dependency_manifest() -> dict[str, object]:
         "recommended_warnings": list_recommended_warnings,
     }
 
-# `_read_runtime_version` 只从源码读取权威版本号，不触发运行时导入副作用。
-def _read_runtime_version() -> str:
-    """从 runtime 源码读取版本号。
+# `_read_source_version` 只从源码读取权威版本号，不触发运行期导入副作用。
+def _read_source_version() -> str:
+    """从 config.version 源码读取版本号。
 
     Args:
         无。
 
     Returns:
-        `runtime/hls_generator/__init__.py` 中声明的版本字符串。
+        `scripts/python/config/version.py` 中声明的版本字符串。
 
     Raises:
         ReleaseError: 初始化文件里缺少 `__version__` 时抛出。
         OSError: 读取版本文件时的底层文件系统异常向上传递。
     """
 
-    # runtime __init__ 是源码侧对外声明版本号的权威位置。
-    path_init = SKILL_ROOT / "runtime" / "hls_generator" / "__init__.py"  # runtime 初始化文件
+    # config.version 是源码侧对外声明版本号的权威位置。
+    path_init = SKILL_ROOT / "scripts" / "python" / "config" / "version.py"  # 源码版本文件
 
-    # 这里只读文本，不导入 runtime 模块，避免引入额外副作用。
-    str_init_text = path_init.read_text(encoding="utf-8")  # runtime 初始化源码
+    # 这里只读文本，不导入 CLI 模块，避免引入额外副作用。
+    str_init_text = path_init.read_text(encoding="utf-8")  # 版本源码
 
     # 如果源码里找不到 __version__，说明发布元数据已经不完整。
     if not (
@@ -416,7 +413,7 @@ def _read_runtime_version() -> str:
         # 缺少版本号会直接破坏 release identity，因此必须立即阻断。
         raise ReleaseError(f"> ERR: [Python] Could not find __version__ in {path_init}.")
 
-    # 返回 runtime 源码声明的版本号，供主流程与目标版本做一致性校验。
+    # 返回源码声明的版本号，供主流程与目标版本做一致性校验。
     return match_runtime_version.group(1)
 
 # `_read_cli_version` 验证命令行入口对外暴露的版本仍与源码一致。
@@ -427,7 +424,7 @@ def _read_cli_version() -> str:
         无。
 
     Returns:
-        从 `python -m runtime.hls_generator --version` 输出中提取的版本号。
+        从 `python -m scripts.python.cli.hls_generator --version` 输出中提取的版本号。
 
     Raises:
         ReleaseError: CLI 运行失败或 stdout 里无法解析出版本号时抛出。
@@ -439,9 +436,9 @@ def _read_cli_version() -> str:
     # 这样可以确保 CLI 读取的是当前工作树源码，而不是别处安装副本。
     dict_env["PYTHONPATH"] = str(SKILL_ROOT) + os.pathsep + dict_env.get("PYTHONPATH", "")  # 当前 skill 源码优先导入
 
-    # 用当前 Python 解释器执行 runtime 模块，避免跨环境差异。
+    # 用当前 Python 解释器执行功能域 CLI 模块，避免跨环境差异。
     completed_process_obj_process: subprocess.CompletedProcess[str] = subprocess.run(  # CLI 版本查询结果
-        [sys.executable, "-m", "runtime.hls_generator", "--version"],  # CLI 版本查询命令
+        [sys.executable, "-m", "scripts.python.cli.hls_generator", "--version"],  # CLI 版本查询命令
         cwd=SKILL_ROOT,  # 在当前 skill 根目录执行
         env=dict_env,  # 使用前面准备好的 CLI 导入环境
         capture_output=True,  # 同时抓取 stdout 与 stderr 供版本失败诊断

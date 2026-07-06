@@ -68,11 +68,11 @@
       "with_skill_expected_pass": true,
       "without_skill_expected_pass": false,
       "without_skill_reason": "The baseline path does not know the AGENTS-managed route table.",
-      "required_files": ["../../AGENTS.md", "scripts/python/validation/confidence_loop.py", "scripts/python/validation/confidence_remote.py"],
+      "required_files": ["../../.agents/agents-control.json", "scripts/python/validation/confidence_loop.py", "scripts/python/validation/confidence_remote.py"],
       "required_terms": [
         {
-          "file": "../../AGENTS.md",
-          "terms": ["`remote-hls-validation`: primary `server_6`", "U55C 硬件指纹证据"]
+          "file": "../../.agents/agents-control.json",
+          "terms": ["\"task_key\": \"remote-hls-validation\"", "\"primary_server_id\": \"server_6\"", "final confidence requires factual U55C evidence"]
         },
         {
           "file": "scripts/python/validation/confidence_loop.py",
@@ -131,14 +131,14 @@
       "without_skill_expected_pass": false,
       "without_skill_reason": "A baseline setup may check for comment presence without enforcing placement or hardware-intent semantics.",
       "required_files": [
-        "runtime/hls_generator/comment_policy.py",
+        "scripts/python/hls_quality_gate/comment_policy.py",
         "../../tests/test_comment_policy.py",
         "references/hls-comment-style.md",
         "../../tests/smoke/run_smoke.py"
       ],
       "required_terms": [
         {
-          "file": "runtime/hls_generator/comment_policy.py",
+          "file": "scripts/python/hls_quality_gate/comment_policy.py",
           "terms": ["strict_chinese_hls_comment_spacing", "generic generated line", "PRAGMA_INTENT_KEYWORDS", "_GENERIC_COMMENT_PATTERNS"]
         },
         {

@@ -15,8 +15,15 @@ This skill is a local, HLS-only Codex skill. Keep the repository root on
 `PYTHONPATH`, or run commands from the skill directory before importing the
 facade:
 
-- `runtime/hls_generator/`
-- `integration/`
+- `scripts/python/cli/`
+- `scripts/python/config/`
+- `scripts/python/generation/`
+- `scripts/python/hls_quality_gate/`
+- `scripts/python/integration/`
+- `scripts/python/remote/`
+- `scripts/python/task_dispatcher/`
+- `scripts/python/validation/`
+- `scripts/python/workflow/`
 - `assets/examples/`
 - `references/`
 
@@ -25,10 +32,10 @@ integration surface is intentionally renamed.
 
 ## Stable facade
 
-Prefer the facade instead of reaching into the runtime package directly:
+Prefer the facade instead of reaching into internal functional modules directly:
 
 ```python
-from integration.hls_adapter import (
+from scripts.python.integration.hls_adapter import (
     load_default_workflow_config,
     load_workflow_result,
     render_hls_prompt,
@@ -48,13 +55,13 @@ dict inputs need to become workflow files, they are materialized under
 
 Generated output roots, protected source paths, default workflow config path,
 example spec directory, Vitis command templates, and tool timeouts are loaded
-from `runtime/hls_generator/runtime_config.json`. See
+from `scripts/python/config/runtime_config.json`. See
 `references/configuration.md` before changing those values.
 
 The facade checks configured skill dependencies before rendering prompts,
 running workflows, or validating artifacts. If dependencies are missing or
 invalid, it raises `SkillDependencyError` with an install-request payload. Hosts
-must ask the user before running `python -m runtime.hls_generator deps install
+must ask the user before running `python -m scripts.python.cli.hls_generator deps install
 --all`; after installation, ask the user to restart Codex.
 
 Remote SSH confidence checks must use `scripts/python/remote/remote_vitis_acceptance.py`,
@@ -81,14 +88,14 @@ require variant, role, read/write mode, data/address widths, burst policy, and
 
 ## Provider mapping
 
-The runtime supports three local provider modes:
+The generation layer supports three local provider modes:
 
 - `mock`: deterministic smoke and unit-style tests
 - `manual`: read a prepared response file
 - `command`: call a host-provided model command
 
 For production integration, use `command` and bridge to the host model runner.
-The runtime does not add a cloud SDK dependency.
+The generation layer does not add a cloud SDK dependency.
 
 ## HLS-only validation
 
@@ -125,7 +132,7 @@ config.
 
 ## Customization boundary
 
-Keep host-specific glue in `integration/`. Runtime edits should be limited to
-shared HLS generator behavior, validation, prompt contracts, or CLI changes.
+Keep host-specific glue in `scripts/python/integration/`. Shared HLS generator
+behavior belongs in the matching functional package under `scripts/python/`.
 All generated run artifacts should live outside the skill source tree. In the
 source repository, the governed validation output root is `reports/`.

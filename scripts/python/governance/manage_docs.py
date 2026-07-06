@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -25,6 +26,9 @@ from pathlib import Path
 
 # Any 用于缓存运行时导入的 sanitization 函数。
 from typing import Any
+
+# 阻止当前包装层进程在源码树里回写 __pycache__。
+sys.dont_write_bytecode = True  # 当前治理包装层禁写 Python 字节码缓存
 
 # 委托 helper 负责定位 agents-md-generator 中的真实治理脚本。
 from _skill_tool_delegate import agents_md_generator_script, run_delegate_retrying_transient_fs
@@ -56,11 +60,18 @@ def _run(path_script: Path, list_args: list[str]) -> subprocess.CompletedProcess
         当前子进程的完整执行结果。
     """
 
+    # 为委托治理子进程补齐禁写字节码的环境变量。
+    dict_env = dict(os.environ)  # 子进程继承并补齐的环境变量副本
+
+    # 让委托治理脚本沿用禁写 __pycache__ 的运行约束。
+    dict_env["PYTHONDONTWRITEBYTECODE"] = "1"  # 子进程禁写 Python 字节码缓存
+
     # 子命令使用当前 Python 解释器，保持虚拟环境和依赖解析一致。
     return subprocess.run(
         [sys.executable, str(path_script), *list_args],
         check=False,
         capture_output=True,
+        env=dict_env,
         text=True,
     )
 
@@ -1028,6 +1039,9 @@ def _package_release_with_repo_fixes(path_script: Path, list_argv: list[str]) ->
 
 # CLI 入口只分流 package-release，其余命令交给委托脚本。
 if __name__ == "__main__":
+
+    # 让直接委托路径继承禁写字节码的环境变量。
+    os.environ["PYTHONDONTWRITEBYTECODE"] = "1"  # 直委托子进程禁写 Python 字节码缓存
 
     # 保存原始参数，便于完整转发给委托脚本。
     list_args = sys.argv[1:]  # 需要原样转发给委托脚本的 CLI 参数

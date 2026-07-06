@@ -37,4 +37,4 @@ When a change only adds or rewrites comments, validation must prove that the exe
 2. Parse the baseline and commented files with the available open-source AST provider and compare normalized AST fingerprints.
 3. Reject the rewrite if either token fingerprints or AST fingerprints differ.
 
-The runtime implements this in `runtime/hls_generator/hls_ast_guard.py`; see `references/hls-ast-comment-guard.md` for provider selection and fallback behavior.
+The runtime implements this in `scripts/python/hls_quality_gate/hls_ast_guard.py`; see `references/hls-ast-comment-guard.md` for provider selection and fallback behavior.

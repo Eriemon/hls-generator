@@ -7,6 +7,7 @@ from __future__ import annotations
 # 标准库用于解析治理配置、运行委托验证器并处理短暂文件系统错误。
 import json
 import os
+import re
 import shutil
 
 # 子进程执行与临时目录缩面需要复用同一组标准库工具。
@@ -15,10 +16,14 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, TextIO, cast
+from urllib.parse import urlsplit
 
 # 本地委托解析器集中维护已安装 agents-md-generator 的脚本路径。
 from _skill_tool_delegate import agents_md_generator_script
+
+# 根 AGENTS 中的相对路径引用会驱动官方 verifier 的路径存在性检查。
+PATH_REFERENCE_PATTERN = re.compile(r"(?P<path>\.?[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+)")  # AGENTS Markdown 中常见的相对路径片段
 
 # 这些文本只对应旧 agents-md-generator 尚未理解本仓库新注释策略时的误报。
 SEMANTIC_TRAILING_ERROR_MARKERS = (  # 可被本地兼容层过滤的旧规则错误片段。
@@ -206,6 +211,84 @@ def source_governance_excluded_roots(project: Path) -> tuple[str, ...]:
     # 返回去重后的顶层排除目录集合，供轻量镜像构造流程复用。
     return tuple(list_roots)
 
+# 提取根 AGENTS 文件里显式引用且真实存在的项目内相对路径。
+def root_agents_referenced_paths(project: Path) -> tuple[Path, ...]:
+    """
+    收集根 AGENTS/override 中显式写出的项目内路径。
+
+    参数:
+        project: 当前 verify_agents 检查的项目根目录。
+
+    返回:
+        tuple[Path, ...]: 根 AGENTS 显式引用且真实存在的项目内绝对路径集合。
+    """
+
+    # 统一使用解析后的项目根目录做 relative_to 校验，避免大小写或相对路径差异干扰去重。
+    path_project_root = project.resolve()  # 当前项目根目录的规范绝对路径。
+
+    # 用字典保持插入顺序，便于镜像时生成稳定的复制顺序。
+    dict_referenced_paths: dict[Path, None] = {}  # 根 AGENTS 中显式引用的项目内路径集合。
+
+    # 根级 override 与根 AGENTS 都可能携带官方 verifier 会检查的路径引用。
+    for str_agents_filename in ("AGENTS.override.md", "AGENTS.md"):
+
+        # 构造当前要扫描的根级 AGENTS 文件路径。
+        path_agents = path_project_root / str_agents_filename  # 当前扫描的根级 AGENTS/override 文件。
+
+        # 缺失文件时直接跳过，避免为不存在的根 AGENTS 引入额外异常分支。
+        if not path_agents.is_file():
+
+            # 当前命名形态不存在时无需继续解析其内容。
+            continue
+
+        # 尝试读取根 AGENTS 内容，后续用相对路径模式提取显式引用。
+        try:
+
+            # 统一按 UTF-8 读取根 AGENTS，保持与项目内治理文档编码一致。
+            str_agents_text = path_agents.read_text(encoding="utf-8")  # 当前根 AGENTS 文件的完整文本内容。
+
+        # 根 AGENTS 无法读取时保持降级行为，后续镜像仍可回退到普通 excluded_roots 处理。
+        except OSError:
+
+            # 读失败时不再为当前文件提取引用，继续处理其他根级 AGENTS 形态。
+            continue
+
+        # 逐个抽取 Markdown 行中出现的相对路径片段。
+        for obj_match in PATH_REFERENCE_PATTERN.finditer(str_agents_text):
+
+            # 取出命中的相对路径文本，并去掉可选的 `./` 前缀。
+            str_relative_path = obj_match.group("path").removeprefix("./")  # AGENTS 文本中命中的相对路径片段。
+
+            # 空路径或看起来像 URL 片段的文本都不应当参与项目路径解析。
+            if (not str_relative_path) or looks_like_url_reference(str_relative_path):
+
+                # 当前命中不是项目内相对路径时直接跳过。
+                continue
+
+            # 把命中的相对路径解析到项目根目录下，供 exists 和 relative_to 双重校验。
+            path_candidate = (path_project_root / Path(str_relative_path)).resolve()  # 当前 AGENTS 引用对应的项目内候选绝对路径。
+
+            # 只保留项目根目录内部的真实路径，避免把奇怪片段当成本地文件复制。
+            try:
+
+                # relative_to 成功才说明当前候选路径仍位于项目根目录之内。
+                path_candidate.relative_to(path_project_root)
+
+            # 解析后越过项目根目录的候选路径不应进入轻量镜像复制集合。
+            except ValueError:
+
+                # 项目外路径不参与复制，继续处理下一个命中。
+                continue
+
+            # 只有真实存在的显式引用才值得为轻量镜像补拷贝。
+            if path_candidate.exists():
+
+                # 用字典键自然去重，保持根 AGENTS 中首次出现顺序。
+                dict_referenced_paths[path_candidate] = None  # 根 AGENTS 显式引用且真实存在的项目内路径去重集合
+
+    # 返回稳定顺序的显式引用路径集合，供轻量镜像阶段按需补拷贝。
+    return tuple(dict_referenced_paths.keys())
+
 # 为委托验证器补齐真实 installed skill 目录，避免 temp CODEX_HOME 误导版本探测。
 def delegate_args_with_installed_skill_dir(script_path: Path, args: list[str]) -> tuple[list[str], Path]:
     """
@@ -286,6 +369,9 @@ def build_delegate_project_mirror(project: Path) -> tuple[Path, Path | None]:
         # 保持真实项目路径参与委托验证，不创建额外镜像目录。
         return project, None
 
+    # 根 AGENTS 里显式引用的排除目录路径需要在轻量镜像中保真，否则官方 verifier 会误报缺文件。
+    tuple_referenced_paths = root_agents_referenced_paths(project)  # 根 AGENTS 中显式引用且真实存在的项目内路径集合。
+
     # 只要有任一排除目录在真实项目根存在，就值得构造轻量镜像。
     bool_has_excluded_root = any((project / str_root_name).exists() for str_root_name in tuple_excluded_roots)  # 是否存在已声明的顶层排除目录。
 
@@ -338,6 +424,36 @@ def build_delegate_project_mirror(project: Path) -> tuple[Path, Path | None]:
             # 普通文件直接复制到轻量镜像根，保持 AGENTS 和根级治理文件可见。
             shutil.copy2(path_source_entry, path_target_entry)
 
+        # 再把根 AGENTS 明确引用且落在 excluded_roots 里的具体路径补进轻量镜像。
+        for path_referenced_entry in tuple_referenced_paths:
+
+            # 当前显式引用路径相对项目根目录的层级信息，供 top-level excluded root 过滤复用。
+            path_relative_reference = path_referenced_entry.relative_to(project)  # 当前显式引用路径相对项目根目录的路径。
+
+            # 只为 excluded_roots 内部的显式引用补拷贝，非排除根目录内容此前已完整复制。
+            if path_relative_reference.parts[0] not in tuple_excluded_roots:
+
+                # 非排除根目录内的显式引用无需额外补拷贝。
+                continue
+
+            # 计算显式引用路径在轻量镜像中的目标位置。
+            path_target_reference = path_temp_project_root / path_relative_reference  # 当前显式引用路径在轻量镜像中的目标路径。
+
+            # 目录引用只需保留目录存在事实，供官方 verifier 通过路径存在性检查。
+            if path_referenced_entry.is_dir():
+
+                # 创建完整父目录链，保证显式引用的目录在轻量镜像中可见。
+                path_target_reference.mkdir(parents=True, exist_ok=True)
+
+                # 目录占位已完成，继续处理下一条显式引用。
+                continue
+
+            # 文件引用需要连同父目录链一起补拷贝到轻量镜像中。
+            path_target_reference.parent.mkdir(parents=True, exist_ok=True)
+
+            # 用原始文件内容补齐显式引用的真实路径，避免 verifier 因 excluded_roots 误报缺失。
+            shutil.copy2(path_referenced_entry, path_target_reference)
+
     # 轻量镜像构造异常时必须回退到真实项目路径，避免伪造验证成功。
     except OSError:
 
@@ -386,6 +502,138 @@ def session_search_terms(project: Path) -> tuple[str, ...]:
     # 返回去重后的 exact-cwd 会话搜索字面量集合。
     return tuple(list_terms)
 
+# URL 片段不应被误判成项目内相对路径引用。
+def looks_like_url_reference(str_reference: str) -> bool:
+    """
+    判断给定文本是否更像 URL，而不是项目内相对路径。
+
+    参数:
+        str_reference: 当前 AGENTS 中命中的路径文本。
+
+    返回:
+        返回该文本是否携带 URL scheme 与远端位置。
+    """
+
+    # 同时具备 scheme 与 netloc 时，说明命中内容更像远端 URL。
+    return bool(urlsplit(str_reference).scheme and urlsplit(str_reference).netloc)
+
+# 运行单个 exact-cwd 搜索字面量对应的 rg 路径筛选。
+def run_session_rg_search(str_term: str, sessions_root: Path) -> subprocess.CompletedProcess[str]:
+    """
+    执行一次固定字符串 rg 搜索，返回命中的 session 文件路径输出。
+
+    参数:
+        str_term: 当前要匹配的 exact-cwd 路径字面量。
+        sessions_root: 真实 CODEX_HOME 下的 sessions 根目录。
+
+    返回:
+        返回 rg 子进程结果对象。
+    """
+
+    # 用 ripgrep 只列出命中的 JSONL 文件路径，不读取完整内容到 Python。
+    return subprocess.run(
+        ["rg", "-l", "-i", "-F", "-g", "*.jsonl", str_term, str(sessions_root)],  # 使用固定字符串搜索当前项目路径字面量。
+        check=False,  # rg 退出码 1 只表示无匹配，不属于异常。
+        capture_output=True,  # 捕获 stdout 便于收集候选文件路径。
+        text=True,  # 以文本模式读取 rg 的路径输出。
+    )
+
+# 把 rg 输出中的现存 JSONL 路径提取为去重集合。
+def collect_existing_session_paths(str_rg_stdout: str) -> set[Path]:
+    """
+    解析 rg 输出文本，收集真实存在的 session JSONL 路径。
+
+    参数:
+        str_rg_stdout: rg 输出的候选路径文本。
+
+    返回:
+        返回当前 rg 结果中真实存在的 session 文件集合。
+    """
+
+    # 用集合自然去重，避免同一轮 rg 输出重复路径。
+    set_session_paths: set[Path] = set()  # 单轮 rg 输出解析出的 session 文件集合。
+
+    # 逐项吸收 rg 命中的 JSONL 路径。
+    for str_raw_path in str_rg_stdout.splitlines():
+
+        # 去掉换行和首尾空白，得到候选 session 文件文本路径。
+        str_candidate_path = str_raw_path.strip()  # rg 返回的候选 session 路径文本。
+
+        # 空白行没有任何路径意义，直接跳过。
+        if not str_candidate_path:
+
+            # 当前空白行不参与候选文件集合构建。
+            continue
+
+        # 解析成绝对路径，便于后续复制到 temp CODEX_HOME 时保持稳定。
+        path_candidate_session = Path(str_candidate_path).expanduser().resolve()  # 命中的 session JSONL 绝对路径。
+
+        # 只保留真实存在的 JSONL 文件，避免脏输出污染候选集合。
+        if path_candidate_session.is_file():
+
+            # 记录当前 exact-cwd 可能相关的 session 文件。
+            set_session_paths.add(path_candidate_session)
+
+    # 返回单轮 rg 输出中过滤后的真实路径集合。
+    return set_session_paths
+
+# 从单条 JSONL 原始文本中识别 session_meta 记录。
+def parse_session_meta_line(str_raw_line: str) -> str | None:
+    """
+    解析单条 JSONL 文本，提取可直接复用的 session_meta 原始行。
+
+    参数:
+        str_raw_line: 当前扫描到的 JSONL 原始文本行。
+
+    返回:
+        返回标准化换行后的 session_meta 原始行；当前行不是目标记录时返回 None。
+    """
+
+    # 先按官方 verifier 的 JSONL 记录格式解析当前行。
+    dict_data = json.loads(str_raw_line)  # 当前 session JSONL 记录对象。
+
+    # 非 session_meta 记录对上游匹配无意义，继续读取下一行。
+    if dict_data.get("type") != "session_meta":
+
+        # 当前 JSONL 记录不是会话元数据，继续顺序扫描。
+        return None
+
+    # 上游 verifier 只消费 payload 为 dict 的 session_meta 记录。
+    if not isinstance(dict_data.get("payload"), dict):
+
+        # payload 不是对象时不满足上游 verifier 的读取前提。
+        return None
+
+    # 保留原始 session_meta 行文本，避免 wrapper 重写 JSON 字段顺序。
+    return str_raw_line if str_raw_line.endswith("\n") else f"{str_raw_line}\n"
+
+# 从已打开的 session JSONL 句柄中顺序抽取首条 session_meta 原始行。
+def find_session_meta_line(handle: TextIO) -> str | None:
+    """
+    顺序扫描 session JSONL 文本流，返回首条可复用的 session_meta 原始行。
+
+    参数:
+        handle: 已打开的 session JSONL 文本句柄。
+
+    返回:
+        返回首条 session_meta 原始行；没有命中时返回 None。
+    """
+
+    # 顺序扫描 JSONL，命中首条 session_meta 后立即返回原始文本行。
+    for str_raw_line in handle:
+
+        # 当前行若已满足上游 verifier 的 session_meta 条件，则立即返回。
+        str_session_meta_line = parse_session_meta_line(str_raw_line)  # 当前 JSONL 行对应的 session_meta 提取结果。
+
+        # 当前行一旦满足 session_meta 条件，就立即停止继续扫描后续长日志。
+        if str_session_meta_line is not None:
+
+            # 命中 session_meta 后立即短路返回，避免继续扫描长日志。
+            return str_session_meta_line
+
+    # 扫描结束仍无命中时返回 None，让上层回退到整文件复制。
+    return None
+
 # 用 ripgrep 先把 sessions 缩到当前 exact-cwd 候选文件集合，避免全量 JSONL 扫描。
 def find_matching_session_files(project: Path, sessions_root: Path) -> list[Path] | None:
     """
@@ -414,13 +662,8 @@ def find_matching_session_files(project: Path, sessions_root: Path) -> list[Path
         # 逐项推进 exact-cwd 搜索字面量，缩小 sessions 输入面。
         for str_term in session_search_terms(project):
 
-            # 用 ripgrep 只列出命中的 JSONL 文件路径，不读取完整内容到 Python。
-            completed_process_search: subprocess.CompletedProcess[str] = subprocess.run(  # 当前字面量的 rg 搜索结果。
-                ["rg", "-l", "-i", "-F", "-g", "*.jsonl", str_term, str(sessions_root)],  # 使用固定字符串搜索当前项目路径字面量。
-                check=False,  # rg 退出码 1 只表示无匹配，不属于异常。
-                capture_output=True,  # 捕获 stdout 便于收集候选文件路径。
-                text=True,  # 以文本模式读取 rg 的路径输出。
-            )  # 当前 exact-cwd 字面量的 rg 扫描结果。
+            # 先执行当前字面量对应的 rg 搜索，再决定是否值得吸收候选 session 路径。
+            completed_process_search = run_session_rg_search(str_term, sessions_root)  # 当前字面量的 rg 搜索结果。
 
             # rg 只有 0 和 1 是可接受结果；其他退出码通常表示环境或参数异常。
             if completed_process_search.returncode not in {0, 1}:
@@ -428,26 +671,8 @@ def find_matching_session_files(project: Path, sessions_root: Path) -> list[Path
                 # 快速筛选异常时回退到原始环境，避免 wrapper 假装拿到了完整证据。
                 return None
 
-            # 逐项吸收 rg 命中的 JSONL 路径。
-            for str_raw_path in completed_process_search.stdout.splitlines():
-
-                # 去掉换行和首尾空白，得到候选 session 文件文本路径。
-                str_candidate_path = str_raw_path.strip()  # rg 返回的候选 session 路径文本。
-
-                # 空白行没有任何路径意义，直接跳过。
-                if not str_candidate_path:
-
-                    # 当前空白行不参与候选文件集合构建。
-                    continue
-
-                # 解析成绝对路径，便于后续复制到 temp CODEX_HOME 时保持稳定。
-                path_candidate_session = Path(str_candidate_path).expanduser().resolve()  # 命中的 session JSONL 绝对路径。
-
-                # 只保留真实存在的 JSONL 文件，避免脏输出污染候选集合。
-                if path_candidate_session.is_file():
-
-                    # 记录当前 exact-cwd 可能相关的 session 文件。
-                    set_session_paths.add(path_candidate_session)
+            # 只吸收真实存在的 JSONL 文件，避免脏输出污染候选集合。
+            set_session_paths.update(collect_existing_session_paths(completed_process_search.stdout))
 
     # rg 不存在时只能回退到原始环境，不能伪造缩面成功。
     except FileNotFoundError:
@@ -476,23 +701,8 @@ def extract_session_meta_line(path_session: Path) -> str | None:
         # 以忽略坏字节的方式读取 JSONL，保持和上游 parse_session_meta 一致的编码容错行为。
         with path_session.open("r", encoding="utf-8", errors="ignore") as handle:
 
-            # 顺序扫描 JSONL，命中首条 session_meta 后立即返回原始文本行。
-            for str_raw_line in handle:
-
-                # 先按官方 verifier 的 JSONL 记录格式解析当前行。
-                dict_data = json.loads(str_raw_line)  # 当前 session JSONL 记录对象。
-
-                # 非 session_meta 记录对上游匹配无意义，继续读取下一行。
-                if dict_data.get("type") != "session_meta":
-
-                    # 当前 JSONL 记录不是会话元数据，继续顺序扫描。
-                    continue
-
-                # 上游 verifier 只消费 payload 为 dict 的 session_meta 记录。
-                if isinstance(dict_data.get("payload"), dict):
-
-                    # 保留原始 session_meta 行文本，避免 wrapper 重写 JSON 字段顺序。
-                    return str_raw_line if str_raw_line.endswith("\n") else f"{str_raw_line}\n"
+            # 把顺序扫描逻辑委托给 helper，保持当前函数只负责文件打开与异常边界。
+            return find_session_meta_line(handle)
 
     # 任何读文件或 JSON 解析异常都回退到整文件复制，避免 wrapper 自己制造误判。
     except (OSError, json.JSONDecodeError):

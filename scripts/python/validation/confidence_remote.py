@@ -25,26 +25,26 @@ from typing import Any
 # validation 目录需要加入导入路径，以兼容直接运行本文件的场景。
 MODULE_DIR = Path(__file__).resolve().parent  # validation 脚本目录
 
-# skill 根目录承载 runtime 包和远端验收脚本。
+# skill 根目录承载 scripts.python 包和远端验收脚本。
 SKILL_ROOT = Path(__file__).resolve().parents[3]  # erie-hls-generator 技能根目录
 
 # 直接执行 validation 脚本时，先让同目录 helper 可被解析。
 site.addsitedir(str(MODULE_DIR))
 
-# runtime 包位于 skill 根目录下，测试导入与 CLI 执行共享同一入口。
+# scripts.python 包位于 skill 根目录下，测试导入与 CLI 执行共享同一入口。
 site.addsitedir(str(SKILL_ROOT))
 
 # board 分区函数读取示例声明中的板卡验收元数据。
-from runtime.hls_generator.board_acceptance import partition_example_specs_by_board_acceptance
+from scripts.python.remote.board_acceptance import partition_example_specs_by_board_acceptance
 
 # 配置 helper 提供 skill 内部 examples_dir 的规范路径。
-from runtime.hls_generator.config import skill_config_path
+from scripts.python.config.hls_config import skill_config_path
 
 # 远端目录契约校验保证保留的 run 产物可审查。
-from runtime.hls_generator.remote_directory_contract import validate_remote_result_contract
+from scripts.python.remote.remote_directory_contract import validate_remote_result_contract
 
 # 路由契约约束 server_6 等远端目标不能被临时绕过。
-from runtime.hls_generator.route_contract import load_remote_route_contract, validate_remote_route_target
+from scripts.python.remote.route_contract import load_remote_route_contract, validate_remote_route_target
 
 # 本地 confidence helper 复用进程运行和输出裁剪逻辑。
 from confidence_local import _load_tier1_board_matrix, _run_process, _tail

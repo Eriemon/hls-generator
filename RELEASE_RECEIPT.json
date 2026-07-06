@@ -1,960 +1,968 @@
 {
-  "version": "0.2.3",
-  "tag": "v0.2.3",
+  "version": "0.2.6",
+  "tag": "v0.2.6",
   "package": "erie-hls-generator",
-  "generated_at": "2026-07-05T05:13:14Z",
+  "generated_at": "2026-07-06T04:52:37Z",
   "files": [
     {
-      "path": "checksums.sha256",
-      "sha256": "253f7e54fde92005f3763eb2a452bb4274294f2e97fc6d8d33026cc800147aaf"
-    },
-    {
-      "path": "RELEASE_MANIFEST.json",
-      "sha256": "036c37af34b91b86660be4d8433649aa5e6c3a7fadee55e9764bf3dceabb9b82"
-    },
-    {
-      "path": "repository/hls-generator/.gitignore",
+      "path": ".gitignore",
       "sha256": "9c99732a61888573a3daf62d096168e061feacfa1ad0aaa93d79b712b8a7b590"
     },
     {
-      "path": "repository/hls-generator/agents/openai.yaml",
+      "path": "agents/openai.yaml",
       "sha256": "57ae4f6215d94a450e47d4f4fbef1eb671cf2d9d9c4a5c45d0c8dd319cd1cbd5"
     },
     {
-      "path": "repository/hls-generator/assets/examples/hls_2d_block_transform_spec.json",
-      "sha256": "01cb9158bbabb777790e008a7f13f24033f36d35c32b91361cf8d5be8f4f908d"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_array_reshape_vector_scale_spec.json",
-      "sha256": "3da9bef69acd039800ac2265a855a262c46b7368398cedc8dda27d6d5f90a8cd"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_axi4_burst_vector_scale_spec.json",
-      "sha256": "a4b9c0f01dfd79923321d48e77c5feeb77d862c9089ac445e382c7bf17cbdcec"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_axis_increment_spec.json",
-      "sha256": "6e11fc2766c5f2b704224b12267074fadbc74787d01542cbafb3af14e5c7da1c"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_cordic_axis_board_spec.json",
-      "sha256": "6596c2261414cfb5fb7effa7e84775c5bef9212b93838eb01afaa597c8e5a847"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_cordic_axis_spec.json",
-      "sha256": "b034d5b328731dcd09056e1b59bba298346053fc5ecdb588564712dad5f818d4"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_cordic_rotation_spec.json",
-      "sha256": "a56cd7d6649b3cc9879d1a163c179b79e015aedc06c976e9415ec8af7ea9b417"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_cordic_sincos_spec.json",
-      "sha256": "0009cf095bbb92c23790bf78e4d1cf22cdd5c1e250436a76090fbf8432702636"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_cordic_vectoring_spec.json",
-      "sha256": "b16e29d0eea64bb3be421c1605961145bc10f0523a7e0ac5921137d2f8119074"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_dataflow_axis_spec.json",
-      "sha256": "98aa91cd1b007cfe094d3a0b9648ae1437cec7a43f5b980a8e0db4ad949e654e"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_directio_freerun_axis_spec.json",
-      "sha256": "d613cb7c8778b50fa4390a65d52c0a731ae830761ec7b90f6ae53caa0f2ea0e8"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_fence_ordering_spec.json",
-      "sha256": "e214a42ed0201ddc73d76e61ecd844d2668e48cbca535f8ed3ee2d7db424b96a"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_fft_fixed_point_spec.json",
-      "sha256": "97b6fd25a3b33c61fd11ab196e74d0d62298aa54bd91b69e2f3b4e98f1668bbb"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_fft_power_spectrum_spec.json",
-      "sha256": "5eb5f50106916cb0cc38719ece4059f417bf77a8115475f8c442c6dd0bdc189e"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_fft_scaled_spec.json",
-      "sha256": "bb4ad3fa7485b27002b0da894fc1aed9da3915c68c619af84c70b7ff5b54d042"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_fir_axis_board_spec.json",
-      "sha256": "2225a0d41873e12ab91c74dbbb2cab70dcafda9b845041d195380a0d5840241f"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_fir_axis_spec.json",
-      "sha256": "8c7e6848bd96db1767f8a05dab44e5938a444501c15e9bf50e00a31641a2aae1"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_fir_dataflow_spec.json",
-      "sha256": "8a53f53182552f9453fd2e5ddc79d85f81f05f2f07d200e49770260b3baf85bf"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_fir_pipeline_spec.json",
-      "sha256": "8106a4cfc473a2210fc9426443f1947452264e441aaa32c510ef03af6509bd4c"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_fir_symmetric_spec.json",
-      "sha256": "4a09ae809a2de350af26a7ec36297f8a6e930a1bbaca7d71e60ee04a9b1ec3dc"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_fixed_point_scale_spec.json",
-      "sha256": "bcccd8d4198f8106c7a214c1c4b62ce89822fa187f59dc580af0c30a949792c3"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_host_kernel_split_spec.json",
-      "sha256": "60389795875cd5b2c6c02d7fa90be3f33db6dba6897d72e70c11ca5b83f5db6e"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_line_buffer_stencil_spec.json",
-      "sha256": "09bc57f465ae1d5e4c13fcdba6d0183cedb595689f5351e8b4c0dbf68da6c99e"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_lz77_reference_spec.json",
-      "sha256": "9b91fd2520bb9dd52ef1556d4c0d8e058593b767a0cf4f49f7f95e65c17d82ec"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_matmul_blocked_spec.json",
-      "sha256": "cfc0262e57b0afa693a65742b31354489616459a261e96dc4650478c99ff8a6d"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_matmul_dataflow_spec.json",
-      "sha256": "3e70a4b87ffcf4e4f0cf981bcafa6da4ef4d75659de9e20d5779167bc7632c20"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_matmul_partitioned_spec.json",
-      "sha256": "594578e624194448b95ef34e3d1dddf2508a1f073ee8a6a6647c252c900fee29"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_minimal_vitis_pipeline_spec.json",
-      "sha256": "3b844bb1fb6beda5148efc094b7616f5b16d13f5da0724c95acbb0fdb6a5785b"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_multi_m_axi_add_spec.json",
-      "sha256": "fb191cdcbb291d40dd891b6bff2f19952fabeb460480953ac30ccf8e6cca914f"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_partition_vector_scale_spec.json",
-      "sha256": "74d2f8d90644fd4917501b371bcd36ce69667fbf5c50e81ed6f3cbc667f3ed71"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_prefix_basic_spec.json",
-      "sha256": "987c805eff80abde4d41246cef9d9c4535661ca33bdeb6885cbf1455bc17a837"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_prefix_blocked_spec.json",
-      "sha256": "ee28a566b63df471e7cd87199bceba7e39c85f0c0073eedf97f347236efe73d5"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_reduction_tree_sum_spec.json",
-      "sha256": "a0f362cbd81e284c270515b0629faccdc63467928fbf0798e75caee50a3e1adf"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_rle_axis_decode_board_spec.json",
-      "sha256": "9d0a73b053035e20dcb0a4f963c5d90175d3d2fe536bbe7cead03e9a5471a5f4"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_rle_axis_decode_spec.json",
-      "sha256": "d40194e237a792dd8f6bff134812938df9278f46bea0816115414d7cecb52b7f"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_rle_axis_encode_board_spec.json",
-      "sha256": "1109ae5300d1998a5ae2d960bfa223b6580dbfec6d49807ac8c3ae9992854e84"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_rle_axis_encode_spec.json",
-      "sha256": "e2a55b190022963d3680fd3ba9d461c8dda93340e49b97f479f0f4c3b848f634"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_spmv_csr_reference_spec.json",
-      "sha256": "bae5923e6bb1fed3be8df295fdcf2762e49515e299e250b98a1e85c043584b24"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_streamofblocks_axis_spec.json",
-      "sha256": "ebd3a7c8811c82976a44d2d228f91477a78864e43c7119a87d5978c5f0edd93b"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_task_graph_axis_spec.json",
-      "sha256": "b3a61d9abcba187340372cc2c03325c0b79ccf153e064b952eeca6dc9caf1e3d"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_tiled_gemm_spec.json",
-      "sha256": "aff857e665541dd6ceb68d83b006dc1b78106e72ef1c49744f47b7a4a35c6b99"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_vector_lane_add_spec.json",
-      "sha256": "2bab4b7a4d2e79176b0bf8009a50a94432c06e39dbcc2f8ad5a331e1b814e9d2"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_vector_scale_mock_spec.json",
-      "sha256": "01387e9b68dfd9476920bd1887325afcf44a91e163a128e2abe5410db9d5826c"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/hls_vector_scale_spec.json",
-      "sha256": "9cb3b558ddd841182dbddfdf69e3ec2424d2f350eb910983fd0b26b4c1552f2a"
-    },
-    {
-      "path": "repository/hls-generator/assets/examples/tier1_board_coverage_matrix.json",
-      "sha256": "9d492aa30280525de05a1ed06acf9d195eadf11fbe4dcc982dcc24f4e627c2e9"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_array_partition_template.json",
-      "sha256": "41eeb6dee595fe64e096126ba15a75ec1d2d135c6be1b978cc2a574507f4a5b1"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_array_reshape_template.json",
-      "sha256": "6d6780231b21dd00d353b576cfd51b0a9c51e4bbf62bb428113089463e9584f8"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_axi4_burst_template.json",
-      "sha256": "7f5ccc16de60a3c100b16e5d8456ed5190fb72da54a726269f902b789e840f5e"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_cordic_axis_template.json",
-      "sha256": "78c141769e53bf924a1d2d94cb13b9becb3363b6d2aa4752ed84e0d808e3d743"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_cordic_rotation_template.json",
-      "sha256": "feb9f5ccba6128e1b2d49b714395f14043efce00fc3542b0b48387c3a3556c4a"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_cordic_sincos_template.json",
-      "sha256": "d0f7af0d887cb8b9f368bf871b1d09b986c59668736321c371592a6c84d5c933"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_cordic_vectoring_template.json",
-      "sha256": "872d261f448903153bae4482bf3b2efeba69d9b3bbb625065c32905e93664baf"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_dataflow_template.json",
-      "sha256": "1a9aca2608da45fc3bf5a04b48ec0c17e00fdc089ec76f8a78ce60e1a08ba176"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_directio_freerun_template.json",
-      "sha256": "34e9204f4682ecdaa989561a166c6437b27de3a898f23d2b321eb234f6b3db8c"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_fence_ordering_template.json",
-      "sha256": "72ae664bba117482211c0bf35867e8b4a25ffaed07272aa6a323273ffd9d84c2"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_fft_fixed_point_template.json",
-      "sha256": "04ea7cef013eed889324f8514b0717ae6b3a0c4f49d43af19b7ef005f13ab97e"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_fft_power_spectrum_template.json",
-      "sha256": "c0bd1ef687cace3d22ff5fd42dd7ce1cba694dc0bc1901a01ce32659def6eec0"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_fft_scaled_template.json",
-      "sha256": "52cde0f4914be5ebdd89b56ec5509f5be0d757633948ead3071120fae990249f"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_fir_axis_template.json",
-      "sha256": "d0cca86eaf6a90535843f78578ff06c2edee0a53c5a75950491861e7181cf04d"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_fir_dataflow_template.json",
-      "sha256": "f4139d7bf1614d71e8b9422da55735a34def8c7b84e0acdfa5d7bd671ac16bf7"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_fir_pipeline_template.json",
-      "sha256": "e9bf43d05dbfa10dd4a4b232980887a04decc0331720bc4ee83bb249d42495a0"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_fir_symmetric_template.json",
-      "sha256": "9c32de759cdd1118ee0dffc371f766aa869900e9e2bb5fe6a3a5fba93fa28d9a"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_fixed_point_template.json",
-      "sha256": "f7a785050e5d72df8fa119e24b2f2382748dfa7fac49ec630373d8e1ee7244fc"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_host_kernel_split_template.json",
-      "sha256": "31bf1c1556baa36e97f75401ca8c1a0ef92e732221a2199479dfbdd7f6153068"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_line_buffer_stencil_template.json",
-      "sha256": "baff5617cf1874a56245e8b5162a58b64c62230643be75702a128cd0f94a1898"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_matmul_blocked_template.json",
-      "sha256": "24c8a11d95f25f5011ba429ec4cb14a73c0e6bd5488f755544095c5eff9e1218"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_matmul_dataflow_template.json",
-      "sha256": "664dbc315822ee205b865d9a4a703aafa105de2f080d83aab81bd95b9fa5d7cd"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_matmul_partitioned_template.json",
-      "sha256": "7701af8a2915d11e91b60fe772c9bce6c0419319e0699ad7254c4a7c27f2aaff"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_minimal_vitis_pipeline_template.json",
-      "sha256": "882cc3a5b51c60a541427ad4db88111cb71e597644050c061c5a6eb503df561c"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_multi_m_axi_template.json",
-      "sha256": "abe7722cca62b2327ac1298bbe118f947197a739bd0aa765ece9cddc8a26c895"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_prefix_basic_template.json",
-      "sha256": "5d98eef7c44eab25f896c282ff0f3f55467e7ec46bb60cc7abc27e21cf44a026"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_prefix_blocked_template.json",
-      "sha256": "352227f08dfe94569143b31012bb49b4037677ff75058013ccdeda6f0fa7da59"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_reduction_tree_template.json",
-      "sha256": "ed67f0af1bc07fa7ec816a10bc497e9ca30e7607cf8cfd5f0f19ad6def910752"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_rle_axis_decode_template.json",
-      "sha256": "c43df78fda04afd3281c940c3fb67277869191899bc852201e6365e7c2ffa70d"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_rle_axis_encode_template.json",
-      "sha256": "a354644c7861143a866259e203eb4a13604335eef5f37f9c3ad2afe44575109d"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_streamofblocks_template.json",
-      "sha256": "784619e3ab0ce3e64222ed7228fb0b0a3c0164d6bc3ca2437d837b80142addae"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_task_graph_template.json",
-      "sha256": "802dbb82bd9a7ce0e3e8a58eb307f9572bac5a6adf39e9e4ec41d4afc8d710dc"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_tiled_gemm_template.json",
-      "sha256": "24d616749bc6e5315e65879298cd990b6eef9c4db6d4d823cb52e4d4606f897d"
-    },
-    {
-      "path": "repository/hls-generator/assets/templates/hls_vector_lane_template.json",
-      "sha256": "d9267c251e532aad79a7a2fdbe24e18018577bda99adc1aa538eff661da46414"
-    },
-    {
-      "path": "repository/hls-generator/assets/validation-board/hosts/binary_add_host.cpp.tpl",
-      "sha256": "a67c0fd82ed5c7c4a6d81e28652088f0752e69641a8da7103b742e9081394eb3"
-    },
-    {
-      "path": "repository/hls-generator/assets/validation-board/hosts/binary_memory_host.cpp.tpl",
-      "sha256": "0822e3bb04d71f1f2835b80f771be101fd7309c9f2f13e74dbcad9c5be096599"
-    },
-    {
-      "path": "repository/hls-generator/assets/validation-board/hosts/matrix_memory_host.cpp.tpl",
-      "sha256": "89ac7b380749ca9208b66500f1e13cd1cd85bac0fd74f04e04785a330b87918d"
-    },
-    {
-      "path": "repository/hls-generator/assets/validation-board/hosts/matrix_unary_host.cpp.tpl",
-      "sha256": "96e576b58a3765cc451091e9592aade2394a409857339357c1e226dbd3b6c3ea"
-    },
-    {
-      "path": "repository/hls-generator/assets/validation-board/hosts/unary_memory_host.cpp.tpl",
-      "sha256": "d29b0ea3437c4bd7550ff670523a6e05764bf499ff6dddd865f487ea64aecd46"
-    },
-    {
-      "path": "repository/hls-generator/assets/validation-board/hosts/vector_increment_host.cpp.tpl",
-      "sha256": "fa865f8a2fbd824943675567bd8c261d493ec458cf2ac8cdfddd7d4d96f56ff4"
-    },
-    {
-      "path": "repository/hls-generator/assets/validation-board/hosts/vector_scale_host.cpp.tpl",
-      "sha256": "584a403d2d6f5572ea9a98202156ca863ba58e160b0b8999c3ad8abb01f12d4c"
-    },
-    {
-      "path": "repository/hls-generator/assets/validation-board/hosts/wrapper_unary_memory_host.cpp.tpl",
-      "sha256": "79b705765496f7df1b8c96af555d4f56dffbd085c76ba22b98cb41e8c7f7fef7"
-    },
-    {
-      "path": "repository/hls-generator/assets/validation-board/README.md",
-      "sha256": "afcceb75627cd4c23c5333df428d89fcbf1140953a260717eff6353ce5c20adb"
-    },
-    {
-      "path": "repository/hls-generator/CITATION.cff",
-      "sha256": "003502b46389d74bbd7f5db08715f180e0fe857d4e20b21d952bc4280a0e8129"
-    },
-    {
-      "path": "repository/hls-generator/CONTRIBUTING.md",
-      "sha256": "c88ee5db656958f99989f29359af0097a920cfa2d23b6db760b26e4339be8f1d"
-    },
-    {
-      "path": "repository/hls-generator/docs/assets/architecture-cn.svg",
-      "sha256": "e7db3c9cad9379f7f6fa30d6f869ec341d2e077a9cb97bb4a7982d77ba4c623f"
-    },
-    {
-      "path": "repository/hls-generator/docs/assets/architecture.svg",
-      "sha256": "2c4dc18b1f7eea2442d0132ca5a30c64a01602b8c6762cad415a24ddeb177d9e"
-    },
-    {
-      "path": "repository/hls-generator/docs/assets/hero.svg",
-      "sha256": "8213e1c585eeec1c5e6e2c2c67389452e1475fe72af1cc80b8e5ed40f0d66f52"
-    },
-    {
-      "path": "repository/hls-generator/docs/assets/workflow-cn.svg",
-      "sha256": "ce5f6acf2e00ac435131646a2d8800fea566a28e5a6e24d70de526502a2c8404"
-    },
-    {
-      "path": "repository/hls-generator/docs/assets/workflow.svg",
-      "sha256": "fa3f4a353cf6ad866ee7b929f49ac225780425a39f7731b23360fbdf6f71cc6c"
-    },
-    {
-      "path": "repository/hls-generator/evals/evals.json",
-      "sha256": "82f5fb676939a002ce30175e8dc4b4c1abeb05423ab2d67f4e47f9f7ea2f6a00"
-    },
-    {
-      "path": "repository/hls-generator/integration/__init__.py",
-      "sha256": "b78b034bdf250a64e68685944b820c6609a72a7efa5df64473786a7a5aee475a"
-    },
-    {
-      "path": "repository/hls-generator/integration/default_workflow_config.json",
+      "path": "assets/config/default_workflow_config.json",
       "sha256": "e36099bb90bb592f5ef64db859e3ce43906d2a3f1116469515745ceb988efc8c"
     },
     {
-      "path": "repository/hls-generator/integration/hls_adapter.py",
-      "sha256": "832ff189019dd40fb779130d01b705100b644921efb3dacf52456505ed92a9b4"
+      "path": "assets/examples/hls_2d_block_transform_spec.json",
+      "sha256": "01cb9158bbabb777790e008a7f13f24033f36d35c32b91361cf8d5be8f4f908d"
     },
     {
-      "path": "repository/hls-generator/LICENSE",
+      "path": "assets/examples/hls_array_reshape_vector_scale_spec.json",
+      "sha256": "3da9bef69acd039800ac2265a855a262c46b7368398cedc8dda27d6d5f90a8cd"
+    },
+    {
+      "path": "assets/examples/hls_axi4_burst_vector_scale_spec.json",
+      "sha256": "a4b9c0f01dfd79923321d48e77c5feeb77d862c9089ac445e382c7bf17cbdcec"
+    },
+    {
+      "path": "assets/examples/hls_axis_increment_spec.json",
+      "sha256": "6e11fc2766c5f2b704224b12267074fadbc74787d01542cbafb3af14e5c7da1c"
+    },
+    {
+      "path": "assets/examples/hls_cordic_axis_board_spec.json",
+      "sha256": "6596c2261414cfb5fb7effa7e84775c5bef9212b93838eb01afaa597c8e5a847"
+    },
+    {
+      "path": "assets/examples/hls_cordic_axis_spec.json",
+      "sha256": "b034d5b328731dcd09056e1b59bba298346053fc5ecdb588564712dad5f818d4"
+    },
+    {
+      "path": "assets/examples/hls_cordic_rotation_spec.json",
+      "sha256": "a56cd7d6649b3cc9879d1a163c179b79e015aedc06c976e9415ec8af7ea9b417"
+    },
+    {
+      "path": "assets/examples/hls_cordic_sincos_spec.json",
+      "sha256": "0009cf095bbb92c23790bf78e4d1cf22cdd5c1e250436a76090fbf8432702636"
+    },
+    {
+      "path": "assets/examples/hls_cordic_vectoring_spec.json",
+      "sha256": "b16e29d0eea64bb3be421c1605961145bc10f0523a7e0ac5921137d2f8119074"
+    },
+    {
+      "path": "assets/examples/hls_dataflow_axis_spec.json",
+      "sha256": "98aa91cd1b007cfe094d3a0b9648ae1437cec7a43f5b980a8e0db4ad949e654e"
+    },
+    {
+      "path": "assets/examples/hls_directio_freerun_axis_spec.json",
+      "sha256": "d613cb7c8778b50fa4390a65d52c0a731ae830761ec7b90f6ae53caa0f2ea0e8"
+    },
+    {
+      "path": "assets/examples/hls_fence_ordering_spec.json",
+      "sha256": "e214a42ed0201ddc73d76e61ecd844d2668e48cbca535f8ed3ee2d7db424b96a"
+    },
+    {
+      "path": "assets/examples/hls_fft_fixed_point_spec.json",
+      "sha256": "97b6fd25a3b33c61fd11ab196e74d0d62298aa54bd91b69e2f3b4e98f1668bbb"
+    },
+    {
+      "path": "assets/examples/hls_fft_power_spectrum_spec.json",
+      "sha256": "5eb5f50106916cb0cc38719ece4059f417bf77a8115475f8c442c6dd0bdc189e"
+    },
+    {
+      "path": "assets/examples/hls_fft_scaled_spec.json",
+      "sha256": "bb4ad3fa7485b27002b0da894fc1aed9da3915c68c619af84c70b7ff5b54d042"
+    },
+    {
+      "path": "assets/examples/hls_fir_axis_board_spec.json",
+      "sha256": "2225a0d41873e12ab91c74dbbb2cab70dcafda9b845041d195380a0d5840241f"
+    },
+    {
+      "path": "assets/examples/hls_fir_axis_spec.json",
+      "sha256": "8c7e6848bd96db1767f8a05dab44e5938a444501c15e9bf50e00a31641a2aae1"
+    },
+    {
+      "path": "assets/examples/hls_fir_dataflow_spec.json",
+      "sha256": "8a53f53182552f9453fd2e5ddc79d85f81f05f2f07d200e49770260b3baf85bf"
+    },
+    {
+      "path": "assets/examples/hls_fir_pipeline_spec.json",
+      "sha256": "8106a4cfc473a2210fc9426443f1947452264e441aaa32c510ef03af6509bd4c"
+    },
+    {
+      "path": "assets/examples/hls_fir_symmetric_spec.json",
+      "sha256": "4a09ae809a2de350af26a7ec36297f8a6e930a1bbaca7d71e60ee04a9b1ec3dc"
+    },
+    {
+      "path": "assets/examples/hls_fixed_point_scale_spec.json",
+      "sha256": "bcccd8d4198f8106c7a214c1c4b62ce89822fa187f59dc580af0c30a949792c3"
+    },
+    {
+      "path": "assets/examples/hls_host_kernel_split_spec.json",
+      "sha256": "60389795875cd5b2c6c02d7fa90be3f33db6dba6897d72e70c11ca5b83f5db6e"
+    },
+    {
+      "path": "assets/examples/hls_line_buffer_stencil_spec.json",
+      "sha256": "09bc57f465ae1d5e4c13fcdba6d0183cedb595689f5351e8b4c0dbf68da6c99e"
+    },
+    {
+      "path": "assets/examples/hls_lz77_reference_spec.json",
+      "sha256": "9b91fd2520bb9dd52ef1556d4c0d8e058593b767a0cf4f49f7f95e65c17d82ec"
+    },
+    {
+      "path": "assets/examples/hls_matmul_blocked_spec.json",
+      "sha256": "cfc0262e57b0afa693a65742b31354489616459a261e96dc4650478c99ff8a6d"
+    },
+    {
+      "path": "assets/examples/hls_matmul_dataflow_spec.json",
+      "sha256": "3e70a4b87ffcf4e4f0cf981bcafa6da4ef4d75659de9e20d5779167bc7632c20"
+    },
+    {
+      "path": "assets/examples/hls_matmul_partitioned_spec.json",
+      "sha256": "594578e624194448b95ef34e3d1dddf2508a1f073ee8a6a6647c252c900fee29"
+    },
+    {
+      "path": "assets/examples/hls_minimal_vitis_pipeline_spec.json",
+      "sha256": "3b844bb1fb6beda5148efc094b7616f5b16d13f5da0724c95acbb0fdb6a5785b"
+    },
+    {
+      "path": "assets/examples/hls_multi_m_axi_add_spec.json",
+      "sha256": "fb191cdcbb291d40dd891b6bff2f19952fabeb460480953ac30ccf8e6cca914f"
+    },
+    {
+      "path": "assets/examples/hls_partition_vector_scale_spec.json",
+      "sha256": "74d2f8d90644fd4917501b371bcd36ce69667fbf5c50e81ed6f3cbc667f3ed71"
+    },
+    {
+      "path": "assets/examples/hls_prefix_basic_spec.json",
+      "sha256": "987c805eff80abde4d41246cef9d9c4535661ca33bdeb6885cbf1455bc17a837"
+    },
+    {
+      "path": "assets/examples/hls_prefix_blocked_spec.json",
+      "sha256": "ee28a566b63df471e7cd87199bceba7e39c85f0c0073eedf97f347236efe73d5"
+    },
+    {
+      "path": "assets/examples/hls_reduction_tree_sum_spec.json",
+      "sha256": "a0f362cbd81e284c270515b0629faccdc63467928fbf0798e75caee50a3e1adf"
+    },
+    {
+      "path": "assets/examples/hls_rle_axis_decode_board_spec.json",
+      "sha256": "9d0a73b053035e20dcb0a4f963c5d90175d3d2fe536bbe7cead03e9a5471a5f4"
+    },
+    {
+      "path": "assets/examples/hls_rle_axis_decode_spec.json",
+      "sha256": "d40194e237a792dd8f6bff134812938df9278f46bea0816115414d7cecb52b7f"
+    },
+    {
+      "path": "assets/examples/hls_rle_axis_encode_board_spec.json",
+      "sha256": "1109ae5300d1998a5ae2d960bfa223b6580dbfec6d49807ac8c3ae9992854e84"
+    },
+    {
+      "path": "assets/examples/hls_rle_axis_encode_spec.json",
+      "sha256": "e2a55b190022963d3680fd3ba9d461c8dda93340e49b97f479f0f4c3b848f634"
+    },
+    {
+      "path": "assets/examples/hls_spmv_csr_reference_spec.json",
+      "sha256": "bae5923e6bb1fed3be8df295fdcf2762e49515e299e250b98a1e85c043584b24"
+    },
+    {
+      "path": "assets/examples/hls_streamofblocks_axis_spec.json",
+      "sha256": "ebd3a7c8811c82976a44d2d228f91477a78864e43c7119a87d5978c5f0edd93b"
+    },
+    {
+      "path": "assets/examples/hls_task_graph_axis_spec.json",
+      "sha256": "b3a61d9abcba187340372cc2c03325c0b79ccf153e064b952eeca6dc9caf1e3d"
+    },
+    {
+      "path": "assets/examples/hls_tiled_gemm_spec.json",
+      "sha256": "aff857e665541dd6ceb68d83b006dc1b78106e72ef1c49744f47b7a4a35c6b99"
+    },
+    {
+      "path": "assets/examples/hls_vector_lane_add_spec.json",
+      "sha256": "2bab4b7a4d2e79176b0bf8009a50a94432c06e39dbcc2f8ad5a331e1b814e9d2"
+    },
+    {
+      "path": "assets/examples/hls_vector_scale_mock_spec.json",
+      "sha256": "01387e9b68dfd9476920bd1887325afcf44a91e163a128e2abe5410db9d5826c"
+    },
+    {
+      "path": "assets/examples/hls_vector_scale_spec.json",
+      "sha256": "9cb3b558ddd841182dbddfdf69e3ec2424d2f350eb910983fd0b26b4c1552f2a"
+    },
+    {
+      "path": "assets/examples/tier1_board_coverage_matrix.json",
+      "sha256": "9d492aa30280525de05a1ed06acf9d195eadf11fbe4dcc982dcc24f4e627c2e9"
+    },
+    {
+      "path": "assets/templates/hls_array_partition_template.json",
+      "sha256": "41eeb6dee595fe64e096126ba15a75ec1d2d135c6be1b978cc2a574507f4a5b1"
+    },
+    {
+      "path": "assets/templates/hls_array_reshape_template.json",
+      "sha256": "6d6780231b21dd00d353b576cfd51b0a9c51e4bbf62bb428113089463e9584f8"
+    },
+    {
+      "path": "assets/templates/hls_axi4_burst_template.json",
+      "sha256": "7f5ccc16de60a3c100b16e5d8456ed5190fb72da54a726269f902b789e840f5e"
+    },
+    {
+      "path": "assets/templates/hls_cordic_axis_template.json",
+      "sha256": "78c141769e53bf924a1d2d94cb13b9becb3363b6d2aa4752ed84e0d808e3d743"
+    },
+    {
+      "path": "assets/templates/hls_cordic_rotation_template.json",
+      "sha256": "feb9f5ccba6128e1b2d49b714395f14043efce00fc3542b0b48387c3a3556c4a"
+    },
+    {
+      "path": "assets/templates/hls_cordic_sincos_template.json",
+      "sha256": "d0f7af0d887cb8b9f368bf871b1d09b986c59668736321c371592a6c84d5c933"
+    },
+    {
+      "path": "assets/templates/hls_cordic_vectoring_template.json",
+      "sha256": "872d261f448903153bae4482bf3b2efeba69d9b3bbb625065c32905e93664baf"
+    },
+    {
+      "path": "assets/templates/hls_dataflow_template.json",
+      "sha256": "1a9aca2608da45fc3bf5a04b48ec0c17e00fdc089ec76f8a78ce60e1a08ba176"
+    },
+    {
+      "path": "assets/templates/hls_directio_freerun_template.json",
+      "sha256": "34e9204f4682ecdaa989561a166c6437b27de3a898f23d2b321eb234f6b3db8c"
+    },
+    {
+      "path": "assets/templates/hls_fence_ordering_template.json",
+      "sha256": "72ae664bba117482211c0bf35867e8b4a25ffaed07272aa6a323273ffd9d84c2"
+    },
+    {
+      "path": "assets/templates/hls_fft_fixed_point_template.json",
+      "sha256": "04ea7cef013eed889324f8514b0717ae6b3a0c4f49d43af19b7ef005f13ab97e"
+    },
+    {
+      "path": "assets/templates/hls_fft_power_spectrum_template.json",
+      "sha256": "c0bd1ef687cace3d22ff5fd42dd7ce1cba694dc0bc1901a01ce32659def6eec0"
+    },
+    {
+      "path": "assets/templates/hls_fft_scaled_template.json",
+      "sha256": "52cde0f4914be5ebdd89b56ec5509f5be0d757633948ead3071120fae990249f"
+    },
+    {
+      "path": "assets/templates/hls_fir_axis_template.json",
+      "sha256": "d0cca86eaf6a90535843f78578ff06c2edee0a53c5a75950491861e7181cf04d"
+    },
+    {
+      "path": "assets/templates/hls_fir_dataflow_template.json",
+      "sha256": "f4139d7bf1614d71e8b9422da55735a34def8c7b84e0acdfa5d7bd671ac16bf7"
+    },
+    {
+      "path": "assets/templates/hls_fir_pipeline_template.json",
+      "sha256": "e9bf43d05dbfa10dd4a4b232980887a04decc0331720bc4ee83bb249d42495a0"
+    },
+    {
+      "path": "assets/templates/hls_fir_symmetric_template.json",
+      "sha256": "9c32de759cdd1118ee0dffc371f766aa869900e9e2bb5fe6a3a5fba93fa28d9a"
+    },
+    {
+      "path": "assets/templates/hls_fixed_point_template.json",
+      "sha256": "f7a785050e5d72df8fa119e24b2f2382748dfa7fac49ec630373d8e1ee7244fc"
+    },
+    {
+      "path": "assets/templates/hls_host_kernel_split_template.json",
+      "sha256": "31bf1c1556baa36e97f75401ca8c1a0ef92e732221a2199479dfbdd7f6153068"
+    },
+    {
+      "path": "assets/templates/hls_line_buffer_stencil_template.json",
+      "sha256": "baff5617cf1874a56245e8b5162a58b64c62230643be75702a128cd0f94a1898"
+    },
+    {
+      "path": "assets/templates/hls_matmul_blocked_template.json",
+      "sha256": "24c8a11d95f25f5011ba429ec4cb14a73c0e6bd5488f755544095c5eff9e1218"
+    },
+    {
+      "path": "assets/templates/hls_matmul_dataflow_template.json",
+      "sha256": "664dbc315822ee205b865d9a4a703aafa105de2f080d83aab81bd95b9fa5d7cd"
+    },
+    {
+      "path": "assets/templates/hls_matmul_partitioned_template.json",
+      "sha256": "7701af8a2915d11e91b60fe772c9bce6c0419319e0699ad7254c4a7c27f2aaff"
+    },
+    {
+      "path": "assets/templates/hls_minimal_vitis_pipeline_template.json",
+      "sha256": "882cc3a5b51c60a541427ad4db88111cb71e597644050c061c5a6eb503df561c"
+    },
+    {
+      "path": "assets/templates/hls_multi_m_axi_template.json",
+      "sha256": "abe7722cca62b2327ac1298bbe118f947197a739bd0aa765ece9cddc8a26c895"
+    },
+    {
+      "path": "assets/templates/hls_prefix_basic_template.json",
+      "sha256": "5d98eef7c44eab25f896c282ff0f3f55467e7ec46bb60cc7abc27e21cf44a026"
+    },
+    {
+      "path": "assets/templates/hls_prefix_blocked_template.json",
+      "sha256": "352227f08dfe94569143b31012bb49b4037677ff75058013ccdeda6f0fa7da59"
+    },
+    {
+      "path": "assets/templates/hls_reduction_tree_template.json",
+      "sha256": "ed67f0af1bc07fa7ec816a10bc497e9ca30e7607cf8cfd5f0f19ad6def910752"
+    },
+    {
+      "path": "assets/templates/hls_rle_axis_decode_template.json",
+      "sha256": "c43df78fda04afd3281c940c3fb67277869191899bc852201e6365e7c2ffa70d"
+    },
+    {
+      "path": "assets/templates/hls_rle_axis_encode_template.json",
+      "sha256": "a354644c7861143a866259e203eb4a13604335eef5f37f9c3ad2afe44575109d"
+    },
+    {
+      "path": "assets/templates/hls_streamofblocks_template.json",
+      "sha256": "784619e3ab0ce3e64222ed7228fb0b0a3c0164d6bc3ca2437d837b80142addae"
+    },
+    {
+      "path": "assets/templates/hls_task_graph_template.json",
+      "sha256": "802dbb82bd9a7ce0e3e8a58eb307f9572bac5a6adf39e9e4ec41d4afc8d710dc"
+    },
+    {
+      "path": "assets/templates/hls_tiled_gemm_template.json",
+      "sha256": "24d616749bc6e5315e65879298cd990b6eef9c4db6d4d823cb52e4d4606f897d"
+    },
+    {
+      "path": "assets/templates/hls_vector_lane_template.json",
+      "sha256": "d9267c251e532aad79a7a2fdbe24e18018577bda99adc1aa538eff661da46414"
+    },
+    {
+      "path": "assets/validation-board/hosts/binary_add_host.cpp.tpl",
+      "sha256": "a67c0fd82ed5c7c4a6d81e28652088f0752e69641a8da7103b742e9081394eb3"
+    },
+    {
+      "path": "assets/validation-board/hosts/binary_memory_host.cpp.tpl",
+      "sha256": "0822e3bb04d71f1f2835b80f771be101fd7309c9f2f13e74dbcad9c5be096599"
+    },
+    {
+      "path": "assets/validation-board/hosts/matrix_memory_host.cpp.tpl",
+      "sha256": "89ac7b380749ca9208b66500f1e13cd1cd85bac0fd74f04e04785a330b87918d"
+    },
+    {
+      "path": "assets/validation-board/hosts/matrix_unary_host.cpp.tpl",
+      "sha256": "96e576b58a3765cc451091e9592aade2394a409857339357c1e226dbd3b6c3ea"
+    },
+    {
+      "path": "assets/validation-board/hosts/unary_memory_host.cpp.tpl",
+      "sha256": "d29b0ea3437c4bd7550ff670523a6e05764bf499ff6dddd865f487ea64aecd46"
+    },
+    {
+      "path": "assets/validation-board/hosts/vector_increment_host.cpp.tpl",
+      "sha256": "fa865f8a2fbd824943675567bd8c261d493ec458cf2ac8cdfddd7d4d96f56ff4"
+    },
+    {
+      "path": "assets/validation-board/hosts/vector_scale_host.cpp.tpl",
+      "sha256": "584a403d2d6f5572ea9a98202156ca863ba58e160b0b8999c3ad8abb01f12d4c"
+    },
+    {
+      "path": "assets/validation-board/hosts/wrapper_unary_memory_host.cpp.tpl",
+      "sha256": "79b705765496f7df1b8c96af555d4f56dffbd085c76ba22b98cb41e8c7f7fef7"
+    },
+    {
+      "path": "assets/validation-board/README.md",
+      "sha256": "afcceb75627cd4c23c5333df428d89fcbf1140953a260717eff6353ce5c20adb"
+    },
+    {
+      "path": "checksums.sha256",
+      "sha256": "18e13fa75e99e759f6c3e1db9c16b40116431c69bf35762f7168b364c44db7fa"
+    },
+    {
+      "path": "docs/assets/architecture-cn.svg",
+      "sha256": "e7db3c9cad9379f7f6fa30d6f869ec341d2e077a9cb97bb4a7982d77ba4c623f"
+    },
+    {
+      "path": "docs/assets/architecture.svg",
+      "sha256": "2c4dc18b1f7eea2442d0132ca5a30c64a01602b8c6762cad415a24ddeb177d9e"
+    },
+    {
+      "path": "docs/assets/hero.svg",
+      "sha256": "8213e1c585eeec1c5e6e2c2c67389452e1475fe72af1cc80b8e5ed40f0d66f52"
+    },
+    {
+      "path": "docs/assets/workflow-cn.svg",
+      "sha256": "ce5f6acf2e00ac435131646a2d8800fea566a28e5a6e24d70de526502a2c8404"
+    },
+    {
+      "path": "docs/assets/workflow.svg",
+      "sha256": "fa3f4a353cf6ad866ee7b929f49ac225780425a39f7731b23360fbdf6f71cc6c"
+    },
+    {
+      "path": "evals/evals.json",
+      "sha256": "27620301f46786f5f00ca3e285f2862c4dac479edd8111b3b5fe0d9ff11b5c62"
+    },
+    {
+      "path": "LICENSE",
       "sha256": "e54bbf97f36ecf8dfe16488cd1ce9cf5dd0d7ffde39214a84615a1c54bf9451d"
     },
     {
-      "path": "repository/hls-generator/pyproject.toml",
-      "sha256": "c4e0d46cd475308cc0f82299f3111e9a6123a56823cccbaf520cf504a58f3297"
+      "path": "README-CN.md",
+      "sha256": "58af7bc42f8ce222c940c4a464022c44694e14b153166b9174512ac800479400"
     },
     {
-      "path": "repository/hls-generator/README-CN.md",
-      "sha256": "2a0f9df95f16b804b08583b4f16835a4ed035a628677e603d7b9681984b918f7"
+      "path": "README.md",
+      "sha256": "8151320e3619ef55e580ece9392dc8c4b99103394eabaa4b38687dc5c3eef887"
     },
     {
-      "path": "repository/hls-generator/README.md",
-      "sha256": "322476f7ccb2f7e022b5e73cb3ce8a6ada8310bee35ddd1d9a8d040cc624182e"
+      "path": "references/configuration.md",
+      "sha256": "b85624b3f0352de4336710fcb0b07e2c4e2033b452a2b8527d63b9e86bf99753"
     },
     {
-      "path": "repository/hls-generator/references/configuration.md",
-      "sha256": "badc2ba3fd0c7e70a26d0cfc6ddad1163e4c77c081e5d33203b23825537dee76"
-    },
-    {
-      "path": "repository/hls-generator/references/hls-advanced-library-patterns.md",
+      "path": "references/hls-advanced-library-patterns.md",
       "sha256": "f325b992589d8eee501d6eb7ad6c187515912236ac6349a454c1281f20a060ab"
     },
     {
-      "path": "repository/hls-generator/references/hls-ast-comment-guard.md",
+      "path": "references/hls-ast-comment-guard.md",
       "sha256": "c528cbb5ac34be7fb6e570b9f91d4afb6b982ad11e3c600563e0c2928d52980b"
     },
     {
-      "path": "repository/hls-generator/references/hls-comment-style.md",
-      "sha256": "e3f8cdb864d65d5c830dc739c1c5a695e57a75f789999c894dd247356e9f6869"
+      "path": "references/hls-comment-style.md",
+      "sha256": "8e93a042194d55868924948b2c5c31f0f53878a2245bdc17e2cf1cdc7a99a71a"
     },
     {
-      "path": "repository/hls-generator/references/hls-device-migration-strategy.md",
+      "path": "references/hls-device-migration-strategy.md",
       "sha256": "51f06b10157ac64702d9f72defd5dd2b0009bc41e0d00808a8a36762c60625d4"
     },
     {
-      "path": "repository/hls-generator/references/hls-fft-cordic-template-family.md",
+      "path": "references/hls-fft-cordic-template-family.md",
       "sha256": "fd1c28a7fbccc4cba88b5433ceae24eef61bc0e8d11103eefbae237f009de4a0"
     },
     {
-      "path": "repository/hls-generator/references/hls-fir-template-family.md",
+      "path": "references/hls-fir-template-family.md",
       "sha256": "6880041a19473d180def66817676dbfa64226a90994ee24a8411c70b60aa26c4"
     },
     {
-      "path": "repository/hls-generator/references/hls-library-policy.md",
+      "path": "references/hls-library-policy.md",
       "sha256": "af1fb53a8647f6ab08c46694c1871ef017d25775773e24099c572136b346415e"
     },
     {
-      "path": "repository/hls-generator/references/hls-linear-algebra-template-family.md",
+      "path": "references/hls-linear-algebra-template-family.md",
       "sha256": "eecd28dac3914e2bef1e629cbaebd48b1e7281e3432dfc454abc398079dee920"
     },
     {
-      "path": "repository/hls-generator/references/hls-memory-burst-and-layout.md",
+      "path": "references/hls-memory-burst-and-layout.md",
       "sha256": "5014566a5ebb2ab6214b079ada464fb666553ad488d5adda3c7cf0e0af6d2f24"
     },
     {
-      "path": "repository/hls-generator/references/hls-modeling-strategy.md",
+      "path": "references/hls-modeling-strategy.md",
       "sha256": "5ee3552faddf0f80e251c5f868f8cee68d3046d5049beb9e4498d1d3c4d6e4cc"
     },
     {
-      "path": "repository/hls-generator/references/hls-optimization-patterns.md",
+      "path": "references/hls-optimization-patterns.md",
       "sha256": "ccf3123b228ce9c1600ecd58626b5bdf3e182bc621df9abafc7eb006cb42c309"
     },
     {
-      "path": "repository/hls-generator/references/hls-project-structure-patterns.md",
+      "path": "references/hls-project-structure-patterns.md",
       "sha256": "363ee4301ff2e46a9f9ed3436c540108af147e2681c40c130ace60aab5f739f1"
     },
     {
-      "path": "repository/hls-generator/references/hls-report-driven-optimization.md",
+      "path": "references/hls-report-driven-optimization.md",
       "sha256": "9b19c9c3790d40632b57e21868ac53bea9f35a35de827ca31c057456ed82f39d"
     },
     {
-      "path": "repository/hls-generator/references/hls-stencil-reduction-gemm-patterns.md",
+      "path": "references/hls-stencil-reduction-gemm-patterns.md",
       "sha256": "245bf89e6a347aa87cec6b194e3b9133e1f2d82ded186f1847ac8314a8c72a66"
     },
     {
-      "path": "repository/hls-generator/references/hls-stream-codec-template-family.md",
+      "path": "references/hls-stream-codec-template-family.md",
       "sha256": "967ea64b1391cf84256ef48aa19ffb7d9e8bc4ab534e9439b9398910befc1861"
     },
     {
-      "path": "repository/hls-generator/references/hls-task-parallel-strategy.md",
+      "path": "references/hls-task-parallel-strategy.md",
       "sha256": "bc3ca8d11f86aba2885666dde25aaff7a0fb3919edf53329198663f4cebaeeda"
     },
     {
-      "path": "repository/hls-generator/references/hls-template-catalog.md",
+      "path": "references/hls-template-catalog.md",
       "sha256": "7787aeff098a6c928f9a5e67f3010a9ec6a4d68425fd617e46ea02b0f3aa23ca"
     },
     {
-      "path": "repository/hls-generator/references/hls-tutorial-derived-templates.md",
+      "path": "references/hls-tutorial-derived-templates.md",
       "sha256": "dc88a4dda2c0d7fd8426f59e9f195e7623cd057bcf27b91bd71d79f45b149bd3"
     },
     {
-      "path": "repository/hls-generator/references/hls_dispatcher.md",
+      "path": "references/hls_dispatcher.md",
       "sha256": "81a241fea0645dcc89d31e6a6990db8cf9241c99d7b43c6e8d1f2167107205b6"
     },
     {
-      "path": "repository/hls-generator/references/hls_readability_gate.md",
-      "sha256": "feb252aa6b3158d75be48194c45393cdd463a72807b4bf0524df0aa82b5be49a"
+      "path": "references/hls_readability_gate.md",
+      "sha256": "999aa0670b96d838147deaa8824623dfa9417045ef3457bdefe8eb4eb4e10259"
     },
     {
-      "path": "repository/hls-generator/references/hls_readability_rules.md",
+      "path": "references/hls_readability_rules.md",
       "sha256": "9926531ccaaec04165fe20f8a263684b4f1d4ad1fdb3b2c873701ce6bacdd06e"
     },
     {
-      "path": "repository/hls-generator/references/hls_review_checklist.md",
+      "path": "references/hls_review_checklist.md",
       "sha256": "2ae254552f024e956bfbed4923b2afada4d5f9ff27cd29c7d6c59ab3f131d23f"
     },
     {
-      "path": "repository/hls-generator/references/integration.md",
-      "sha256": "a60306f814b789e658c515a719af13a0f968ab591b6cb892373a137b30f4ef6e"
+      "path": "references/integration.md",
+      "sha256": "6e4e0a370fdc188df753d6c1d4c9b6e593011dbbc4589eb1be59208e0501516c"
     },
     {
-      "path": "repository/hls-generator/references/python_dispatcher.md",
+      "path": "references/python_dispatcher.md",
       "sha256": "730f3f2b8fc368530e27a71fea0552265fe2c3af2385ac9e8dd01f666b6d70cc"
     },
     {
-      "path": "repository/hls-generator/references/python_readability_rules.md",
+      "path": "references/python_readability_rules.md",
       "sha256": "3b43cdfdec4c84ea0fa51aaabf869aa656805fe73f6e9218fda51e8c4c55bc27"
     },
     {
-      "path": "repository/hls-generator/references/ref-opt-catalog.md",
+      "path": "references/ref-opt-catalog.md",
       "sha256": "172a56c057dd225ae67b18317cd46bf84765e6bb3ed94be99f8c705a3a306d9b"
     },
     {
-      "path": "repository/hls-generator/references/remote-board-platform-upload.md",
+      "path": "references/remote-board-platform-upload.md",
       "sha256": "e913faae32460546c0f5ab593fd00fa5e4ab6284b956880d90e3d653e8f88f20"
     },
     {
-      "path": "repository/hls-generator/references/style/current_project_chinese_style.md",
+      "path": "references/style/current_project_chinese_style.md",
       "sha256": "9d93e889f53f56a4f3af123aa793827794a6d196cf83fb3e54f284b8834a7fef"
     },
     {
-      "path": "repository/hls-generator/references/style/current_project_hls_style_config.json",
+      "path": "references/style/current_project_hls_style_config.json",
       "sha256": "9aae02d6bd415079b75f6515c126928c631d8539067643c50c871a5a31bb94b6"
     },
     {
-      "path": "repository/hls-generator/references/style/current_project_style_config.json",
+      "path": "references/style/current_project_style_config.json",
       "sha256": "811ac851eba6a7effbb709879489eb10a79c016ac1ec457ac4d72708ea6f1997"
     },
     {
-      "path": "repository/hls-generator/references/vitis-hls-2024-2-script-guide.md",
+      "path": "references/vitis-hls-2024-2-script-guide.md",
       "sha256": "f2d5575c41bbb87e452cfccdc57487a3f08aff536ad7b849c4efd04146e52ca4"
     },
     {
-      "path": "repository/hls-generator/references/workflow-contracts.md",
-      "sha256": "ed0de9860e8d1123bec887cc583607c89301e468528d42c18951e6087be51cf7"
+      "path": "references/workflow-contracts.md",
+      "sha256": "4f0bb99e9c584aff9c4819a5c3921aabe15f467f3427fe1c0953bb9693b37a41"
     },
     {
-      "path": "repository/hls-generator/runtime/__init__.py",
-      "sha256": "ebdadb2da282c17dba805e0247d67d13bc0433ec3f15f606ffec1328b5891fe5"
+      "path": "RELEASE_MANIFEST.json",
+      "sha256": "6cbd45198b9e8da0fd46ac35f1279c511fa3d2c2ad434defd728ee414212e9fb"
     },
     {
-      "path": "repository/hls-generator/runtime/hls_generator/__init__.py",
-      "sha256": "e559401b59676f7401130ef99327c3dc09140fb4630956846c43c120589176e5"
+      "path": "scripts/__init__.py",
+      "sha256": "7d27500d64ed892b1fd9c37d80590734c69e767a0ae0b9720c5db591130bc4ca"
     },
     {
-      "path": "repository/hls-generator/runtime/hls_generator/__main__.py",
-      "sha256": "8cb3a3d6e05b798672928bc38b92fc25b677e12cadf42f4caebcd2e10c50cd81"
+      "path": "scripts/python/__init__.py",
+      "sha256": "a221b3f017ac6ac2a827a27f407329d4dd26e93eaf565265d5ef455d4048e58c"
     },
     {
-      "path": "repository/hls-generator/runtime/hls_generator/board_acceptance.py",
-      "sha256": "e26b5aaee7c6afe187e3a38c2f8a35645d715a1ac28171b42fd4ba9e97b8369e"
+      "path": "scripts/python/cli/__init__.py",
+      "sha256": "4d30901cf025c9107cf81cff0e1d602901b02b418c7b8a97d8b7532d023599a9"
     },
     {
-      "path": "repository/hls-generator/runtime/hls_generator/board_platform_payload.py",
-      "sha256": "2b31acdfea9a6218c5b299a27de2499c5a4a8642fa7ea3ee0483817fa91ac78e"
+      "path": "scripts/python/cli/hls_generator.py",
+      "sha256": "73bea1808672928d22e16f45636fd7ca92bd80da7f2df444253e8965b3650931"
     },
     {
-      "path": "repository/hls-generator/runtime/hls_generator/cli.py",
-      "sha256": "bd63aa65cac482f86cb7dbd49d2e603bd127ad7d276dd5de2ff1f792e7274b77"
+      "path": "scripts/python/config/__init__.py",
+      "sha256": "695cb096c56d8901bd786a436447d08bd276b008a18ececab38939f3d8e3334f"
     },
     {
-      "path": "repository/hls-generator/runtime/hls_generator/comment_policy.py",
-      "sha256": "93724d8243ce31a8dd469aef27ec93a8114df0767cc1d10a8fb2a09d32fbf34a"
+      "path": "scripts/python/config/hls_config.py",
+      "sha256": "ce5556c6f98e569484332b6a2eb2485395a50adfb89b5a4a8078d0d1fd06e49e"
     },
     {
-      "path": "repository/hls-generator/runtime/hls_generator/config.py",
-      "sha256": "7f75c06fe2f4467145ed75ac3acfa500f9a9ff65e27de456bc447021430ebb6c"
+      "path": "scripts/python/config/runtime_config.json",
+      "sha256": "a0e3378bbaf9405f1972b3f990a18fadac474f07a140c1ddf9a54d32aad2922d"
     },
     {
-      "path": "repository/hls-generator/runtime/hls_generator/extractor.py",
-      "sha256": "5e6ab576292fe4303b39f332959689241166050031105144ba46ec3268a369cc"
+      "path": "scripts/python/config/skill_dependencies.py",
+      "sha256": "47045cc98f92dca00aa711c376b5c54005978a7a1a76af840653d127b5ba56d8"
     },
     {
-      "path": "repository/hls-generator/runtime/hls_generator/hls_ast_guard.py",
-      "sha256": "0b78c93f3515f7de57202131c6aa368113d16caa2b116590c17480a99f3d659c"
+      "path": "scripts/python/config/user_config.py",
+      "sha256": "efc43d29e21b1388ada62200ec1d85c9dc9be9ca8406bf685b0c98abb6a2feab"
     },
     {
-      "path": "repository/hls-generator/runtime/hls_generator/hls_cfg.py",
-      "sha256": "fa47d5852ef04af642f9e2a579b2bc1ded4c8327e1eb0f588ad16dca622119b3"
+      "path": "scripts/python/config/version.py",
+      "sha256": "ca413337c8debff5cf8dd9bf8c8a901caca5ea79be3fc00795e232311a01ba6e"
     },
     {
-      "path": "repository/hls-generator/runtime/hls_generator/hls_profile.py",
-      "sha256": "9f1771e62293ee1145b4ce5850de0eba5a55a53a326ea47ff4a110e5d87106a5"
+      "path": "scripts/python/config/workspace.py",
+      "sha256": "3d5662cc3fdecfaa01cd459980ee727e2a34b3fd514808d4328f8254b5a9b40d"
     },
     {
-      "path": "repository/hls-generator/runtime/hls_generator/hls_reports.py",
-      "sha256": "8f7bb47db76889f656125db99310036afaa7c6fd4c9deaedb21bc5330803672f"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/hls_tcl.py",
-      "sha256": "9ad11c9b04c6da1b4886ff5c8d963cfafe2f1f1864606d848211f312e7149432"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/interface_contract.py",
-      "sha256": "ae8168beae4d36745a46f1b2e28b09ba4d82119b71b8e5018349e4dcaec85348"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/intervention.py",
-      "sha256": "612360cd21813ddd290095c0981e60219c305ba4ae616968f7ce9a177e9ada94"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/mock_comment_rendering.py",
-      "sha256": "9dc95075bcde7646868e00ec76c259d3a4fb3989fce994239236b0ffa7c4112b"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/mock_hls_artifacts.py",
-      "sha256": "e870af3eb71081686321e61747cb4b3506d8d84f810a57f5f4bc7180b7a41714"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/mock_vectors.py",
-      "sha256": "86dd2f6ab384820f2926a6a265b9b955ec054e14aefc9d2b9e046aa85fe59ec6"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/model_provider.py",
-      "sha256": "49e55eff3677b4f1add578f6094c71148b0e835ca82eb6b2b381c6ea6a6d0283"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/patterns.py",
-      "sha256": "0d700724609ad781274c90184271c11aeb670a429614e585d577d7977207305f"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/planning.py",
-      "sha256": "4d81e57afacb030394f42b38697111235027f57b032ad1d4cee4eabba49cf55e"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/prompt.py",
-      "sha256": "7e25eeb7e7f035fb377bb064bb7fc92211435ac499ebab10d57ab0b7976f8a64"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/readability_gate/__init__.py",
-      "sha256": "65085c79fd15ded31fb3ed95f84acec02d32538b9769b55b0e7fcddaf34a10e8"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/readability_gate/comment_rules.py",
-      "sha256": "998e79087688b3ce0ce3989c1eae5d73597fa0bdf41b49b33a73cbd6245b48f3"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/readability_gate/contract_rules.py",
-      "sha256": "27ff5a75725d06de162379121eb8b69a89af8c5a07d549e93ca262cd0214d0db"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/readability_gate/cpp_ast_provider.py",
-      "sha256": "4f73f3f6f5a41be1bd016614142c894506c8692e4e86da7bedc9ec70d7feb18f"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/readability_gate/cpp_lexer.py",
-      "sha256": "29f7b9a81f94551517af6975ec88356ffeb206dc75507aca0c2ebb5d792d3a5b"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/readability_gate/naming_rules.py",
-      "sha256": "9883d04303e200423a0226debe1c2749fec65a97e6fc8de54fd90f2732f07bbb"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/readability_gate/pragma_rules.py",
-      "sha256": "8f8e244ed01c1ee182d9f9b8183ea7f3f9bfdd2641b683681b4ca80496467480"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/readability_gate/profiles.py",
-      "sha256": "2ddc167005c616127301ec4183bfeaaf31807cfacd127cdd4bbf9b7845bf6976"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/readability_gate/report.py",
-      "sha256": "b80fd2f56b4d1d31d561ce90cb374dca054538b656479bfeec5b8e487e9af88b"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/readability_gate/rewrite_plan.py",
-      "sha256": "6c513275f00de5936138b2d0d36c3a2058bc540b947e4d89fb71d8384c97b73f"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/readability_gate/runner.py",
-      "sha256": "64208a9aa57393a2c40cec84949ca356ce2cdb2d19789f12e42dbd3b7bc5f88a"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/readability_gate/structure_rules.py",
-      "sha256": "cfd55ab8ea5526b6406e3c7e76941eb0b13d2d316b51ab80244fed7d298f96aa"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/reference_contract.py",
-      "sha256": "0311756342233183accc806e683f388e7cdb1fd7e407e776379986f041fcd94f"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/remote_directory_contract.py",
-      "sha256": "5584691e96e41de6f10e8e53bfafc1f16c2b9114557ad6869cec3ff2e12ad071"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/remote_recovery.py",
-      "sha256": "6d9907f6d17786633e15716b285597067203db6083300de80278cc4cf55b1583"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/requirements.py",
-      "sha256": "4ef97ceee325ed6adf2b83d35a71e5de044e82a1d35c04b47e229d0c88f0170e"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/route_contract.py",
-      "sha256": "3e954164d1e230e4541186c1b047c32476a4c99eda0dc156b5756f7e27441be0"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/runtime_config.json",
-      "sha256": "9e1b4ef2f0451ca27562b76e55daec0e5f24b304330284d70adbec589a90f5e2"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/skill_dependencies.py",
-      "sha256": "13a3f7abe4512f92a365685190abb4e41787ceab3f4072b502642653182725c2"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/spec.py",
-      "sha256": "b03d2dd35443d92cbaca3c10e4ac615e5691f4da0d0a48aac050291ff95ad8e2"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/task_dispatcher.py",
-      "sha256": "046ba512f61051583b20c06ed74b3acb5e265f6d6a0d8d761c729aeeac716fbd"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/trace.py",
-      "sha256": "0ba3f80f54f430cd2f55ca162eb90b86f902d67181a34d5f82f6516046c1d499"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/user_config.py",
-      "sha256": "53e0ee7d057d5aebdcaf12776da83e272532f88d91c542aa03f10eaae1ebc507"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/validation.py",
-      "sha256": "e63df47f8d0a2a45a77d277de357e10e416d3128115c5c25976445e009163937"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/vectors.py",
-      "sha256": "f08942e579cc4a02893f2de90fc7fc1f536a327b0ca42146502b22f8efa1a556"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/verifier.py",
-      "sha256": "0075c33093d03c0e667f702b13c5bd9cde61acfcd3caf461ed7bbe940cbdde0a"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/vitis_rules.py",
-      "sha256": "60e443e7d0681824f6a3666731806f7392d35790e62a6fbea7c18a0917b844c6"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/workflow.py",
-      "sha256": "36536ab85852d0e6c973a47b80b472f880fe723282f8268940fd106153ed2d72"
-    },
-    {
-      "path": "repository/hls-generator/runtime/hls_generator/workspace.py",
-      "sha256": "d06a48a678a4402f06e34ead468cce0b0b357b01afd64ae90e577b3da53650aa"
-    },
-    {
-      "path": "repository/hls-generator/scripts/python/curation/generate_hls_template_assets.py",
+      "path": "scripts/python/curation/generate_hls_template_assets.py",
       "sha256": "44badfe5f6df2525c01ccd4929490361a1aef26bd8c7aecd91e3d4b9f85fce25"
     },
     {
-      "path": "repository/hls-generator/scripts/python/curation/generate_ref_opt_assets.py",
+      "path": "scripts/python/curation/generate_ref_opt_assets.py",
       "sha256": "92030988272e84663c5d8b726d5735780bed968c48b1edbf46d7ce2f2878e394"
     },
     {
-      "path": "repository/hls-generator/scripts/python/evaluation/evaluate_skill.py",
+      "path": "scripts/python/evaluation/evaluate_skill.py",
       "sha256": "2cfdd1b645f914def70245fc9459886c7c066e87defccb77ab9964b1b7726fed"
     },
     {
-      "path": "repository/hls-generator/scripts/python/governance/_skill_tool_delegate.py",
+      "path": "scripts/python/generation/__init__.py",
+      "sha256": "e169244fac435d4db35a3177fff6c737232de1ed27945335f5e796e0a1e336fc"
+    },
+    {
+      "path": "scripts/python/generation/extractor.py",
+      "sha256": "5e6ab576292fe4303b39f332959689241166050031105144ba46ec3268a369cc"
+    },
+    {
+      "path": "scripts/python/generation/mock_comment_rendering.py",
+      "sha256": "093790711cf5b15b18da0746e21ad6700f57659345f7de2bb8078d131789e460"
+    },
+    {
+      "path": "scripts/python/generation/mock_hls_artifacts.py",
+      "sha256": "37eb6de7a217a9e20e96ed0a63587be348be009cc5f0ceabc9496924efdf7e48"
+    },
+    {
+      "path": "scripts/python/generation/mock_vectors.py",
+      "sha256": "86dd2f6ab384820f2926a6a265b9b955ec054e14aefc9d2b9e046aa85fe59ec6"
+    },
+    {
+      "path": "scripts/python/generation/model_provider.py",
+      "sha256": "49e55eff3677b4f1add578f6094c71148b0e835ca82eb6b2b381c6ea6a6d0283"
+    },
+    {
+      "path": "scripts/python/generation/patterns.py",
+      "sha256": "0d700724609ad781274c90184271c11aeb670a429614e585d577d7977207305f"
+    },
+    {
+      "path": "scripts/python/generation/planning.py",
+      "sha256": "f10130fdc55dba9116db177f2959e95d7e0499f9dcfb068a858bd4ca9939aa01"
+    },
+    {
+      "path": "scripts/python/generation/prompt.py",
+      "sha256": "a77f28de6d7b3f65d11e8caac2ccd3e54f6929a1869636a211f2e01ad3053b98"
+    },
+    {
+      "path": "scripts/python/generation/requirements.py",
+      "sha256": "0fb5381d6db0db3a14ac77899f5e3bc9cb7a124318b93eafca768b308d76cb67"
+    },
+    {
+      "path": "scripts/python/generation/spec.py",
+      "sha256": "b03d2dd35443d92cbaca3c10e4ac615e5691f4da0d0a48aac050291ff95ad8e2"
+    },
+    {
+      "path": "scripts/python/generation/vectors.py",
+      "sha256": "f08942e579cc4a02893f2de90fc7fc1f536a327b0ca42146502b22f8efa1a556"
+    },
+    {
+      "path": "scripts/python/governance/_skill_tool_delegate.py",
       "sha256": "3a4a4b03548590a1a17c7e5a5ec6d4189e26af34eefbda641998fe40e7a40181"
     },
     {
-      "path": "repository/hls-generator/scripts/python/governance/audit_skill.py",
+      "path": "scripts/python/governance/audit_skill.py",
       "sha256": "eb8d7ec6c59169fe5f709cd71d5a59223f8426b086d97a7a67735c1a203889b9"
     },
     {
-      "path": "repository/hls-generator/scripts/python/governance/manage_dirs.py",
+      "path": "scripts/python/governance/manage_dirs.py",
       "sha256": "dac86a06964cad64d709a9967ded6aa5d0b4fd197ee4206314c315ede4d74991"
     },
     {
-      "path": "repository/hls-generator/scripts/python/governance/manage_docs.py",
-      "sha256": "264d4b471291c700aee8907e605a2103d880d60ead0547be037645ec88982b25"
+      "path": "scripts/python/governance/manage_docs.py",
+      "sha256": "561e8d0b3315b002cd2d1f1ea5339f348b5618e52920a22e52f5a2d4c7a3625e"
     },
     {
-      "path": "repository/hls-generator/scripts/python/governance/render_agents.py",
+      "path": "scripts/python/governance/render_agents.py",
       "sha256": "1841ea4523e1f88578529d89216dc8bc26f33a5490222048eeff4c75f6971f3f"
     },
     {
-      "path": "repository/hls-generator/scripts/python/governance/verify_agents.py",
-      "sha256": "d5c9e6ed5fa5b2faa495148132bb1e4d1732e40d5f1e7b4cdb5ee862d1e496e5"
+      "path": "scripts/python/governance/verify_agents.py",
+      "sha256": "332335721ebd7db41f3b285451131f6744e78e5e812ec60d050dac667412fba6"
     },
     {
-      "path": "repository/hls-generator/scripts/python/inspection/inspect_project.py",
+      "path": "scripts/python/hls_quality_gate/__init__.py",
+      "sha256": "4a54908ccfd526457275142b8c1450aeefbf9813fca1c9491f8c040e70c19491"
+    },
+    {
+      "path": "scripts/python/hls_quality_gate/comment_policy.py",
+      "sha256": "93724d8243ce31a8dd469aef27ec93a8114df0767cc1d10a8fb2a09d32fbf34a"
+    },
+    {
+      "path": "scripts/python/hls_quality_gate/hls_ast_guard.py",
+      "sha256": "b4ca4d7536cd9ff60d97eb484bc6249c22e9ce3dcb088beb054cf2b4d9c3cfe9"
+    },
+    {
+      "path": "scripts/python/hls_quality_gate/readability/__init__.py",
+      "sha256": "65085c79fd15ded31fb3ed95f84acec02d32538b9769b55b0e7fcddaf34a10e8"
+    },
+    {
+      "path": "scripts/python/hls_quality_gate/readability/comment_rules.py",
+      "sha256": "998e79087688b3ce0ce3989c1eae5d73597fa0bdf41b49b33a73cbd6245b48f3"
+    },
+    {
+      "path": "scripts/python/hls_quality_gate/readability/contract_rules.py",
+      "sha256": "27ff5a75725d06de162379121eb8b69a89af8c5a07d549e93ca262cd0214d0db"
+    },
+    {
+      "path": "scripts/python/hls_quality_gate/readability/cpp_ast_provider.py",
+      "sha256": "4f73f3f6f5a41be1bd016614142c894506c8692e4e86da7bedc9ec70d7feb18f"
+    },
+    {
+      "path": "scripts/python/hls_quality_gate/readability/cpp_lexer.py",
+      "sha256": "29f7b9a81f94551517af6975ec88356ffeb206dc75507aca0c2ebb5d792d3a5b"
+    },
+    {
+      "path": "scripts/python/hls_quality_gate/readability/naming_rules.py",
+      "sha256": "9883d04303e200423a0226debe1c2749fec65a97e6fc8de54fd90f2732f07bbb"
+    },
+    {
+      "path": "scripts/python/hls_quality_gate/readability/pragma_rules.py",
+      "sha256": "8f8e244ed01c1ee182d9f9b8183ea7f3f9bfdd2641b683681b4ca80496467480"
+    },
+    {
+      "path": "scripts/python/hls_quality_gate/readability/profiles.py",
+      "sha256": "2ddc167005c616127301ec4183bfeaaf31807cfacd127cdd4bbf9b7845bf6976"
+    },
+    {
+      "path": "scripts/python/hls_quality_gate/readability/report.py",
+      "sha256": "b80fd2f56b4d1d31d561ce90cb374dca054538b656479bfeec5b8e487e9af88b"
+    },
+    {
+      "path": "scripts/python/hls_quality_gate/readability/rewrite_plan.py",
+      "sha256": "99d7e9b92796f1d16a44231097120b2f3d58c9cf3866533ce80791b0c7c969d9"
+    },
+    {
+      "path": "scripts/python/hls_quality_gate/readability/runner.py",
+      "sha256": "64208a9aa57393a2c40cec84949ca356ce2cdb2d19789f12e42dbd3b7bc5f88a"
+    },
+    {
+      "path": "scripts/python/hls_quality_gate/readability/structure_rules.py",
+      "sha256": "cfd55ab8ea5526b6406e3c7e76941eb0b13d2d316b51ab80244fed7d298f96aa"
+    },
+    {
+      "path": "scripts/python/inspection/inspect_project.py",
       "sha256": "5fe5353e5b7a580b496741c06847eb159479c96de2f1da9b96a73e58d4fc6f4b"
     },
     {
-      "path": "repository/hls-generator/scripts/python/install/sync_installed_skill_copy.py",
+      "path": "scripts/python/install/sync_installed_skill_copy.py",
       "sha256": "eeede220ab473a2f980a67138cd627951437a0ba0da9fbd18cffec373e8b608d"
     },
     {
-      "path": "repository/hls-generator/scripts/python/quality_gate/api_type_rules.py",
+      "path": "scripts/python/integration/__init__.py",
+      "sha256": "b78b034bdf250a64e68685944b820c6609a72a7efa5df64473786a7a5aee475a"
+    },
+    {
+      "path": "scripts/python/integration/hls_adapter.py",
+      "sha256": "d18d85e129d5b1482b3bd00f0fd859219709dc282e37f9f4232496506e89d5a3"
+    },
+    {
+      "path": "scripts/python/quality_gate/api_type_rules.py",
       "sha256": "efbf4896703ed420676c2b8bf86b2e568e5016d188fea22b9d2a36eb623ba91f"
     },
     {
-      "path": "repository/hls-generator/scripts/python/quality_gate/ast_helpers.py",
+      "path": "scripts/python/quality_gate/ast_helpers.py",
       "sha256": "871ce05c4d7aef8f2ecbd8ebe86d7bbf5f046a145153cbc3321d36e868ad998c"
     },
     {
-      "path": "repository/hls-generator/scripts/python/quality_gate/base_rules.py",
+      "path": "scripts/python/quality_gate/base_rules.py",
       "sha256": "1a3f971ef428ffc32d661232f82e8c1bcd8d5209721d2931abab99b28e51e384"
     },
     {
-      "path": "repository/hls-generator/scripts/python/quality_gate/current_project_style_rules.py",
+      "path": "scripts/python/quality_gate/current_project_style_rules.py",
       "sha256": "a355795fdc4368c9cd4ae16293a3a768de82040bf4de17f3f8bc8d77188e987a"
     },
     {
-      "path": "repository/hls-generator/scripts/python/quality_gate/dense_spacing_rules.py",
+      "path": "scripts/python/quality_gate/dense_spacing_rules.py",
       "sha256": "943ca96d52d8994091dd445e1bf7a9f52f7c8bf406e0f0b312d2acc232b933f3"
     },
     {
-      "path": "repository/hls-generator/scripts/python/quality_gate/docstring_rules.py",
+      "path": "scripts/python/quality_gate/docstring_rules.py",
       "sha256": "923e942a7650fc2e29d46b3c210c460545e25fc764a395ade40d0f9c08d38d78"
     },
     {
-      "path": "repository/hls-generator/scripts/python/quality_gate/extra_base_rules.py",
+      "path": "scripts/python/quality_gate/extra_base_rules.py",
       "sha256": "758956ab609da334bf05d978b81a23f71ec293d301da553402ecbca88b328338"
     },
     {
-      "path": "repository/hls-generator/scripts/python/quality_gate/profiles.py",
+      "path": "scripts/python/quality_gate/profiles.py",
       "sha256": "17ab625b6cbf96cc0dfb0eb0e3cc7fbe74840ff779873f7de29d30828722733e"
     },
     {
-      "path": "repository/hls-generator/scripts/python/quality_gate/raw_misc_rules.py",
+      "path": "scripts/python/quality_gate/raw_misc_rules.py",
       "sha256": "25651df7a1d1459f1bce07c42d7ed1bee6494c886ee9fc76a8735370d72ff622"
     },
     {
-      "path": "repository/hls-generator/scripts/python/quality_gate/report.py",
+      "path": "scripts/python/quality_gate/report.py",
       "sha256": "557e4c09aa8066470d7754b90b19fdba6c104b14877aa45d2fb45009219dcfb8"
     },
     {
-      "path": "repository/hls-generator/scripts/python/quality_gate/rule_runner.py",
+      "path": "scripts/python/quality_gate/rule_runner.py",
       "sha256": "9bbc494dc7377aeabe2cc93c98a2a98e8ee7dfced5796ded9f92323d98174b77"
     },
     {
-      "path": "repository/hls-generator/scripts/python/quality_gate/run.py",
+      "path": "scripts/python/quality_gate/run.py",
       "sha256": "77c4ca0a2b0585f7c48fd1aa002a50f3ca5ee7c33dc0ff7632d7ced40098adea"
     },
     {
-      "path": "repository/hls-generator/scripts/python/quality_gate/run_quality_gate.py",
+      "path": "scripts/python/quality_gate/run_quality_gate.py",
       "sha256": "594853ccf7faef69de683bde504baab83649e1087d83bcf5f281f85177427e11"
     },
     {
-      "path": "repository/hls-generator/scripts/python/quality_gate/scientific_rules.py",
+      "path": "scripts/python/quality_gate/scientific_rules.py",
       "sha256": "f46db0337d0039236caf891d06c48fa16c9e11d04dd1a2a339e28d96c3af8e2a"
     },
     {
-      "path": "repository/hls-generator/scripts/python/quality_gate/semantic_comment_rules.py",
+      "path": "scripts/python/quality_gate/semantic_comment_rules.py",
       "sha256": "7c4cb4b0f5ef828d22adb519be681be80e924ec9f19eaaab86f4249368d5b696"
     },
     {
-      "path": "repository/hls-generator/scripts/python/quality_gate/tool_runner.py",
+      "path": "scripts/python/quality_gate/tool_runner.py",
       "sha256": "918c123d54d90ddca1ff2147c4a8b8fc87dbc8bd9f4a6cdcf22b14f1ca95b58a"
     },
     {
-      "path": "repository/hls-generator/scripts/python/quality_gate/variable_naming_rules.py",
+      "path": "scripts/python/quality_gate/variable_naming_rules.py",
       "sha256": "5d1005c83a6821d97fa0d997c50b5cb7b3fc52e362af2ad4dd9e1848f17eaad2"
     },
     {
-      "path": "repository/hls-generator/scripts/python/release/prepare_release.py",
-      "sha256": "6e4c821d31dd233af4d479ff62a360fcb27a7bc6e71513deda78cd07c1a84067"
+      "path": "scripts/python/release/prepare_release.py",
+      "sha256": "ec1ffd253f9cd99d9335f857a2b2c916032a56aef3918950c608a11f1f74a6f1"
     },
     {
-      "path": "repository/hls-generator/scripts/python/remote/remote_acceptance_board.py",
-      "sha256": "3e29016d769e0d9bdabe0962f386299465af7abf1ac4f3a3185dfe83a7f0dd98"
+      "path": "scripts/python/remote/__init__.py",
+      "sha256": "395e57f74fe7017afeb09bf210a2f7f56be636e4b0c4f61b107fd12826fb9fb0"
     },
     {
-      "path": "repository/hls-generator/scripts/python/remote/remote_acceptance_common.py",
-      "sha256": "4d070055fc6b75de9da5fce27a48eec81348a154619362c4cec1fc9f0a827e4a"
+      "path": "scripts/python/remote/board_acceptance.py",
+      "sha256": "e26b5aaee7c6afe187e3a38c2f8a35645d715a1ac28171b42fd4ba9e97b8369e"
     },
     {
-      "path": "repository/hls-generator/scripts/python/remote/remote_acceptance_link.py",
+      "path": "scripts/python/remote/board_platform_payload.py",
+      "sha256": "2b31acdfea9a6218c5b299a27de2499c5a4a8642fa7ea3ee0483817fa91ac78e"
+    },
+    {
+      "path": "scripts/python/remote/remote_acceptance_board.py",
+      "sha256": "9a097cc052504ba41a3b24e80a2864734dca8d8340b9bd6df4a9ed7ffab0a882"
+    },
+    {
+      "path": "scripts/python/remote/remote_acceptance_common.py",
+      "sha256": "dbdd339c53cf3901dbad550403bc6ec926dd28736d84751773545c83237dc11b"
+    },
+    {
+      "path": "scripts/python/remote/remote_acceptance_link.py",
       "sha256": "8a39ed35d2c68fbbd954c9637ee3ce57d987caa9b2d8364f8de6048175531db9"
     },
     {
-      "path": "repository/hls-generator/scripts/python/remote/remote_acceptance_recovery.py",
+      "path": "scripts/python/remote/remote_acceptance_recovery.py",
       "sha256": "5ed25e480b49687050df748ed19e3bb39320ed83633f2ca1f51c967eb6ecfd99"
     },
     {
-      "path": "repository/hls-generator/scripts/python/remote/remote_acceptance_vitis.py",
-      "sha256": "c7994fae14748a402e692fdbcab4645a8be2101467af6792458e3abaea5bb6b7"
+      "path": "scripts/python/remote/remote_acceptance_vitis.py",
+      "sha256": "c54863ec5bfc90759172f6247f70cff429e79cc76bcf2762bcd733c99ded7261"
     },
     {
-      "path": "repository/hls-generator/scripts/python/remote/remote_vitis_acceptance.py",
-      "sha256": "6e169467f9f077e5a674d1677c4d06681b26e40cf50af563f5d28d5e76edb43e"
+      "path": "scripts/python/remote/remote_directory_contract.py",
+      "sha256": "50904cb27fe4c44665623af3bc58279bdd9f848b2a38e738a5b2c425cf294d8f"
     },
     {
-      "path": "repository/hls-generator/scripts/python/task_dispatcher/classify_python_task.py",
+      "path": "scripts/python/remote/remote_recovery.py",
+      "sha256": "6d9907f6d17786633e15716b285597067203db6083300de80278cc4cf55b1583"
+    },
+    {
+      "path": "scripts/python/remote/remote_vitis_acceptance.py",
+      "sha256": "2484301b7b1ac5fb5ed287174cb5bb73d31562f205f2c6874935e8f9a4ef0972"
+    },
+    {
+      "path": "scripts/python/remote/route_contract.py",
+      "sha256": "70c0f51e95ab3c5e924df3e3f22702ba92e466c585d617875545859e60ed8df9"
+    },
+    {
+      "path": "scripts/python/task_dispatcher/__init__.py",
+      "sha256": "453038c323e8a5a9c232b81bdf34072ae12859cfae65faa5c5e840c7f5b5d56b"
+    },
+    {
+      "path": "scripts/python/task_dispatcher/classify_python_task.py",
       "sha256": "be5468ff0bfd8987d1174ace0c30f32b467e36b69429efeb35dfa71b76fb6f46"
     },
     {
-      "path": "repository/hls-generator/scripts/python/task_dispatcher/run_hls_workflow.py",
-      "sha256": "11a5769015c04de5b7e9a6b4a876cc4d6c94676347013cc844f8a3df06f98ac1"
+      "path": "scripts/python/task_dispatcher/hls_task_classifier.py",
+      "sha256": "775caee4cc6ec119bbb552968957560acb0fcf3a3f44a00c7bc780864e6730ff"
     },
     {
-      "path": "repository/hls-generator/scripts/python/task_dispatcher/run_python_workflow.py",
+      "path": "scripts/python/task_dispatcher/run_hls_workflow.py",
+      "sha256": "8ba06792903a667c5d6725197bfdff5af74b50db786c5474ebe47893e1a8284a"
+    },
+    {
+      "path": "scripts/python/task_dispatcher/run_python_workflow.py",
       "sha256": "b2083ac8a04b0bdf14f9c522a43732eca1b0dc57f8333df82c2c74039f17a647"
     },
     {
-      "path": "repository/hls-generator/scripts/python/validation/confidence_local.py",
-      "sha256": "afa2dd3085017cb4a44ea3db7c1485185434498825569a620b023b642aa26041"
+      "path": "scripts/python/validation/__init__.py",
+      "sha256": "941a342a81eb5b95be0de843cde4aa1ff0c9cf23502dbf0d6cc2c6e0871075c6"
     },
     {
-      "path": "repository/hls-generator/scripts/python/validation/confidence_loop.py",
-      "sha256": "5b31e9c1539bedfc5fee6c3e24135b5166be165e31e075c8cc13d62c60d2071c"
+      "path": "scripts/python/validation/confidence_local.py",
+      "sha256": "06de0cb8b889c80d5157062e0ada12f71734bf50b79292a23fc2feda6523d3bd"
     },
     {
-      "path": "repository/hls-generator/scripts/python/validation/confidence_remote.py",
-      "sha256": "2e3acafcfbe6038fcf979a992da6b56e9e7ec6257b8a2f53f9c2856b0c77f33d"
+      "path": "scripts/python/validation/confidence_loop.py",
+      "sha256": "5636ade9261659e39e99c61fd480a5de9833654428b5526d2926302bc2b3f23f"
     },
     {
-      "path": "repository/hls-generator/scripts/python/validation/confidence_report.py",
+      "path": "scripts/python/validation/confidence_remote.py",
+      "sha256": "5c008f5415063b3b59e54dc246a85ea27f1ebe186a7c5c04f1751f603dc444fd"
+    },
+    {
+      "path": "scripts/python/validation/confidence_report.py",
       "sha256": "3d2e440263aeb3c5d9514fc521cf8c2d918cbdbd6d5926bb80c19e62db5241a6"
     },
     {
-      "path": "repository/hls-generator/scripts/python/validation/quick_validate.py",
+      "path": "scripts/python/validation/hls_artifacts.py",
+      "sha256": "d5f009ef5b71911b590fd942aee77de346d8843773ceb96bde60a3a573ff4029"
+    },
+    {
+      "path": "scripts/python/validation/hls_cfg.py",
+      "sha256": "f77f9cf81b097e715d74bb77fa83626d6fda9e90bae3093398cf0e821525386f"
+    },
+    {
+      "path": "scripts/python/validation/hls_profile.py",
+      "sha256": "e060ce513c6ae3f82452921a85c20dcc36791b8275fe8003c22c0e7cec4f1d1b"
+    },
+    {
+      "path": "scripts/python/validation/hls_reports.py",
+      "sha256": "8f7bb47db76889f656125db99310036afaa7c6fd4c9deaedb21bc5330803672f"
+    },
+    {
+      "path": "scripts/python/validation/hls_tcl.py",
+      "sha256": "cad28c744c6694f0f5a0f9355fdf1212192ddf7589dcd57e5e29f1ae36a28687"
+    },
+    {
+      "path": "scripts/python/validation/interface_contract.py",
+      "sha256": "d0c03d0cc78a60e2a0652bc5c53517542824c51639e15a5ab37d24358cd6d615"
+    },
+    {
+      "path": "scripts/python/validation/quick_validate.py",
       "sha256": "8341b98198c2e380ed30c36980492251625f1fa036098ec5949d28eca2aed8be"
     },
     {
-      "path": "repository/hls-generator/SECURITY.md",
-      "sha256": "edd1407438ba20910c1d3bd7f7fbc4ae217ba6285d425c3591ec153efcf95a14"
+      "path": "scripts/python/validation/stage_verifier.py",
+      "sha256": "ddbf7c853c43d79a1b72152cfe7f25aa3b829f3dc5c3a1aaa900497e6ae88512"
     },
     {
-      "path": "repository/hls-generator/SKILL.md",
-      "sha256": "4d74fe8339843eea1ac552c9d434a98693c714c7f2999c4e5e8b1d42abbdb859"
+      "path": "scripts/python/validation/vitis_rules.py",
+      "sha256": "60e443e7d0681824f6a3666731806f7392d35790e62a6fbea7c18a0917b844c6"
     },
     {
-      "path": "repository/hls-generator/VERSION",
-      "sha256": "3ab94c04d24986f3af288ba1cda2c0bbddbc5a89dff097182805f54578e1ea75"
+      "path": "scripts/python/workflow/__init__.py",
+      "sha256": "af0b8c9dadb6817ffc3f10a344226c4ff4c6584db99bf3d0b5365afd6aa3596a"
+    },
+    {
+      "path": "scripts/python/workflow/hls_workflow.py",
+      "sha256": "29ef0e4cb7faf3b83d13bd09412889812f5aae88931c6fa9f1cc1df7bb3ce300"
+    },
+    {
+      "path": "scripts/python/workflow/intervention.py",
+      "sha256": "612360cd21813ddd290095c0981e60219c305ba4ae616968f7ce9a177e9ada94"
+    },
+    {
+      "path": "scripts/python/workflow/trace.py",
+      "sha256": "0ba3f80f54f430cd2f55ca162eb90b86f902d67181a34d5f82f6516046c1d499"
+    },
+    {
+      "path": "SKILL.md",
+      "sha256": "b84ee6f1b50d33e18a05e110b9a7497401cc73030a4eb87b7f21948099854356"
     }
   ],
   "sanitization": {
