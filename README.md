@@ -103,12 +103,11 @@ If you are doing comment-only HLS rewrites, keep a baseline tree and pass `--bas
   <img src="docs/assets/workflow.svg" alt="HLS Generator workflow" width="100%">
 </p>
 
-## Public Repository Boundary
+## Notes
 
-- Public tracked content is limited to the skill payload, release-required metadata, and user-facing documentation.
-- The redacted placeholder `<REDACTED_LOCAL_PATH>` remains in `references/remote-board-platform-upload.md`; real local filesystem paths must not appear in the public repository or release package.
-- `.settings/`, `*.local.json`, `*.remote.json`, `reports/`, `tests/`, `smoke*`, caches, and similar local-only artifacts must stay out of the public repository and rebuilt release zip.
-- External Vitis execution is only claimed when `vitis-run` or `vitis_hls` actually runs.
+- `references/remote-board-platform-upload.md` uses `<REDACTED_LOCAL_PATH>` in examples instead of real local filesystem paths.
+- Local-only files such as `.settings/`, `*.local.json`, `*.remote.json`, reports, tests, smoke outputs, and caches are not part of the published repository payload or release zip.
+- Vitis execution should only be claimed when `vitis-run` or `vitis_hls` actually ran.
 
 ## Scope
 

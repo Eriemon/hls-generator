@@ -103,12 +103,11 @@ python -m scripts.python.cli.hls_generator readability-gate --target hls --path 
   <img src="docs/assets/workflow-cn.svg" alt="HLS Generator 工作流" width="100%">
 </p>
 
-## 公开仓库边界
+## 使用注意事项
 
-- 公开跟踪内容只保留 skill 载荷、release 必需元数据和面向用户的文档。
-- `references/remote-board-platform-upload.md` 中继续保留 `<REDACTED_LOCAL_PATH>`；真实本地路径不得进入公开仓库或 release 包。
-- `.settings/`、`*.local.json`、`*.remote.json`、`reports/`、`tests/`、`smoke*`、缓存及类似本地专用内容必须排除在公开仓库和重建 release zip 之外。
-- 只有实际运行 `vitis-run` 或 `vitis_hls` 后，才可以声称完成外部 Vitis 执行验证。
+- `references/remote-board-platform-upload.md` 里的示例使用 `<REDACTED_LOCAL_PATH>`，不会放入真实本地路径。
+- `.settings/`、`*.local.json`、`*.remote.json`、reports、tests、smoke 输出和缓存这类本地专用文件不属于公开仓库载荷，也不会放进 release zip。
+- 只有实际运行 `vitis-run` 或 `vitis_hls` 后，才应该声称完成了 Vitis 执行验证。
 
 ## 范围
 
