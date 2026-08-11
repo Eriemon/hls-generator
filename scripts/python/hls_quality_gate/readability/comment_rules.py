@@ -2,7 +2,8 @@
 # 延迟解析类型注解，保持 Python 3.10+ 运行兼容。
 from __future__ import annotations
 
-# 标准库用于正则判断、路径定位和通用报告载荷。
+# 标准库用于相似度、正则判断、路径定位和通用报告载荷。
+import difflib
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,6 +32,7 @@ from .cpp_lexer import (
     normalize_comment_text,
 
     # 上下文定位和特殊语句识别用于空行块、控制语句规则。
+    parse_functions,
     previous_meaningful_code_index,
     special_statement_kind,
     statement_infos,
@@ -149,10 +151,16 @@ class PragmaContext:
 
 # 文件头关键词用于确认注释描述了 HLS 文件角色。
 FILE_HEADER_KEYWORDS = (  # 允许文件头注释命中的文件角色关键词
+    "核心对象", "top function", "kernel", "testbench",  # 顶层对象说明词
     "文件", "头文件", "源码", "测试",  # 通用文件形态角色词
-    "testbench", "内核", "接口", "声明",  # HLS 入口、接口与声明类角色词
-    "实现", "验证", "配置",  # 实现、验证与配置类角色词
+    "内核", "接口", "声明", "实现", "验证", "配置",  # 实现、验证与配置类角色词
 )
+
+# 文件头 contract 必须显式包含这些固定字段。
+FILE_HEADER_REQUIRED_FIELDS = ("职责：", "输入/输出：", "打印协议：")  # 文件头 contract 固定字段
+
+# 文件头还需要明确写出核心对象或 top function。
+FILE_HEADER_CORE_OBJECT_TERMS = ("核心对象：", "top function")  # 文件头核心对象字段
 
 # pragma 关键词用于判断注释是否解释硬件或吞吐意图。
 PRAGMA_INTENT_KEYWORDS = (  # 通用 pragma 注释允许覆盖的硬件/吞吐语义词
@@ -285,6 +293,15 @@ def check_comment_rules(
     # 普通注释语言和质量规则覆盖所有提取到的注释。
     list_issues.extend(_comment_language_and_quality_issues(str_text, str_rel_path, config))
 
+    # 旧式块注释在 current-project HLS 风格下被统一禁止。
+    list_issues.extend(_block_comment_syntax_issues(str_text, str_rel_path, config))
+
+    # HLS 面向人的 transcript 必须使用固定前缀。
+    list_issues.extend(_hls_print_prefix_issues(list_lines, str_rel_path, config))
+
+    # 注释相似度去重链用于阻断 exact duplicate、near duplicate 和函数内模板换皮。
+    list_issues.extend(_repeated_comment_text_issues(str_text, list_lines, str_rel_path, config))
+
     # 空行切块规则要求下方 HLS 代码块有中文目的说明。
     list_issues.extend(_blank_line_block_issues(list_lines, str_rel_path, config))
 
@@ -310,103 +327,187 @@ def _file_header_issues(
     rel_path: str,
     config: HlsProfileConfig,
 ) -> list[HlsGateIssue]:
-    """检查 HLS 文件头中文角色注释。
+    """检查 HLS 文件头是否满足连续 `//` contract 约束。
 
-    Args:
-        lines: 当前文件的源码物理行。
-        rel_path: 报告中使用的文件相对路径。
-        config: 当前 profile 的文件头规则配置。
+    参数:
+        lines: 当前 HLS 文件的物理行列表。
+        rel_path: 报告中使用的相对文件路径。
+        config: 当前 profile 的文件头 contract 配置。
 
-    Returns:
-        文件头规则命中的诊断列表；未启用或通过时为空列表。
+    返回:
+        文件头 contract 触发的问题列表；通过时返回空列表。
     """
 
-    # 未启用文件头要求时不产生任何诊断。
+    # 未启用文件头要求时直接跳过。
     if not config.require_file_header:
 
-        # 配置允许缺省文件头，直接通过该规则。
+        # 文件头 contract 规则关闭时不生成任何诊断。
         return []
 
-    # 逐行寻找第一条非空内容，判定它是否是合格中文文件头注释。
-    for int_line_number, str_raw_line in enumerate(lines, start=1):
+    # 首个非空物理行决定文件头 contract 的合法起点。
+    int_first_content_index = _first_nonempty_line_index(lines)  # 首个非空物理行零基下标
 
-        # 空行不承载文件角色信息，继续寻找第一条有意义内容。
-        if not str_raw_line.strip():
+    # 空文件由 HG000 统一兜底。
+    if int_first_content_index < 0:
 
-            # 跳过文件开头的空白行。
-            continue
+        # 空文件没有可验证的 contract，只能直接报 HG000。
+        return [
+            make_issue(
+                "HG000",
+                "error",
+                rel_path,
+                1,
+                "HLS 文件为空，无法进行可读性检查。",
+                node_kind="translation_unit",
+            )
+        ]
 
-        # 第一条非空内容必须是注释，避免 HLS 文件缺少角色说明。
+    # 第一段必须先出现 comment-only 行，不能直接从代码开始。
+    if not is_comment_only(lines[int_first_content_index]):
+
+        # 首个可见内容不是注释块时，文件头 contract 立即判定缺失。
+        return [
+            make_issue(
+                "HG007",
+                "error",
+                rel_path,
+                int_first_content_index + 1,
+                "每个 governed HLS 文件都必须先写连续 `//` 文件头 contract，说明职责、核心对象、输入/输出和打印协议。",
+                detail=lines[int_first_content_index].strip(),
+                node_kind="file_header",
+            )
+        ]
+
+    # 把首段注释块收集出来，同时记录是否混入了块注释语法。
+    tuple_header_scan = _scan_file_header_block(lines, int_first_content_index)  # 文件头扫描结果
+
+    # 扫描结果拆成文件头正文和非法注释形态标志，供后续 contract 判断复用。
+    list_header_lines, bool_has_non_line_comment = tuple_header_scan  # 文件头正文与非法注释标志
+
+    # 旧式块注释或混合注释形态不能作为合法文件头 contract。
+    if bool_has_non_line_comment:
+
+        # 非 `//` 注释混入文件头时，直接按非法 contract 形态阻断。
+        return [
+            make_issue(
+                "HG007",
+                "error",
+                rel_path,
+                int_first_content_index + 1,
+                "文件头 contract 必须使用连续 `//` 注释块，不能使用块注释或混合注释形态。",
+                detail="\n".join(list_header_lines).strip(),
+                node_kind="file_header",
+            )
+        ]
+
+    # 把文件头 contract 合并成多行文本，供字段和语言检查复用。
+    str_header_block = "\n".join(list_header_lines).strip()  # 文件头 contract 正文
+
+    # 文件头必须覆盖职责、核心对象、输入输出和打印协议。
+    bool_has_required_fields = all(str_field in str_header_block for str_field in FILE_HEADER_REQUIRED_FIELDS)  # 是否具备职责/输入输出/打印协议三段
+
+    # 核心对象词决定当前文件是否真正写明了 top function 或关键对象。
+    bool_has_core_object = any(str_term in str_header_block for str_term in FILE_HEADER_CORE_OBJECT_TERMS)  # 是否写出核心对象或 top function
+
+    # 字段不全时直接阻断文件头 contract。
+    if not bool_has_required_fields or not bool_has_core_object:
+
+        # 合同字段残缺时，要求补齐职责、对象、边界和 transcript 协议。
+        return [
+            make_issue(
+                "HG007",
+                "error",
+                rel_path,
+                int_first_content_index + 1,
+                "文件头 contract 必须显式写出职责、核心对象或 top function、输入/输出边界，以及打印或仿真 transcript 协议。",
+                detail=str_header_block,
+                node_kind="file_header",
+            )
+        ]
+
+    # 中文和角色词都缺失时说明只是模板化占位。
+    if not contains_cjk(str_header_block) or not _contains_any(str_header_block, FILE_HEADER_KEYWORDS):
+
+        # 只有字段标签却没有中文语义时，文件头仍然视作占位模板。
+        return [
+            make_issue(
+                "HG007",
+                "error",
+                rel_path,
+                int_first_content_index + 1,
+                "文件头 contract 必须使用中文，并明确描述当前 HLS 文件的角色与顶层对象。",
+                detail=str_header_block,
+                node_kind="file_header",
+            )
+        ]
+
+    # 文件头 contract 通过所有固定字段检查。
+    return []
+
+# 先定位首个非空物理行，供文件头 contract 起点判断复用。
+def _first_nonempty_line_index(lines: list[str]) -> int:
+    """定位文件中首个非空物理行。
+
+    参数:
+        lines: 当前 HLS 文件的物理行列表。
+
+    返回:
+        首个非空物理行的零基下标；若整文件为空白则返回 `-1`。
+    """
+
+    # 按物理行顺序扫描，首个非空行决定文件头 contract 的法定起点。
+    for int_index, str_line in enumerate(lines):
+
+        # 命中首个非空行后立即返回其零基下标。
+        if str_line.strip():
+
+            # 当前行已经是首个可见内容，无需继续扫描后续物理行。
+            return int_index
+
+    # 整个文件都是空白时统一返回 -1。
+    return -1
+
+# 首段连续注释块的采样与合法性判断集中在这里完成。
+def _scan_file_header_block(lines: list[str], int_start_index: int) -> tuple[list[str], bool]:
+    """收集文件头首段注释块及其注释形态。
+
+    参数:
+        lines: 当前 HLS 文件的物理行列表。
+        int_start_index: 文件头 contract 起始行的零基下标。
+
+    返回:
+        依次返回归一化后的文件头正文行列表，以及是否混入了非 `//` 注释。
+    """
+
+    # 文件头 contract 逐行累积为归一化正文，供后续字段检查直接复用。
+    list_header_lines: list[str] = []  # 文件头 contract 正文行
+
+    # 只要混入块注释或其他非 `//` 形态，就不能视作合法文件头。
+    bool_has_non_line_comment = False  # 文件头块中是否混入了非法注释形态
+
+    # 只扫描首段连续 comment-only 块，遇到代码或空行就停止。
+    for str_raw_line in lines[int_start_index:]:
+
+        # 首段连续注释块结束后，后续内容不再属于文件头 contract。
         if not is_comment_only(str_raw_line):
 
-            # 返回文件头缺失诊断，定位到第一条实际代码。
-            return [
-                make_issue(
-                    "HG007",
-                    "error",
-                    rel_path,
-                    int_line_number,
-                    "HLS 文件必须先用中文文件角色注释说明内核、头文件或 testbench 职责。",
-                    detail=str_raw_line.strip(),
-                    node_kind="file_header",
-                )
-            ]
+            # 文件头边界已经确定，停止收集后续物理行。
+            break
 
-        # 提取去掉注释符号后的文件头文本。
-        str_comment = normalize_comment_text(str_raw_line)  # 文件头注释正文
+        # 当前注释行用于区分合法 `//` 与旧式块注释形态。
+        str_stripped_line = str_raw_line.strip()  # 当前文件头候选行
 
-        # 文件头必须包含中文，工具标记不能替代文件角色说明。
-        if not contains_cjk(str_comment):
+        # 不是 `//` 开头时，记录为非法文件头注释形态。
+        if not str_stripped_line.startswith("//"):
 
-            # 返回文件头语言诊断，提示使用中文说明角色。
-            return [
-                make_issue(
-                    "HG007",
-                    "error",
-                    rel_path,
-                    int_line_number,
-                    "HLS 文件头注释必须使用中文。",
-                    detail=str_comment,
-                    node_kind="file_header",
-                )
-            ]
+            # 一旦命中块注释风格，调用方就必须把整段文件头判为非法。
+            bool_has_non_line_comment = True  # 文件头混入了非 `//` 注释形态
 
-        # 文件头还必须能说明具体文件角色，不能只是泛泛描述。
-        bool_generic_header = _is_generic_comment(str_comment, config)  # 文件头是否模板化
+        # 文件头 contract 正文统一归一化后再进入字段检查。
+        list_header_lines.append(normalize_comment_text(str_raw_line))
 
-        # 文件角色关键词用于区分普通注释和真实文件头。
-        bool_has_role_keyword = _contains_any(str_comment, FILE_HEADER_KEYWORDS)  # 文件头是否含角色词
-
-        # 模板化或缺少角色词都会削弱 HLS 文件职责可读性。
-        if bool_generic_header or not bool_has_role_keyword:
-
-            # 返回文件头意图不足诊断。
-            return [
-                make_issue(
-                    "HG007",
-                    "error",
-                    rel_path,
-                    int_line_number,
-                    "HLS 文件头注释必须说明具体文件角色，而不是模板化描述。",
-                    detail=str_comment,
-                    node_kind="file_header",
-                )
-            ]
-
-        # 第一条非空注释合格后即可结束文件头检查。
-        return []
-
-    # 完全空文件无法继续做 HLS 注释可读性判断。
-    return [
-        make_issue(
-            "HG000",
-            "error",
-            rel_path,
-            1,
-            "HLS 文件为空，无法进行可读性检查。",
-            node_kind="translation_unit",
-        )
-    ]
+    # 返回文件头正文与注释形态标志，供主流程决定是否报 HG007。
+    return list_header_lines, bool_has_non_line_comment
 
 # _comment_language_and_quality_issues 检查所有注释的语言和语义质量。
 def _comment_language_and_quality_issues(
@@ -486,6 +587,687 @@ def _comment_language_and_quality_issues(
 
     # 返回所有注释语言和质量诊断。
     return list_issues
+
+# _block_comment_syntax_issues 阻断旧式块注释语法。
+def _block_comment_syntax_issues(
+    text: str,
+    rel_path: str,
+    config: HlsProfileConfig,
+) -> list[HlsGateIssue]:
+    """检查源码是否仍包含被禁止的块注释语法。
+
+    参数:
+        text: 当前 HLS 文件的完整源码文本。
+        rel_path: 报告中使用的相对文件路径。
+        config: 当前 profile 的块注释语法配置。
+
+    返回:
+        块注释语法触发的问题列表；通过时返回空列表。
+    """
+
+    # 规则关闭时不扫描块注释。
+    if not config.forbid_block_comment_syntax:
+
+        # 块注释语法规则关闭时不生成任何诊断。
+        return []
+
+    # 逐条扫描提取到的注释跨度，直接阻断 kind=block 的旧式注释。
+    return [
+        make_issue(
+            "HG030",
+            "error",
+            rel_path,
+            obj_comment.line,
+            "HLS 注释只允许 `//` 单行注释和连续 `//` 注释块；`/* ... */` 与 `/** ... */` 一律禁止。",
+            detail=obj_comment.raw.strip(),
+            node_kind="block_comment",
+        )
+        for obj_comment in extract_comments(text)
+        if obj_comment.kind == "block"
+    ]
+
+# _hls_print_prefix_issues 检查面向人的 transcript 是否带固定前缀。
+def _hls_print_prefix_issues(
+    lines: list[str],
+    rel_path: str,
+    config: HlsProfileConfig,
+) -> list[HlsGateIssue]:
+    """检查 printf、puts、stdout/stderr 与 iostream transcript 前缀。
+
+    参数:
+        lines: 当前 HLS 文件的物理行列表。
+        rel_path: 报告中使用的相对文件路径。
+        config: 当前 profile 的 HLS transcript 前缀配置。
+
+    返回:
+        面向人的 HLS 打印前缀问题列表；通过时返回空列表。
+    """
+
+    # profile 关闭时不做 HLS print 边界检查。
+    if not config.require_hls_print_prefix:
+
+        # 打印前缀规则关闭时不生成任何诊断。
+        return []
+
+    # 问题列表按源码顺序累计。
+    list_issues: list[HlsGateIssue] = []  # HLS print 边界问题
+
+    # 逐行检查常见面向人的打印语句。
+    for int_line_number, str_raw_line in enumerate(lines, start=1):
+
+        # 去掉尾注释后的代码部分用于识别打印语句。
+        str_code = code_part(str_raw_line)  # 当前行的有效代码
+
+        # 当前行不包含面向人的打印语句时直接跳过。
+        if not _looks_like_hls_human_print(str_code):
+
+            # 非人类 transcript 行不参与 HG028 前缀检查。
+            continue
+
+        # 允许前缀任一命中即可通过当前打印边界。
+        if any(str_prefix in str_raw_line for str_prefix in config.allowed_hls_print_prefixes):
+
+            # 合法 transcript 前缀已经命中，当前打印行无需继续报错。
+            continue
+
+        # 裸 PASS/FAIL 或无前缀打印统一归入 HG028。
+        list_issues.append(
+            make_issue(
+                "HG028",
+                "error",
+                rel_path,
+                int_line_number,
+                "HLS 面向人的打印必须使用 `> INFO: [HLS] ...`、`> WARNING: [HLS] ...` 或 `> ERR: [HLS] ...` 前缀。",
+                detail=str_code.strip(),
+                node_kind="hls_print_output",
+                code_excerpt=str_code.strip(),
+            )
+        )
+
+    # 返回全部打印前缀问题。
+    return list_issues
+
+# _repeated_comment_text_issues 复用 Python current-project 的相似度去重链。
+def _repeated_comment_text_issues(
+    text: str,
+    lines: list[str],
+    rel_path: str,
+    config: HlsProfileConfig,
+) -> list[HlsGateIssue]:
+    """检查 exact duplicate、near duplicate 与函数内高相似注释。
+
+    参数:
+        text: 当前 HLS 文件的完整源码文本。
+        lines: 当前 HLS 文件的物理行列表。
+        rel_path: 报告中使用的相对文件路径。
+        config: 当前 profile 的 HG029 相似度配置。
+
+    返回:
+        注释重复或高相似触发的问题列表；规则关闭或无命中时返回空列表。
+    """
+
+    # 规则关闭时跳过整条去重链。
+    if not config.forbid_repeated_comment_text:
+
+        # HG029 关闭时不生成任何相似度诊断。
+        return []
+
+    # 注释候选由统一 helper 负责过滤非中文、工具注释和空骨架。
+    list_candidates = _repeated_comment_candidates(text)  # 可参与去重比较的注释候选
+
+    # 不足两条注释时无法构成重复或相似比较。
+    if len(list_candidates) < 2:
+
+        # 单条注释无法形成重复对比关系，直接返回空列表。
+        return []
+
+    # 统一记录已报告行，避免 exact/near/function 三条链重复报同一行。
+    set_reported_lines: set[int] = set()  # 已登记 HG029 的注释行
+
+    # 问题列表按 exact -> near -> function-similarity 的顺序稳定追加。
+    list_issues: list[HlsGateIssue] = []  # HG029 注释相似度问题集合
+
+    # 精确重复先处理，后出现的模板句承担修复责任。
+    _append_exact_repeated_comment_issues(
+        list_candidates,
+        rel_path,
+        config.max_exact_comment_reuse,
+        set_reported_lines,
+        list_issues,
+    )
+
+    # 文件级 near duplicate 只保留中文信息量足够的候选。
+    list_near_candidates = _near_duplicate_comment_candidates(list_candidates, config)  # 文件级近似重复候选
+
+    # 文件级 near duplicate 负责挡住共享模板标记的轻改写句子。
+    _append_near_duplicate_comment_issues(
+        list_near_candidates,
+        rel_path,
+        config,
+        set_reported_lines,
+        list_issues,
+    )
+
+    # 函数内高相似分组补住 marker 没完全覆盖的模板换皮。
+    dict_function_groups = _function_comment_candidate_groups(lines, list_candidates, config)  # 函数级注释候选分组
+
+    # 函数内部的高相似句仍按后出现者承担修复责任。
+    _append_function_similarity_comment_issues(
+        dict_function_groups,
+        rel_path,
+        config,
+        set_reported_lines,
+        list_issues,
+    )
+
+    # 返回 HG029 诊断集合。
+    return list_issues
+
+# exact duplicate 先行登记，确保完全重复句优先承担 HG029 修复责任。
+def _append_exact_repeated_comment_issues(
+    list_candidates: list[tuple[int, str, str]],
+    rel_path: str,
+    int_allowed_reuse: int,
+    set_reported_lines: set[int],
+    list_issues: list[HlsGateIssue],
+) -> None:
+    """把 exact duplicate 命中的 HG029 追加到结果列表。
+
+    参数:
+        list_candidates: 已归一化的注释候选列表。
+        rel_path: 报告中使用的相对文件路径。
+        int_allowed_reuse: 单条归一化注释允许出现的最大次数。
+        set_reported_lines: 已登记 HG029 的注释行集合。
+        list_issues: 需要原地追加的问题列表。
+
+    返回:
+        无返回值；问题直接追加到 `list_issues`。
+    """
+
+    # 精确重复计数器按归一化骨架累计出现次数。
+    dict_exact_seen: dict[str, int] = {}  # 精确重复计数器
+
+    # 后出现的完全重复注释承担修复责任。
+    for int_line_number, str_normalized_text, _str_original_text in list_candidates:
+
+        # 先读取当前骨架此前已出现的次数。
+        int_seen_count = dict_exact_seen.get(str_normalized_text, 0)  # 当前骨架此前出现次数
+
+        # 当前骨架的出现次数随后立即回写计数器。
+        dict_exact_seen[str_normalized_text] = int_seen_count + 1  # 当前骨架累计出现次数
+
+        # 仍在允许复用次数以内时不报 HG029。
+        if int_seen_count < int_allowed_reuse:
+
+            # 当前重复度仍在容忍范围内，继续检查下一个候选。
+            continue
+
+        # 超出允许复用次数后，当前注释行承担 exact duplicate 修复责任。
+        list_issues.append(_repeated_comment_issue(rel_path, int_line_number))
+
+        # 报告过的行号写入集合，避免后续链路重复报同一行。
+        set_reported_lines.add(int_line_number)
+
+# 文件级 near duplicate 先做信息量过滤，避免短句噪声放大相似度比较。
+def _near_duplicate_comment_candidates(
+    list_candidates: list[tuple[int, str, str]],
+    config: HlsProfileConfig,
+) -> list[tuple[int, str, str]]:
+    """筛出文件级 near duplicate 需要比较的注释候选。
+
+    参数:
+        list_candidates: 已归一化的注释候选列表。
+        config: 当前 profile 的 HG029 相似度配置。
+
+    返回:
+        满足 near-duplicate 最低中文信息量要求的候选列表。
+    """
+
+    # 文件级 near duplicate 只比较中文信息量足够的注释。
+    list_near_candidates: list[tuple[int, str, str]] = []  # 通过信息量门槛的 near-duplicate 候选
+
+    # 逐条筛掉中文信息量过低的注释骨架。
+    for tuple_candidate in list_candidates:
+
+        # 先统计当前归一化文本中的中文信息量。
+        int_cjk_count = _count_cjk_characters(tuple_candidate[1])  # 当前候选的中文字符数
+
+        # 中文信息量不足时不进入文件级 near duplicate 比较。
+        if int_cjk_count < config.min_near_duplicate_cjk_chars:
+
+            # 低信息量短句交给函数级链路或其他规则处理。
+            continue
+
+        # 满足最小中文信息量后再纳入文件级 near duplicate 候选。
+        list_near_candidates.append(tuple_candidate)
+
+    # 返回文件级 near duplicate 的候选集合。
+    return list_near_candidates
+
+# 文件级 near duplicate 负责拦住共享模板标记的轻改写句子。
+def _append_near_duplicate_comment_issues(
+    list_near_candidates: list[tuple[int, str, str]],
+    rel_path: str,
+    config: HlsProfileConfig,
+    set_reported_lines: set[int],
+    list_issues: list[HlsGateIssue],
+) -> None:
+    """把文件级 near duplicate 命中的 HG029 追加到结果列表。
+
+    参数:
+        list_near_candidates: 已通过中文信息量筛选的 near-duplicate 候选。
+        rel_path: 报告中使用的相对文件路径。
+        config: 当前 profile 的 HG029 相似度配置。
+        set_reported_lines: 已登记 HG029 的注释行集合。
+        list_issues: 需要原地追加的问题列表。
+
+    返回:
+        无返回值；问题直接追加到 `list_issues`。
+    """
+
+    # 向前比较保证后出现的句子承担修复责任。
+    for int_index, tuple_candidate in enumerate(list_near_candidates):
+
+        # 当前候选拆成行号和归一化文本，便于后续相似度比较。
+        int_line_number, str_normalized_text, _str_original_text = tuple_candidate  # 当前 near 候选
+
+        # 已在 exact duplicate 链里报过的行号不再重复进入 near duplicate。
+        if int_line_number in set_reported_lines:
+
+            # 当前行已经被 earlier chain 接管，继续检查下一个候选。
+            continue
+
+        # 只与当前候选之前出现过的注释比较，保持后出现者承担修复责任。
+        for _int_previous_line, str_previous_text, _str_previous_original in list_near_candidates[:int_index]:
+
+            # 完全相同的骨架已由 exact duplicate 链处理，这里不重复报错。
+            if str_normalized_text == str_previous_text:
+
+                # 完全相同的骨架已在 earlier chain 覆盖，继续看下一条前文。
+                continue
+
+            # near duplicate 只在共享模板信号词时才继续比较相似度。
+            if not _comments_share_template_marker(
+                str_normalized_text,
+                str_previous_text,
+                config.function_similarity_template_terms,
+            ):
+
+                # 没有共享模板信号词时，不把两条注释视作 near duplicate 候选对。
+                continue
+
+            # 当前两条候选的相似度决定是否命中文件级 near duplicate。
+            float_similarity = _comment_similarity(str_normalized_text, str_previous_text)  # 当前 near 候选对的相似度
+
+            # 相似度低于阈值时，不生成 near duplicate 诊断。
+            if float_similarity < config.near_duplicate_similarity_threshold:
+
+                # 当前句对还没达到 near duplicate 阈值，继续比较下一条前文。
+                continue
+
+            # 命中文件级 near duplicate 后，由当前较晚出现的注释行承担修复责任。
+            list_issues.append(_repeated_comment_issue(rel_path, int_line_number))
+
+            # 已报告的 near duplicate 行号写回集合，避免函数级链路再重复报它。
+            set_reported_lines.add(int_line_number)
+
+            # 当前候选已经命中 near duplicate，无需再比较更早的注释。
+            break
+
+# 把注释候选按函数体分桶后，函数级高相似链才有稳定的比较边界。
+def _function_comment_candidate_groups(
+    lines: list[str],
+    list_candidates: list[tuple[int, str, str]],
+    config: HlsProfileConfig,
+) -> dict[int, list[tuple[int, str, str]]]:
+    """按函数跨度把注释候选分组，供函数内高相似链复用。
+
+    参数:
+        lines: 当前 HLS 文件的物理行列表。
+        list_candidates: 已归一化的注释候选列表。
+        config: 当前 profile 的 HG029 相似度配置。
+
+    返回:
+        函数下标到该函数内注释候选列表的映射。
+    """
+
+    # 函数跨度表只保留真正带函数体的实现，声明原型不参与函数内相似比较。
+    list_function_spans = _function_similarity_spans(lines)  # 当前文件的函数跨度表
+
+    # 分组结果按函数下标收拢注释候选，模块级注释不进入函数内相似链。
+    dict_function_groups: dict[int, list[tuple[int, str, str]]] = {}  # 函数下标到注释候选列表
+
+    # 逐条把足够长的中文注释归入最近函数。
+    for tuple_candidate in list_candidates:
+
+        # 当前候选拆成行号与归一化文本，便于做信息量和跨度判断。
+        int_line_number, str_normalized_text, _str_original_text = tuple_candidate  # 当前函数级候选
+
+        # 中文信息量不足的短句不参与函数内高相似比较。
+        if _count_cjk_characters(str_normalized_text) < config.min_function_similarity_cjk_chars:
+
+            # 低信息量短句不会进入函数级高相似链。
+            continue
+
+        # 只有落在函数体跨度内的注释才进入函数级分组。
+        for int_function_index, int_start_line, int_end_line in list_function_spans:
+
+            # 命中当前函数跨度后，候选就归入该函数并停止继续搜索。
+            if int_start_line <= int_line_number <= int_end_line:
+
+                # 当前注释候选挂到所属函数组，供函数内高相似链复用。
+                dict_function_groups.setdefault(int_function_index, []).append(tuple_candidate)
+
+                # 每条注释最多只属于一个函数体，命中后立即结束跨度搜索。
+                break
+
+    # 返回函数级注释候选分组结果。
+    return dict_function_groups
+
+# 函数跨度表集中提取出来，避免高相似链重复解析函数边界。
+def _function_similarity_spans(lines: list[str]) -> list[tuple[int, int, int]]:
+    """提取函数内高相似比较需要的函数跨度表。
+
+    参数:
+        lines: 当前 HLS 文件的物理行列表。
+
+    返回:
+        依次包含函数下标、起始行和结束行的跨度列表。
+    """
+
+    # 只保留带函数体的实现跨度，函数声明原型不参与函数内相似比较。
+    return [
+        (int_index, obj_function.start_line, obj_function.end_line)
+        for int_index, obj_function in enumerate(parse_functions(lines))
+        if not obj_function.is_declaration
+    ]
+
+# 函数级高相似链负责补住模板标记未完全覆盖的函数内换皮注释。
+def _append_function_similarity_comment_issues(
+    dict_function_groups: dict[int, list[tuple[int, str, str]]],
+    rel_path: str,
+    config: HlsProfileConfig,
+    set_reported_lines: set[int],
+    list_issues: list[HlsGateIssue],
+) -> None:
+    """把函数内高相似注释命中的 HG029 追加到结果列表。
+
+    参数:
+        dict_function_groups: 函数下标到注释候选列表的映射。
+        rel_path: 报告中使用的相对文件路径。
+        config: 当前 profile 的 HG029 相似度配置。
+        set_reported_lines: 已登记 HG029 的注释行集合。
+        list_issues: 需要原地追加的问题列表。
+
+    返回:
+        无返回值；问题直接追加到 `list_issues`。
+    """
+
+    # 每个函数内部只报告后出现的高相似注释。
+    for list_group in dict_function_groups.values():
+
+        # 单函数组不足两条注释时，不足以形成高相似比较。
+        if len(list_group) < 2:
+
+            # 当前函数的注释样本不足，继续检查下一个函数组。
+            continue
+
+        # 当前函数组内按源码顺序比较后出现的注释。
+        for int_index, tuple_candidate in enumerate(list_group):
+
+            # 当前候选拆成行号与归一化文本，供相似度链复用。
+            int_line_number, str_normalized_text, _str_original_text = tuple_candidate  # 当前函数组候选
+
+            # 已由 earlier chain 接管的行号不再重复进入函数级高相似比较。
+            if int_line_number in set_reported_lines:
+
+                # 当前行已经报过 HG029，继续看函数组内下一条候选。
+                continue
+
+            # 只与本函数组中更早出现的注释比较，保持后出现者承担修复责任。
+            for _int_previous_line, str_previous_text, _str_previous_original in list_group[:int_index]:
+
+                # 完全相同的骨架已由 exact duplicate 链处理，不在这里重复报错。
+                if str_normalized_text == str_previous_text:
+
+                    # 完全相同的骨架无需再进函数级高相似判定。
+                    continue
+
+                # 当前两条函数内注释的相似度供高相似与模板相似双阈值复用。
+                float_similarity = _comment_similarity(str_normalized_text, str_previous_text)  # 当前函数组候选对的相似度
+
+                # 纯高相似阈值负责兜住没有模板标记的近乎同义句。
+                bool_high_similarity = float_similarity >= config.function_comment_similarity_threshold  # 是否命中函数内高相似阈值
+
+                # 模板相似阈值负责兜住共享模板标记的轻改写句子。
+                bool_template_hit = _template_hit(str_normalized_text, str_previous_text, config, float_similarity)  # 模板相似命中
+
+                # 两条阈值都未命中时，不生成函数级 HG029。
+                if not (bool_high_similarity or bool_template_hit):
+
+                    # 当前句对还没达到函数内高相似标准，继续比较更早的前文。
+                    continue
+
+                # 命中函数级高相似后，由当前较晚出现的注释行承担修复责任。
+                list_issues.append(_repeated_comment_issue(rel_path, int_line_number))
+
+                # 已报告的函数级高相似行号写回集合，避免后续重复报它。
+                set_reported_lines.add(int_line_number)
+
+                # 当前候选已经在本函数组命中 HG029，无需再比较更早的注释。
+                break
+
+# _repeated_comment_candidates 整理参与相似度比较的普通注释。
+def _repeated_comment_candidates(text: str) -> list[tuple[int, str, str]]:
+    """收集中文注释的相似度比较候选。
+
+    参数:
+        text: 当前 HLS 文件的完整源码文本。
+
+    返回:
+        依次包含行号、归一化文本和原始注释正文的候选列表。
+    """
+
+    # 候选保持源码顺序，便于后出现者承担修复责任。
+    list_candidates: list[tuple[int, str, str]] = []  # 注释去重候选
+
+    # 逐条遍历注释跨度，过滤非中文、工具注释和空骨架。
+    for obj_comment in extract_comments(text):
+
+        # 原始注释正文需要先裁掉首尾空白，再决定是否保留。
+        str_original_text = obj_comment.text.strip()  # 原始注释正文
+
+        # 非中文或空注释不会进入 HG029 的相似度比较链。
+        if not str_original_text or not contains_cjk(str_original_text):
+
+            # 空骨架或非中文注释不参与 HG029 相似度比较。
+            continue
+
+        # 白名单里的特殊注释不应进入重复/高相似阻断链。
+        if _allowed_non_chinese_comment(str_original_text):
+
+            # 当前注释属于白名单形态，继续检查下一条注释跨度。
+            continue
+
+        # 归一化骨架统一去掉数字、ASCII 标识符与标点差异。
+        str_normalized_text = _normalized_comment_similarity_content(str_original_text)  # 相似度比较文本骨架
+
+        # 归一化后已经没有中文语义时，不进入 HG029 候选集合。
+        if not str_normalized_text:
+
+            # 归一化结果为空说明当前注释只剩模板噪声，不参与相似度比较。
+            continue
+
+        # 合法候选按源码顺序保留行号、骨架与原始正文。
+        list_candidates.append((obj_comment.line, str_normalized_text, str_original_text))
+
+    # 返回按源码顺序排列的注释候选。
+    return list_candidates
+
+# _normalized_comment_similarity_content 生成去重链使用的强归一化骨架。
+def _normalized_comment_similarity_content(comment_text: str) -> str:
+    """移除数字、ASCII 标识符和常见标点，只保留中文语义骨架。
+
+    参数:
+        comment_text: 当前待归一化的注释正文。
+
+    返回:
+        供 exact/near/function similarity 复用的中文语义骨架。
+    """
+
+    # 先用现有 helper 去掉注释符号，再统一成小写比较文本。
+    str_normalized_text = normalize_comment_text(comment_text).casefold()  # 去掉注释边界后的正文
+
+    # 先去掉 ASCII 标识符，避免变量名差异把模板句伪装成不同注释。
+    str_normalized_text = re.sub(r"\b[a-z_][a-z0-9_]*\b", "", str_normalized_text)  # 去掉 ASCII 标识符后的骨架文本
+
+    # 再去掉数字和序号，避免行号变化把同一句模板伪装成不同文本。
+    str_normalized_text = re.sub(r"\d+", "", str_normalized_text)  # 去掉数字后的骨架文本
+
+    # 去掉空白和常见中英文标点，只保留中文句意骨架。
+    str_normalized_text = _strip_comment_similarity_punctuation(str_normalized_text)  # 去掉空白和标点后的骨架文本
+
+    # 返回可用于 exact/near/function similarity 的骨架文本。
+    return str_normalized_text.strip()
+
+# _count_cjk_characters 统计文本中的中文字符数量。
+def _count_cjk_characters(text: str) -> int:
+    """统计文本中的 CJK 统一表意文字数量。
+
+    参数:
+        text: 当前待统计的文本内容。
+
+    返回:
+        文本中的中文字符数量。
+    """
+
+    # 只统计中文字符，避免 ASCII token 拉高信息量。
+    return len(re.findall(r"[\u4e00-\u9fff]", text or ""))
+
+# _comments_share_template_marker 判断两条注释是否共享低信息模板标记。
+def _comments_share_template_marker(
+    left_text: str,
+    right_text: str,
+    markers: tuple[str, ...],
+) -> bool:
+    """判断两条归一化注释是否共享模板信号词。
+
+    参数:
+        left_text: 左侧归一化注释文本。
+        right_text: 右侧归一化注释文本。
+        markers: 低信息模板信号词集合。
+
+    返回:
+        共享任一模板信号词时返回 `True`，否则返回 `False`。
+    """
+
+    # 共享任一模板信号词时，近似高相似更可能来自换皮模板。
+    return any(str_marker in left_text and str_marker in right_text for str_marker in markers)
+
+# 归一化后的中文骨架还要统一剥掉标点和空白，避免格式差异影响相似度比较。
+def _strip_comment_similarity_punctuation(text: str) -> str:
+    """去掉注释骨架中的空白和常见中英文标点。
+
+    参数:
+        text: 已去掉注释符号、ASCII 标识符和数字后的文本骨架。
+
+    返回:
+        去掉空白与常见标点后的中文语义骨架。
+    """
+
+    # 空白和标点只会制造格式差异，不应该改变中文语义骨架的相似度结论。
+    return re.sub(r"[\s`'\"：:，,。；;、（）()\[\]{}<>《》!！?？+\-*/=|\\]+", "", text)
+
+# 模板相似判定集中到这里，避免函数级高相似链把阈值与标记逻辑写成长表达式。
+def _template_hit(
+    left_text: str,
+    right_text: str,
+    config: HlsProfileConfig,
+    float_similarity: float,
+) -> bool:
+    """判断一对注释是否命中模板相似阈值。
+
+    参数:
+        left_text: 左侧归一化注释文本。
+        right_text: 右侧归一化注释文本。
+        config: 当前 profile 的 HG029 相似度配置。
+        float_similarity: 当前注释对已经计算好的相似度分数。
+
+    返回:
+        相似度超过阈值且共享模板信号词时返回 `True`。
+    """
+
+    # 相似度达标且共享模板标记时，当前句对就属于模板换皮风险。
+    return float_similarity >= config.function_template_similarity_threshold and _comments_share_template_marker(
+        left_text,
+        right_text,
+        config.function_similarity_template_terms,
+    )
+
+# _comment_similarity 用标准库估计两条中文注释的相似度。
+def _comment_similarity(left_text: str, right_text: str) -> float:
+    """计算两条归一化注释之间的相似度。
+
+    参数:
+        left_text: 左侧归一化注释文本。
+        right_text: 右侧归一化注释文本。
+
+    返回:
+        `SequenceMatcher` 计算得到的相似度分数。
+    """
+
+    # SequenceMatcher 对短中文句足够稳定，也不引入第三方依赖。
+    return difflib.SequenceMatcher(None, left_text, right_text).ratio()
+
+# _repeated_comment_issue 构造统一的 HG029 问题对象。
+def _repeated_comment_issue(rel_path: str, line_number: int) -> HlsGateIssue:
+    """构造重复或高相似注释的 HG029 诊断。
+
+    参数:
+        rel_path: 报告中使用的相对文件路径。
+        line_number: 当前命中 HG029 的注释行号。
+
+    返回:
+        统一形状的 HG029 诊断对象。
+    """
+
+    # HG029 统一提示调用方写出上下文相关而非模板复用的注释。
+    return make_issue(
+        "HG029",
+        "error",
+        rel_path,
+        line_number,
+        "注释重复或高度复用了另一条注释；必须改写成当前端口、缓存、循环或事务语义专属的说明。",
+        node_kind="comment_similarity",
+    )
+
+# 这里专门识别面向人的 transcript 语句，供 HG028 打印前缀规则复用。
+def _looks_like_hls_human_print(code: str) -> bool:
+    """判断当前代码片段是否为面向人的打印语句。
+
+    参数:
+        code: 去掉注释后的单行 HLS/C++ 代码片段。
+
+    返回:
+        命中 printf、puts、stdout/stderr 或 iostream transcript 时返回 `True`。
+    """
+
+    # 空片段不可能承载打印语句。
+    if not code.strip():
+
+        # 没有任何有效代码时，不可能构成人类 transcript 语句。
+        return False
+
+    # printf、puts、stdout/stderr 与常见 iostream 流都属于人类 transcript。
+    # 只要命中任一已知打印接口，就把当前语句视作 HG028 检查对象。
+    return bool(
+        re.search(r"\bprintf\s*\(", code)
+        or re.search(r"\bputs\s*\(", code)
+        or re.search(r"\bfprintf\s*\(\s*(?:stdout|stderr)\s*,", code)
+        or "std::cout" in code
+        or "std::cerr" in code
+        or "std::clog" in code
+    )
 
 # _blank_line_block_issues 检查空行切分出的下方代码块是否有中文说明。
 def _blank_line_block_issues(
@@ -735,6 +1517,15 @@ def _append_statement_spacing_issue(
         # 已满足语句上方说明规则。
         return
 
+    # 函数签名允许使用紧邻的连续 // contract 块，而不是强制退化成单行说明。
+    if context.statement_kind == "function_signature" and _has_line_comment_block_above(
+        context.lines,
+        context.line_index,
+    ):
+
+        # 连续 contract 块本身就是函数签名的合法上方说明。
+        return
+
     # 缺少说明时追加 HG003 诊断。
     issues.append(
         make_issue(
@@ -748,6 +1539,42 @@ def _append_statement_spacing_issue(
             code_excerpt=context.code,
         )
     )
+
+# 这个 helper 用来判断函数签名前面的连续 `//` 注释块是否真正独立存在。
+def _has_line_comment_block_above(lines: list[str], line_index: int) -> bool:
+    """判断函数签名前是否紧邻连续 `//` 注释块。
+
+    参数:
+        lines: 当前 HLS 文件的物理行列表。
+        line_index: 目标代码行的零基下标。
+
+    返回:
+        目标行上方存在独立连续 `//` 注释块时返回 `True`。
+    """
+
+    # 目标行至少要有上一行，才可能存在注释块。
+    if line_index <= 0:
+
+        # 文件开头之前没有上一行，因此不可能存在紧邻注释块。
+        return False
+
+    # 紧邻上一行必须是纯 // 注释。
+    int_comment_index = line_index - 1  # 紧邻目标行的候选注释行
+
+    # 紧邻上一行若不是 `//` 注释，目标行上方就不存在合法注释块。
+    if not lines[int_comment_index].strip().startswith("//"):
+
+        # 当前签名前面的紧邻行已经断开注释块，因此这里直接判定为 False。
+        return False
+
+    # 向上回溯整个连续 // 块。
+    while int_comment_index >= 0 and lines[int_comment_index].strip().startswith("//"):
+
+        # 当前循环命中的仍是注释行，因此游标继续向上回退一行。
+        int_comment_index -= 1  # 连续注释块向上回溯
+
+    # 注释块上方是文件开头或空行时，说明该块独立成立。
+    return int_comment_index < 0 or not lines[int_comment_index].strip()
 
 # _append_declaration_comment_issues 负责局部声明和赋值注释检查。
 def _append_declaration_comment_issues(

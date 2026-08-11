@@ -1,15 +1,23 @@
 ---
-name: erie-hls-generator
-description: Use when working on HLS development, HLS design, HLS modification, HLS debug, HLS debugging, Chinese-language HLS requests, high-level synthesis, Vitis HLS, AMD/Xilinx HLS, C/C++ HLS kernels, pragmas/directives, interfaces, DATAFLOW, array partition/reshape, hls_config.cfg, Tcl flow, csim/cosim, HLS reports, or HLS-generated RTL/Verilog interface, export, cosim, or debug issues.
+name: readable-hls-generator
+description: Use when you need to create, write, review, annotate, or validate readable HLS, Vitis HLS, high-level synthesis, or HLS debug workflows.
 ---
 
-# Erie HLS Generator
+# Readable HLS Generator
 
-Use this skill for local AMD-Xilinx/Vitis HLS C/C++ kernel generation. Python implementation is split by function under `scripts/python/cli`, `scripts/python/config`, `scripts/python/generation`, `scripts/python/hls_quality_gate`, `scripts/python/remote`, `scripts/python/task_dispatcher`, `scripts/python/validation`, and `scripts/python/workflow`; the stable local facade is `scripts/python/integration/hls_adapter.py`.
+Use this skill for local AMD-Xilinx/Vitis HLS C/C++ kernel generation, modification, review, comment-only annotation, and validation. It covers readable high-level synthesis delivery paths and HLS debug situations when the root cause still traces back to Vitis HLS code, pragmas, interfaces, configuration, or generated reports. Python implementation exists only as internal HLS machinery under `scripts/python/cli`, `scripts/python/config`, `scripts/python/generation`, `scripts/python/hls_quality_gate`, `scripts/python/remote`, `scripts/python/task_dispatcher`, `scripts/python/validation`, and `scripts/python/workflow`; the stable local facade is `scripts/python/integration/hls_adapter.py`. Repo-local Python code governance is out of scope for this skill and must be handled by `readable-python-generator`.
+
+## Capability Routes
+
+- Create: start from a confirmed HLS spec or scaffold one, then generate readable HLS C/C++ kernel artifacts.
+- Write: modify HLS kernels, pragmas, interfaces, DATAFLOW regions, or Vitis project configuration from an explicit behavior contract.
+- Review: inspect HLS C/C++ artifacts, Vitis reports, pragmas, interfaces, and generated RTL-facing evidence without rewriting code.
+- Annotate: perform comment-only HLS rewrites with Chinese semantic comments and AST/token fingerprint preservation against a baseline.
+- Validate: run static HLS checks locally, then use Vitis csim/cosim and remote board acceptance when the requested readiness requires real tool evidence.
 
 ## Workflow
 
-1. On first trigger in a Codex session, run `python -m scripts.python.cli.hls_generator deps check --json` from this skill directory. If it reports `blocked_dependency`, ask the user whether to install the listed required dependencies before continuing. Recommended dependencies warn only; do not treat them as blockers outside the capability path that explicitly requires them.
+1. On first trigger in a Codex session, run `python -m scripts.python.cli.readable_hls_generator deps check --json` from this skill directory. If it reports `blocked_dependency`, ask the user whether to install the listed required dependencies before continuing. Recommended dependencies warn only; do not treat them as blockers outside the capability path that explicitly requires them.
 2. Start from a confirmed HLS JSON spec or create one with the scaffold command.
 3. Use the facade for local integrations:
    - `run_hls_workflow(...)` for full staged execution or resume.
@@ -19,7 +27,7 @@ Use this skill for local AMD-Xilinx/Vitis HLS C/C++ kernel generation. Python im
 5. Run the fixed default HLS pipeline: `requirements -> codegen_plan -> tests -> hls`. Treat `remote_toolchain_request.json` and `remote_vitis_acceptance.py` as explicit follow-up acceptance helpers, not default generation stages.
 6. Treat generated HLS C/C++ Chinese comment placement as a hard gate: file headers, blank-line-separated lower blocks, function contracts, type contracts, includes, macros, HLS pragmas, loops, variable declarations/assignments, function calls, return statements, datapath steps, vector hashes, and testbench PASS/FAIL behavior must have a blank line plus an immediate Chinese purpose comment where required. Generic, template-like, English, or misplaced comments block validation.
 7. For comment-only HLS rewrites, validate with the AST guard: compare non-comment token fingerprints and normalized AST fingerprints against the baseline artifact tree. Use `--baseline-path` in the CLI or `baseline_path=` in the facade when validating comment-only changes.
-8. Keep final hardware-facing artifacts limited to HLS C/C++ headers, sources, C++ testbenches, `.cfg` files, vectors, and reports. This skill no longer generates or validates Python reference models.
+8. Keep final hardware-facing artifacts limited to HLS C/C++ headers, sources, C++ testbenches, `.cfg` files, vectors, and reports. This skill no longer generates or validates Python reference models, and it no longer ships a repo-local Python quality gate.
 9. Validate with AMD-Xilinx tooling. Static-only validation reports `static_only=true` and `vitis_executed=false`; do not claim tool execution unless `vitis-run` or `vitis_hls` actually ran. Missing local tools block run/acceptance paths with a remote-server request so the caller can ask the user to choose an `erie-remote-ssh` server with Vitis available.
 10. For Vitis development, simulation, cosim, and debug guidance, follow `runtime_config.json` skill routing: prefer `vitis-developer` when installed, otherwise fall back to `vitis-hls-synthesis`.
 
@@ -34,16 +42,16 @@ python .\tests\smoke\run_smoke.py
 Use the functional CLI from the skill directory or another workspace. Pick an explicit writable output directory when you need generated specs, prompts, or validation JSON:
 
 ```powershell
-python -m scripts.python.cli.hls_generator config --path
-python -m scripts.python.cli.hls_generator selfcheck --json
-python -m scripts.python.cli.hls_generator deps check --json
-python -m scripts.python.cli.hls_generator deps request --out <output-dir>\skill_dependency_request.json
-python -m scripts.python.cli.hls_generator scaffold --target hls --name vector_scale --out <output-dir>\hls\spec.json
-python -m scripts.python.cli.hls_generator prompt --target hls --spec <output-dir>\hls\spec.json --out <output-dir>\hls\prompt.md --confirm-requirements --confirmation-notes "<user-confirmed HLS contract>"
-python -m scripts.python.cli.hls_generator validate --target hls --spec <output-dir>\hls\spec.json --path <output-dir>\hls\generated --readiness static --no-external
-python -m scripts.python.cli.hls_generator validate --target hls --spec <output-dir>\hls\spec.json --path <output-dir>\hls\commented --baseline-path <output-dir>\hls\baseline --readiness static --no-external
-python -m scripts.python.cli.hls_generator readability-gate --target hls --path <output-dir>\hls\generated --profile kernel --style current-project --json
-python -m scripts.python.cli.hls_generator comment-plan --target hls --path <output-dir>\hls\commented --baseline-path <output-dir>\hls\baseline --out <output-dir>\hls\reports\hls_comment_rewrite_plan.json
+python -m scripts.python.cli.readable_hls_generator config --path
+python -m scripts.python.cli.readable_hls_generator selfcheck --json
+python -m scripts.python.cli.readable_hls_generator deps check --json
+python -m scripts.python.cli.readable_hls_generator deps request --out <output-dir>\skill_dependency_request.json
+python -m scripts.python.cli.readable_hls_generator scaffold --target hls --name vector_scale --out <output-dir>\hls\spec.json
+python -m scripts.python.cli.readable_hls_generator prompt --target hls --spec <output-dir>\hls\spec.json --out <output-dir>\hls\prompt.md --confirm-requirements --confirmation-notes "<user-confirmed HLS contract>"
+python -m scripts.python.cli.readable_hls_generator validate --target hls --spec <output-dir>\hls\spec.json --path <output-dir>\hls\generated --readiness static --no-external
+python -m scripts.python.cli.readable_hls_generator validate --target hls --spec <output-dir>\hls\spec.json --path <output-dir>\hls\commented --baseline-path <output-dir>\hls\baseline --readiness static --no-external
+python -m scripts.python.cli.readable_hls_generator readability-gate --target hls --path <output-dir>\hls\generated --profile kernel --style current-project --json
+python -m scripts.python.cli.readable_hls_generator comment-plan --target hls --path <output-dir>\hls\commented --baseline-path <output-dir>\hls\baseline --out <output-dir>\hls\reports\hls_comment_rewrite_plan.json
 ```
 
 When local `vitis-run`/`vitis_hls` is missing, inspect the workflow's `remote_toolchain_request.json`, ask the user to choose a configured `erie-remote-ssh` build server and, when needed, a separate validation server, then use the remote acceptance helper:
@@ -60,7 +68,7 @@ python .\scripts\python\validation\confidence_loop.py --server <erie-server> --v
 
 Remote Vitis acceptance refreshes erie software scan data. If multiple Vitis
 versions are detected and no version has been saved for that server in
-`~/.hls-generator/config.json`, ask the user to choose a version and rerun with
+`~/.readable-hls-generator/config.json`, ask the user to choose a version and rerun with
 `--vitis-version <version>`.
 
 If no remote Vitis profile has been configured and no previously saved remote

@@ -9,8 +9,18 @@ from dataclasses import dataclass
 from pathlib import Path
 
 # 本模块依赖 lexer 层提供函数边界，避免引入完整 C++ AST 依赖。
-from .cpp_lexer import FunctionInfo, code_part, find_multiline_statement_starts, parse_functions
+from .cpp_lexer import (
+    FunctionInfo,
+    code_part,
+    find_avoidable_multiline_statement_starts,
+    find_multiline_statement_starts,
+    parse_functions,
+)
+
+# HLS profile 配置提供结构阈值和 HG031 单行长度上限。
 from .profiles import HlsProfileConfig
+
+# 报告模型统一承载规则编号、定位信息和修复摘录。
 from .report import HlsGateIssue, make_issue
 
 # 统计复杂度时只关注会增加控制流路径的关键词。
@@ -118,7 +128,10 @@ def check_structure_rules(root: Path, path: Path, config: HlsProfileConfig) -> l
     # 不可综合构造需要完整文本匹配，以便计算原始行号。
     list_issues.extend(_non_synth_issues(str_rel_path, str_text))
 
-    # 多行声明提示放在最后，避免压过更确定的结构问题。
+    # 可避免的短语句拆行先作为硬错误报告，阻止生成器继续输出异常布局。
+    list_issues.extend(_avoidable_multiline_format_issues(str_rel_path, list_lines, config))
+
+    # 多行声明提示放在最后，继续保留复杂签名与声明的人工复核语义。
     list_issues.extend(_multiline_escape_issues(str_rel_path, list_lines))
 
     # 返回顺序即规则执行顺序，供测试和报告快照稳定使用。
@@ -798,8 +811,20 @@ def _multiline_escape_issues(rel_path: str, lines: list[str]) -> list[HlsGateIss
     # 多行语句不是确定错误，但会削弱简单行级规则的证明能力。
     list_issues: list[HlsGateIssue] = []  # 多行语句提示
 
+    # 收集已经由 HG031 硬错误接管的起始行，避免同一格式问题重复报告 HG024。
+    set_avoidable_line_numbers = {
+        int_line_number  # 当前 HG031 候选的起始行号
+        for int_line_number, _str_statement, _str_kind in find_avoidable_multiline_statement_starts(lines)  # HG031 候选集合
+    }  # 可避免拆行语句的起始行集合
+
     # lexer 返回语句起始行和拼接后的短语句，供报告摘录。
     for int_line_number, str_joined_statement in find_multiline_statement_starts(lines):
+
+        # 已由 HG031 接管的短语句不再追加 HG024 人工复核 warning。
+        if int_line_number in set_avoidable_line_numbers:
+
+            # 继续处理真正需要人工复核的函数签名或复杂声明。
+            continue
 
         # 摘录限制长度，避免报告被长签名或模板参数撑爆。
         str_excerpt = str_joined_statement[:220]  # 多行语句报告摘录
@@ -820,6 +845,66 @@ def _multiline_escape_issues(rel_path: str, lines: list[str]) -> list[HlsGateIss
         list_issues.append(hls_gate_issue_item)
 
     # 返回当前文件内的多行语句提示。
+    return list_issues
+
+# 检查可恢复为单行的短控制头、局部声明和普通赋值。
+def _avoidable_multiline_format_issues(
+    rel_path: str,
+    lines: list[str],
+    config: HlsProfileConfig,
+) -> list[HlsGateIssue]:
+    """阻断不超过 profile 行宽阈值的可避免语句拆行。
+
+    参数:
+        rel_path: 报告使用的源码相对路径。
+        lines: 当前源文件的逐行文本。
+        config: 提供单行长度上限的 HLS profile 配置。
+
+    返回:
+        HG031 格式错误列表。
+    """
+
+    # list_issues 保存超过一行但仍能安全放回单行的语句诊断。
+    list_issues: list[HlsGateIssue] = []  # HG031 格式问题列表
+
+    # lexer 返回起始行、合并语句和类别，结构层负责解释 profile 行宽阈值。
+    for int_line_number, str_joined_statement, str_statement_kind in find_avoidable_multiline_statement_starts(lines):
+
+        # 合并语句超过单行上限时保留多行布局，不制造超长行修复建议。
+        if len(str_joined_statement) > config.max_line_length:
+
+            # 长语句属于明确例外，继续检查下一条候选。
+            continue
+
+        # 报告摘录限制到 profile 行宽，确保机器报告和终端输出保持紧凑。
+        str_excerpt = str_joined_statement[: config.max_line_length]  # HG031 合并语句摘录
+
+        # 按语句类别选择直接可执行的中文修复提示。
+        dict_kind_labels = {
+            "control_header": "短控制头",  # for/while/if/switch 控制头标签
+            "local_declaration": "普通局部声明",  # 自定义类型与常见类型局部声明标签
+            "assignment": "普通赋值",  # 标识符、下标或成员左值赋值标签
+        }  # HG031 语句类别中文标签
+
+        # 取出当前类别的稳定标签，未知类别沿用通用短语句描述。
+        str_kind_label = dict_kind_labels.get(str_statement_kind, "短语句")  # 当前 HG031 类别标签
+
+        # 构造硬错误，要求生成器把合并后不超长的语句恢复为单行。
+        hls_gate_issue_item: HlsGateIssue = make_issue(  # 单个 HG031 格式错误对象
+            "HG031",  # 可避免多行格式规则编号
+            "error",  # current-project 下必须阻断生成结果
+            rel_path,  # HG031 issue 使用的源码相对路径
+            int_line_number,  # 指向拆行语句的起始行
+            f"{str_kind_label}可以在当前行宽内完整表达，必须改为单行。",  # 面向用户的修复提示
+            detail=str_excerpt,  # 合并后的完整短语句摘录
+            node_kind=f"avoidable_multiline_{str_statement_kind}",  # 稳定的格式问题节点类别
+            code_excerpt=str_excerpt,  # 报告中回放可直接恢复的单行文本
+        )
+
+        # 每个可避免拆行候选保留一条 HG031 错误。
+        list_issues.append(hls_gate_issue_item)
+
+    # 返回当前文件内全部可避免拆行问题。
     return list_issues
 
 # 计算函数体内控制流嵌套深度。

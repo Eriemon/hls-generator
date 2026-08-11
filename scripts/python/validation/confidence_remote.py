@@ -26,7 +26,7 @@ from typing import Any
 MODULE_DIR = Path(__file__).resolve().parent  # validation 脚本目录
 
 # skill 根目录承载 scripts.python 包和远端验收脚本。
-SKILL_ROOT = Path(__file__).resolve().parents[3]  # erie-hls-generator 技能根目录
+SKILL_ROOT = Path(__file__).resolve().parents[3]  # readable-hls-generator 技能根目录
 
 # 直接执行 validation 脚本时，先让同目录 helper 可被解析。
 site.addsitedir(str(MODULE_DIR))

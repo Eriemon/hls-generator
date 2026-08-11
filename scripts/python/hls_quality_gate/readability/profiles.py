@@ -83,6 +83,69 @@ DEFAULT_VAGUE_COMMENT_PHRASES = _nonempty_lines_tuple(  # 过短中文注释片�
     """,
 )  # 默认拦截的过短中文注释片段
 
+# HLS typed-prefix 默认词表直接暴露可推断类型、接口载荷类型或存储形态。
+DEFAULT_TYPED_PREFIX_FAMILIES = _nonempty_lines_tuple(  # HLS typed-prefix 默认词族
+    """
+    bool
+    int
+    uint
+    float
+    double
+    fixed
+    ufixed
+    ptr
+    arr
+    stream
+    axis
+    """,
+)  # typed-prefix 的默认主前缀族
+
+# HLS 人类可读打印必须使用固定状态前缀，避免 PASS/FAIL 裸 transcript 扩散。
+DEFAULT_ALLOWED_HLS_PRINT_PREFIXES = _nonempty_lines_tuple(  # HLS 人类可读打印允许前缀
+    """
+    > INFO: [HLS]
+    > WARNING: [HLS]
+    > ERR: [HLS]
+    """,
+)  # HLS print 允许的固定前缀
+
+# 注释相似度去重链复用 Python current-project 的模板信号词。
+DEFAULT_COMMENT_TEMPLATE_MARKERS = _nonempty_lines_tuple(  # 注释模板相似度信号词
+    """
+    中间状态
+    中间语义状态
+    临时状态
+    后续逻辑
+    后续检查
+    后续判断
+    当前检查
+    当前语义
+    当前规则
+    当前步骤
+    当前流程
+    处理路径
+    诊断路径
+    路径清晰
+    语义分支
+    规则诊断
+    规则检查
+    请求解析
+    字段取值
+    载荷来源确认
+    步骤说明
+    条件守卫
+    函数入口
+    函数边界
+    契约返回
+    服务器标识
+    夹具核验片
+    场景锚定位
+    调用核验
+    复用
+    供
+    """,
+)  # 注释近似模板句共享的低信息信号词
+
 # 特殊语句类型定义了 HLS 文本扫描器需要强制检查上下文注释的代码形态。
 DEFAULT_SPECIAL_STATEMENT_KINDS = _nonempty_lines_tuple(  # HLS 结构化语句类型清单
     """
@@ -203,6 +266,54 @@ class HlsProfileConfig:
     # 过短注释词表用于识别无法解释意图的中文片段。
     vague_comment_phrases: tuple[str, ...] = DEFAULT_VAGUE_COMMENT_PHRASES  # 过短注释词表
 
+    # typed-prefix 开关控制 HG025/HG026/HG027 是否进入命名门禁。
+    require_typed_prefix: bool = True  # 是否强制变量名携带 typed-prefix
+
+    # ref_ 旧语义前缀已经禁用，只允许 alias_ 作为次级语义词出现。
+    forbid_ref_primary_prefix: bool = True  # 是否禁止 ref_ 作为变量名前端
+
+    # alias_ 只能跟在真正类型前缀后面，不能单独充当前缀。
+    allow_alias_secondary_token: bool = True  # 是否允许 _alias_ 作为次级语义词
+
+    # typed-prefix 默认词族允许通过配置扩展自定义类型前缀。
+    typed_prefix_families: tuple[str, ...] = DEFAULT_TYPED_PREFIX_FAMILIES  # HG025/HG026/HG027 共享的默认前缀词族
+
+    # 自定义 typedef/struct 前缀通过 current-project 配置补充。
+    custom_type_prefixes: tuple[str, ...] = ()  # 显式配置的自定义类型前缀
+
+    # HLS 人类可读打印边界控制 HG028 是否启用。
+    require_hls_print_prefix: bool = True  # 是否强制人类可读打印使用固定前缀
+
+    # print 前缀集合允许未来扩展到 profile 级别，而不是写死在规则里。
+    allowed_hls_print_prefixes: tuple[str, ...] = DEFAULT_ALLOWED_HLS_PRINT_PREFIXES  # 允许的人类可读 HLS print 前缀
+
+    # 注释相似度去重链和块注释禁用都属于 current-project 严格门禁。
+    forbid_repeated_comment_text: bool = True  # 是否启用注释相似度去重链
+
+    # 旧式块注释在 HLS current-project 下被统一禁止。
+    forbid_block_comment_syntax: bool = True  # 是否禁止 /* ... */ 和 /** ... */ 注释
+
+    # 精确重复注释的允许复用次数，默认同一归一化文本只允许出现一次。
+    max_exact_comment_reuse: int = 1  # 精确重复注释允许的最大复用次数
+
+    # 近似重复阈值与 Python current-project 保持同一默认口径。
+    near_duplicate_similarity_threshold: float = 0.86  # 近似重复相似度阈值
+
+    # 同一函数内部的高相似注释使用更严格的专用阈值。
+    function_comment_similarity_threshold: float = 0.92  # 同函数高相似注释阈值
+
+    # 共享模板词时可使用更敏感的函数内部相似度阈值。
+    function_template_similarity_threshold: float = 0.76  # 同函数模板换皮相似度阈值
+
+    # 中文信息量不足的极短注释不会进入近似重复比较链。
+    min_near_duplicate_cjk_chars: int = 8  # 近似重复比较的最小中文字符数
+
+    # 同函数相似度检查也要求注释本身有足够中文信息量。
+    min_function_similarity_cjk_chars: int = 8  # 同函数相似度比较的最小中文字符数
+
+    # 共享模板词表用于 near duplicate 与函数内模板换皮检测。
+    function_similarity_template_terms: tuple[str, ...] = DEFAULT_COMMENT_TEMPLATE_MARKERS  # HG029 函数内模板换皮判定使用的信号词表
+
     # 导出配置时将不可变 tuple 转换为 JSON 友好的 list。
     def to_dict(self) -> dict[str, Any]:
         """
@@ -245,6 +356,22 @@ class HlsProfileConfig:
             "special_statement_kinds": list(self.special_statement_kinds),
             "generic_comment_phrases": list(self.generic_comment_phrases),
             "vague_comment_phrases": list(self.vague_comment_phrases),
+            "require_typed_prefix": self.require_typed_prefix,
+            "forbid_ref_primary_prefix": self.forbid_ref_primary_prefix,
+            "allow_alias_secondary_token": self.allow_alias_secondary_token,
+            "typed_prefix_families": list(self.typed_prefix_families),
+            "custom_type_prefixes": list(self.custom_type_prefixes),
+            "require_hls_print_prefix": self.require_hls_print_prefix,
+            "allowed_hls_print_prefixes": list(self.allowed_hls_print_prefixes),
+            "forbid_repeated_comment_text": self.forbid_repeated_comment_text,
+            "forbid_block_comment_syntax": self.forbid_block_comment_syntax,
+            "max_exact_comment_reuse": self.max_exact_comment_reuse,
+            "near_duplicate_similarity_threshold": self.near_duplicate_similarity_threshold,
+            "function_comment_similarity_threshold": self.function_comment_similarity_threshold,
+            "function_template_similarity_threshold": self.function_template_similarity_threshold,
+            "min_near_duplicate_cjk_chars": self.min_near_duplicate_cjk_chars,
+            "min_function_similarity_cjk_chars": self.min_function_similarity_cjk_chars,
+            "function_similarity_template_terms": list(self.function_similarity_template_terms),
         }  # 当前 profile 配置的可序列化字典快照
 
 # 用独立工厂函数集中构造默认 profile 映射，避免模块级大字典逐元素触发行内注释规则。
@@ -375,7 +502,7 @@ def _apply_current_project_style(
         return config
 
     # 将 JSON 顶层分区规整为字典，避免错误类型污染后续转换。
-    tuple_style_sections = _style_config_sections(dict_payload)  # 已按区块顺序整理好的配置覆盖三元组
+    tuple_style_sections = _style_config_sections(dict_payload)  # 已按区块顺序整理好的配置覆盖区块
 
     # 第一段区块只保存布尔检查开关覆盖。
     dict_checks: dict[str, Any] = tuple_style_sections[0]  # 布尔规则开关覆盖区块
@@ -386,47 +513,42 @@ def _apply_current_project_style(
     # 第三段区块只保存注释词表覆盖。
     dict_comment_quality: dict[str, Any] = tuple_style_sections[2]  # 注释质量覆盖区块
 
-    # 空泛短语配置为空时沿用基础 profile，确保黑名单不会被意外清空。
-    tuple_generic_phrases = _comment_phrase_override(  # 合并后的空泛注释词表
-        dict_comment_quality,  # 当前项目 JSON 中的注释质量配置分区
-        "banned_generic_comment_phrases",  # 空泛注释短语的配置字段名
-        config.generic_comment_phrases,  # 基础 profile 自带的空泛短语词表
-    )
+    # 第四段区块只保存 typed-prefix 词表与命名相关覆盖。
+    dict_typed_naming: dict[str, Any] = tuple_style_sections[3]  # typed-prefix 覆盖区块
 
-    # 过短短语配置为空时沿用基础 profile，保持 PG037 的默认语义密度。
-    tuple_vague_phrases = _comment_phrase_override(  # 合并后的过短注释词表
-        dict_comment_quality,  # 注释黑名单覆盖来源的 comment_quality 子字典
-        "banned_vague_comment_phrases",  # 过短注释短语的配置字段名
-        config.vague_comment_phrases,  # 基础 profile 自带的过短短语词表
-    )
+    # 第五段区块只承载 HLS transcript 的前缀策略和输出边界覆盖。
+    dict_print_output: dict[str, Any] = tuple_style_sections[4]  # HLS transcript 输出边界覆盖区块
 
-    # replace 保留 dataclass 冻结语义，同时只替换 JSON 明确声明的字段。
+    # replace helper 会在内部统一合并词表和 print 前缀覆盖，避免外层参数列表继续膨胀。
     return _replace_current_project_config(
         config,
         dict_checks,
         dict_thresholds,
-        tuple_generic_phrases,
-        tuple_vague_phrases,
+        dict_comment_quality,
+        dict_typed_naming,
+        dict_print_output,
     )
 
 # 提取 current-project JSON 的顶层配置区块。
 def _style_config_sections(
     payload: dict[str, Any],
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
     """返回 current-project 覆盖文件中的三类有效区块。
 
     参数:
         payload: 已解析的 current-project JSON 顶层载荷。
 
     返回:
-        checks、thresholds 和 comment_quality 三个字典；类型不匹配时对应为空字典。
+        checks、thresholds、comment_quality、typed_naming 和 print_output 五个字典；类型不匹配时对应为空字典。
     """
 
-    # 返回三类覆盖区块，调用方再按检查开关、阈值和注释质量分别消费。
+    # 返回五类覆盖区块，调用方再按检查开关、阈值、注释、命名和输出边界分别消费。
     return (
         _dict_section(payload, "checks"),  # 供规则开关合并阶段读取的 checks 子字典
         _dict_section(payload, "thresholds"),  # 供结构阈值合并阶段读取的 thresholds 子字典
         _dict_section(payload, "comment_quality"),  # 供禁用短语合并阶段读取的 comment_quality 子字典
+        _dict_section(payload, "typed_naming"),  # 供 typed-prefix 规则读取的 typed_naming 子字典
+        _dict_section(payload, "print_output"),  # 供 transcript 输出边界合并阶段读取的 print_output 子字典
     )
 
 # 从 JSON 顶层载荷中读取一个字典区块。
@@ -476,13 +598,46 @@ def _comment_phrase_override(
     # tuple 保持 dataclass 字段不可变，调用方不能原地改写 profile。
     return tuple_phrases
 
+# 合并 current-project 的字符串元组覆盖。
+def _string_tuple_override(
+    dict_payload: dict[str, Any],
+    key: str,
+    fallback: tuple[str, ...],
+) -> tuple[str, ...]:
+    """读取字符串列表覆盖，缺省时保留基础元组。
+
+    参数:
+        dict_payload: 当前项目配置区块。
+        key: 需要读取的字段名。
+        fallback: 字段缺失、为空或类型不合法时沿用的基础元组。
+
+    返回:
+        tuple[str, ...]，供冻结 dataclass 直接复用。
+    """
+
+    # 原始字段值可能来自用户手改 JSON，需要先保守确认容器类型。
+    obj_candidate_value = dict_payload.get(key)  # 待确认类型的覆盖字段值
+
+    # 非列表或元组输入保持基础元组，避免脏配置污染默认词表。
+    if not isinstance(obj_candidate_value, (list, tuple)):
+
+        # 缺省或类型不合法时继续使用基础值。
+        return fallback
+
+    # 逐项转成字符串并过滤空白项，保证最终元组稳定可比较。
+    tuple_values = tuple(str(obj_item).strip() for obj_item in obj_candidate_value if str(obj_item).strip())  # 过滤空值后的冻结字符串元组
+
+    # 空容器覆盖没有实际语义，继续保留基础元组。
+    return tuple_values or fallback
+
 # 用 current-project 覆盖值创建新的 HLS profile 配置。
 def _replace_current_project_config(
     config: HlsProfileConfig,
     dict_checks: dict[str, Any],
     dict_thresholds: dict[str, Any],
-    tuple_generic_phrases: tuple[str, ...],
-    tuple_vague_phrases: tuple[str, ...],
+    dict_comment_quality: dict[str, Any],
+    dict_typed_naming: dict[str, Any],
+    dict_print_output: dict[str, Any],
 ) -> HlsProfileConfig:
     """把 current-project 覆盖值写入新的冻结配置对象。
 
@@ -490,12 +645,61 @@ def _replace_current_project_config(
         config: 已选中的基础 HLS profile 配置。
         dict_checks: 布尔检查开关覆盖区块。
         dict_thresholds: 数值阈值覆盖区块。
-        tuple_generic_phrases: 合并后的空泛注释词表。
-        tuple_vague_phrases: 合并后的过短注释词表。
+        dict_comment_quality: 注释质量配置区块，承载空泛词表、过短词表和 HG029 模板词表覆盖。
+        dict_typed_naming: typed-prefix 命名配置区块，承载 custom prefix 与 family 覆盖。
+        dict_print_output: HLS 人类可读输出配置区块，承载 transcript 前缀覆盖。
 
     返回:
         HlsProfileConfig，包含 current-project 覆盖后的配置。
     """
+
+    # 先缩短注释词表合并 helper 的调用名，避免后续赋值语句超过当前项目的长度阈值。
+    func_phrase_override = _comment_phrase_override  # 注释词表合并 helper 别名
+
+    # 再缩短字符串元组覆盖 helper 的调用名，避免 typed-prefix 与 print 配置赋值过长。
+    func_tuple_override = _string_tuple_override  # 字符串元组覆盖 helper 别名
+
+    # 先记录空泛注释黑名单在 comment_quality 区块中的稳定键名。
+    str_generic_key = "banned_generic_comment_phrases"  # 空泛注释黑名单键名
+
+    # 再按稳定键名合并空泛注释词表，避免显式空配置意外清空基础 profile 词表。
+    tuple_generic_phrases = func_phrase_override(dict_comment_quality, str_generic_key, config.generic_comment_phrases)  # 合并后的空泛注释词表
+
+    # 这里记录过短注释黑名单在 comment_quality 区块中的稳定键名。
+    str_vague_key = "banned_vague_comment_phrases"  # 过短注释黑名单键名
+
+    # 再按稳定键名合并过短注释词表，保持 PG037 的默认语义密度不被空配置破坏。
+    tuple_vague_phrases = func_phrase_override(dict_comment_quality, str_vague_key, config.vague_comment_phrases)  # 合并后的过短注释词表
+
+    # 先记录自定义类型前缀在 typed_naming 区块里的配置键名。
+    str_custom_key = "custom_type_prefixes"  # 自定义类型前缀配置键名
+
+    # 再按稳定键名提取自定义类型前缀，供 typedef/struct 命名规则复用。
+    tuple_custom_type_prefixes = func_tuple_override(dict_typed_naming, str_custom_key, config.custom_type_prefixes)  # 合并后的自定义类型前缀词表
+
+    # 这里记录 typed-prefix family 覆盖在 typed_naming 区块中的配置键名。
+    str_family_key = "typed_prefix_families"  # typed-prefix family 配置键名
+
+    # 再按稳定键名提取默认 family 覆盖，供 HG025/HG026/HG027 共用。
+    tuple_typed_prefix_families = func_tuple_override(dict_typed_naming, str_family_key, config.typed_prefix_families)  # 合并后的 typed-prefix family 词表
+
+    # 先记录 print_output 区块里允许的人类可读前缀键名。
+    str_print_key = "allowed_prefixes"  # print 前缀白名单键名
+
+    # 这里缓存 profile 默认的人类可读前缀集合，避免覆盖调用行过长。
+    tuple_print_defaults = config.allowed_hls_print_prefixes  # 默认 HLS print 前缀词表
+
+    # 再按稳定键名提取允许的 transcript 前缀集合，供 HLS 输出边界规则复用。
+    tuple_allowed_hls_print_prefixes = func_tuple_override(dict_print_output, str_print_key, tuple_print_defaults)  # 合并后的 HLS print 前缀词表
+
+    # 这里记录 HG029 模板相似度信号词在 comment_quality 区块里的配置键名。
+    str_template_key = "function_similarity_template_terms"  # HG029 模板信号词配置键名
+
+    # 这里缓存 profile 默认的模板信号词集合，避免去重配置赋值行超过长度阈值。
+    tuple_default_template_terms = config.function_similarity_template_terms  # 默认 HG029 模板信号词
+
+    # 再按稳定键名提取模板相似度信号词，供 HG029 的函数内去重逻辑复用。
+    tuple_template_terms = func_tuple_override(dict_comment_quality, str_template_key, tuple_default_template_terms)  # HG029 模板相似度判定信号词
 
     # 在一个 replace 调用里同时写回布尔开关、阈值和短语词表，避免遗漏任何覆盖项。
     return replace(
@@ -545,6 +749,61 @@ def _replace_current_project_config(
         block_magic_number_count=int(
             dict_thresholds.get("block_magic_number_count", config.block_magic_number_count),
         ),
+        require_typed_prefix=bool(
+            dict_checks.get("require_typed_prefix", config.require_typed_prefix),
+        ),
+        forbid_ref_primary_prefix=bool(
+            dict_checks.get("forbid_ref_primary_prefix", config.forbid_ref_primary_prefix),
+        ),
+        allow_alias_secondary_token=bool(
+            dict_checks.get("allow_alias_secondary_token", config.allow_alias_secondary_token),
+        ),
+        typed_prefix_families=tuple_typed_prefix_families,
+        custom_type_prefixes=tuple_custom_type_prefixes,
+        require_hls_print_prefix=bool(
+            dict_checks.get("require_hls_print_prefix", config.require_hls_print_prefix),
+        ),
+        allowed_hls_print_prefixes=tuple_allowed_hls_print_prefixes,
+        forbid_repeated_comment_text=bool(
+            dict_checks.get("forbid_repeated_comment_text", config.forbid_repeated_comment_text),
+        ),
+        forbid_block_comment_syntax=bool(
+            dict_checks.get("forbid_block_comment_syntax", config.forbid_block_comment_syntax),
+        ),
+        max_exact_comment_reuse=int(
+            dict_thresholds.get("max_exact_comment_reuse", config.max_exact_comment_reuse),
+        ),
+        near_duplicate_similarity_threshold=float(
+            dict_thresholds.get(
+                "near_duplicate_similarity_threshold",
+                config.near_duplicate_similarity_threshold,
+            ),
+        ),
+        function_comment_similarity_threshold=float(
+            dict_thresholds.get(
+                "function_comment_similarity_threshold",
+                config.function_comment_similarity_threshold,
+            ),
+        ),
+        function_template_similarity_threshold=float(
+            dict_thresholds.get(
+                "function_template_similarity_threshold",
+                config.function_template_similarity_threshold,
+            ),
+        ),
+        min_near_duplicate_cjk_chars=int(
+            dict_thresholds.get(
+                "min_near_duplicate_cjk_chars",
+                config.min_near_duplicate_cjk_chars,
+            ),
+        ),
+        min_function_similarity_cjk_chars=int(
+            dict_thresholds.get(
+                "min_function_similarity_cjk_chars",
+                config.min_function_similarity_cjk_chars,
+            ),
+        ),
+        function_similarity_template_terms=tuple_template_terms,
         generic_comment_phrases=tuple_generic_phrases,
         vague_comment_phrases=tuple_vague_phrases,
     )
@@ -560,7 +819,7 @@ def default_style_config_path() -> Path:
         Path，指向 references/style/current_project_hls_style_config.json。
     """
 
-    # parents[3] 对应 skills/erie-hls-generator 技能根目录。
+    # parents[3] 对应 skills/readable-hls-generator 技能根目录。
     path_skill_root: Path = Path(__file__).resolve().parents[3]  # 技能根目录路径
 
     # 配置文件跟随技能一起发布，避免依赖用户工作目录。

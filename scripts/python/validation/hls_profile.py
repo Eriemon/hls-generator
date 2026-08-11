@@ -9,6 +9,9 @@ import re
 from pathlib import Path
 from typing import Any
 
+# 导入 workflow 侧的参数候选名生成器，供 pragma/interface 校验兼容 typed-prefix 改名。
+from scripts.python.generation.mock_hls_governance import governed_argument_candidate_names
+
 # 模式规则模块提供高级头文件约束与 pattern 名归一化能力。
 from scripts.python.generation.patterns import (
     ADVANCED_LIBRARY_HEADERS,
@@ -326,7 +329,7 @@ def _check_required_pragmas(
         str_pragma_token = str(obj_pragma)  # 当前必需 pragma 文本
 
         # 非空 token 且源码缺失时才追加错误。
-        if str_pragma_token and str_pragma_token not in source_text:
+        if str_pragma_token and not _required_pragma_present(source_text, str_pragma_token, spec):
 
             # 保留原始 pragma 文本，方便用户定位缺口。
             list_issues.append(
@@ -351,13 +354,19 @@ def _check_required_pragmas(
             # 跳过无法提供 port 名的异常条目。
             continue
 
-        # 参数名用于构造 port=... 的正则匹配。
+        # 先提取当前参数名，后续错误消息和正则匹配都要复用它。
         str_argument_name = str(obj_argument["name"])  # 当前接口参数名
 
+        # 再生成 workflow 允许的候选端口名，兼容 typed-prefix 重写后的 pragma 绑定文本。
+        tuple_candidate_names = governed_argument_candidate_names(obj_argument)  # 当前参数允许匹配的端口名候选
+
         # 缺失接口 pragma 时追加错误，要求每个外部参数都显式声明。
-        if not re.search(
-            rf"#pragma\s+HLS\s+INTERFACE[^\n]*\bport\s*=\s*{re.escape(str_argument_name)}\b",
-            source_text,
+        if not any(
+            re.search(
+                rf"#pragma\s+HLS\s+INTERFACE[^\n]*\bport\s*=\s*{re.escape(str_candidate_name)}\b",
+                source_text,
+            )
+            for str_candidate_name in tuple_candidate_names
         ):
 
             # 错误消息指出缺少 pragma 的具体参数名。
@@ -370,6 +379,159 @@ def _check_required_pragmas(
 
     # 返回所有 pragma 合同问题。
     return list_issues
+
+# 判断 required pragma 是否已出现，并兼容 workflow 可能做过的 typed-prefix 改名。
+def _required_pragma_present(source_text: str, pragma_token: str, spec: dict[str, Any]) -> bool:
+    """判断 required pragma 是否已出现，必要时兼容 workflow 的 typed-prefix 改名。
+
+    参数:
+        source_text: 聚合后的源码文本，dtype=str，unit=source text。
+        pragma_token: profile 中声明的必需 pragma 片段，dtype=str，unit=pragma token。
+        spec: 完整 spec 字典，dtype=dict[str, Any]，unit=JSON object。
+
+    返回:
+        任一兼容变体命中时返回 True，否则返回 False，dtype=bool，unit=presence flag。
+    """
+
+    # 先走精确子串命中，保持原有最快路径。
+    if pragma_token in source_text:
+
+        # 原始 pragma 片段已经命中时，无需再展开兼容变体。
+        return True
+
+    # 逐个兼容变体重试子串命中，覆盖 variable=/port= 被 workflow 改写后的 pragma 绑定名。
+    for str_candidate_token in _pragma_token_variants(pragma_token, spec):
+
+        # 任一兼容写法命中后即可判定 required pragma 已出现。
+        if str_candidate_token in source_text:
+
+            # 当前兼容变体已经命中源码文本，返回成功结果。
+            return True
+
+    # 所有兼容变体都未命中时，说明该 required pragma 确实没有落到源码里。
+    return False
+
+# 为带 variable=/port= 绑定名的 pragma 构造 typed-prefix 兼容候选。
+def _pragma_token_variants(pragma_token: str, spec: dict[str, Any]) -> tuple[str, ...]:
+    """为带 variable=/port= 绑定名的 pragma 生成 typed-prefix 兼容候选。
+
+    参数:
+        pragma_token: profile 中声明的 pragma 文本片段，dtype=str，unit=pragma token。
+        spec: 完整 spec 字典，dtype=dict[str, Any]，unit=JSON object。
+
+    返回:
+        包含原始 pragma 和所有 typed-prefix 兼容变体的元组，dtype=tuple[str, ...]，unit=pragma variants。
+    """
+
+    # 先把原始 pragma 文本放入候选集合，确保精确写法永远保留。
+    set_variants = {pragma_token}  # 当前已知的 pragma 兼容变体集合
+
+    # 只对 variable=/port= 两类绑定键扩展 typed-prefix 候选。
+    for str_binding_key in ("variable", "port"):
+
+        # 先提取当前绑定键对应的原始参数名，未命中时不扩展这一类键。
+        obj_match = re.search(rf"(\b{re.escape(str_binding_key)}\s*=\s*)([A-Za-z_]\w*)\b", pragma_token)  # 当前绑定键的命名片段匹配结果
+
+        # 像只带 `port=` 的 pragma 不应该伪造 `variable=` 候选，所以这里直接切到下一类绑定键。
+        if not obj_match:
+
+            # 没有命中当前绑定键时，无需为它生成候选。
+            continue
+
+        # 从正则匹配结果中提取原始绑定名，后续要围绕它做 typed-prefix 扩展。
+        str_original_name = obj_match.group(2)  # pragma 里出现的原始绑定名
+
+        # 复制一份现有候选集合，确保本轮改写不会边遍历边污染输入集合。
+        set_next_variants = set(set_variants)  # 当前绑定键扩展后的候选集合
+
+        # 逐个已有 pragma 变体继续派生新的绑定名替换结果。
+        for str_existing_variant in set_variants:
+
+            # 逐个 typed-prefix 候选名替换当前绑定名，生成兼容写法。
+            for str_candidate_name in _binding_name_candidates(str_original_name, spec):
+
+                # 先构造当前绑定键的精确替换正则，确保只改写目标参数位点。
+                str_binding_pattern = rf"(\b{re.escape(str_binding_key)}\s*=\s*){re.escape(str_original_name)}\b"  # 当前绑定键的精确替换模式
+
+                # 再构造把原始参数名改写成 typed-prefix 候选名的替换文本。
+                str_replacement = rf"\g<1>{str_candidate_name}"  # 当前 typed-prefix 候选对应的替换文本
+
+                # 使用精确模式只替换首个绑定位置，保持 pragma 其余文本稳定。
+                str_rewritten_variant = re.sub(str_binding_pattern, str_replacement, str_existing_variant, count=1)  # 应用当前 typed-prefix 候选后的 pragma 文本
+
+                # 把新的兼容写法并入候选集合，供后续命中检查复用。
+                set_next_variants.add(str_rewritten_variant)
+
+        # 用扩展后的候选集合进入下一类绑定键的处理阶段。
+        set_variants = set_next_variants  # 带入下一轮绑定键扩展的候选集合
+
+    # 返回所有兼容写法，供 required pragma 命中检查复用。
+    return tuple(set_variants)
+
+# 优先从 spec 感知的接口参数候选中构造 pragma 绑定名，缺失时再回退到有限 typed-prefix 扩展。
+def _binding_name_candidates(name: str, spec: dict[str, Any]) -> tuple[str, ...]:
+    """为 pragma 绑定名返回 spec 感知候选或有限 typed-prefix 候选。
+
+    参数:
+        name: pragma 绑定里的原始参数名，dtype=str，unit=binding name。
+        spec: 完整 spec 字典，dtype=dict[str, Any]，unit=JSON object。
+
+    返回:
+        与当前绑定名对应的有序候选元组，dtype=tuple[str, ...]，unit=name candidates。
+    """
+
+    # 先尝试从 spec 的接口参数里找到同名条目，优先复用治理阶段已经确认的候选名集合。
+    for obj_argument in spec.get("interfaces", {}).get("arguments", []) or []:
+
+        # 只有结构合法且带参数名的接口条目才参与候选匹配。
+        if not isinstance(obj_argument, dict) or not obj_argument.get("name"):
+
+            # 跳过缺少参数名的异常接口条目。
+            continue
+
+        # 读取当前接口参数的原始名称，供 required pragma 绑定名对齐。
+        str_argument_name = str(obj_argument["name"]).strip()  # 当前接口参数的原始名称
+
+        # 这里确认 pragma 写的就是接口原名，因此直接沿用治理阶段整理好的候选集。
+        if str_argument_name == name:
+
+            # 返回原名与治理名组成的稳定候选列表。
+            return governed_argument_candidate_names(obj_argument)
+
+    # spec 里找不到对应参数时，再回退到有限 typed-prefix 扩展，兼容历史 profile 文本。
+    return _typed_name_candidates(name)
+
+# 为 pragma 绑定名构造有限的 typed-prefix 候选，避免把匹配空间扩展成无界改名搜索。
+def _typed_name_candidates(name: str) -> tuple[str, ...]:
+    """为未显式带前缀的 pragma 绑定名生成有限的 typed-prefix 候选。
+
+    参数:
+        name: pragma 绑定里的原始参数名，dtype=str，unit=binding name。
+
+    返回:
+        包含原名和有限 typed-prefix 变体的候选元组，dtype=tuple[str, ...]，unit=name candidates。
+    """
+
+    # 先列出与 HG025/HG026/HG027 默认族一致的标量与定点前缀候选。
+    tuple_scalar_prefixes = ("bool_", "int_", "uint_", "float_", "double_", "fixed_", "ufixed_")  # 标量与定点前缀候选
+
+    # 再列出存储形态与接口相关的 typed-prefix 候选。
+    tuple_storage_prefixes = ("ptr_", "arr_", "stream_", "axis_")  # 存储形态与接口前缀候选
+
+    # 最后把两组前缀拼成 pragma 兼容匹配允许尝试的完整 typed-prefix 词族。
+    tuple_prefixes = tuple_scalar_prefixes + tuple_storage_prefixes  # pragma 绑定名允许尝试的 typed-prefix 候选词族
+
+    # 候选列表始终保留原名，避免已经规范化的 pragma 反而丢失原始命中。
+    list_candidates = [name]  # pragma 绑定名候选列表
+
+    # 只有原名本身不带受支持前缀时，才补充 typed-prefix 扩展候选。
+    if not any(name.startswith(str_prefix) for str_prefix in tuple_prefixes):
+
+        # 把有限前缀族逐个拼接到原名上，形成兼容 workflow 改名后的候选。
+        list_candidates.extend(f"{str_prefix}{name}" for str_prefix in tuple_prefixes)
+
+    # 通过有序去重保留首见顺序，避免重复候选干扰命中稳定性。
+    return tuple(dict.fromkeys(list_candidates))
 
 # required_metadata_fields 是 pattern 语义能否成立的前置条件。
 def _check_required_metadata(profile: dict[str, Any]) -> list[dict[str, Any]]:

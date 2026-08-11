@@ -49,8 +49,8 @@ Use `run_hls_workflow(...)` for full staged execution and resume,
 `validate_hls_artifacts(...)` before consuming generated HLS files.
 
 The facade accepts file paths or in-memory dictionaries for specs, workflow
-configuration, evidence, decisions, HLS profiles, and reference contracts. When
-dict inputs need to become workflow files, they are materialized under
+configuration, evidence, decisions, and HLS profiles. When dict inputs need to
+become workflow files, they are materialized under
 `<out_dir>/_adapter_inputs/`.
 
 Generated output roots, protected source paths, default workflow config path,
@@ -61,13 +61,17 @@ from `scripts/python/config/runtime_config.json`. See
 The facade checks configured skill dependencies before rendering prompts,
 running workflows, or validating artifacts. If dependencies are missing or
 invalid, it raises `SkillDependencyError` with an install-request payload. Hosts
-must ask the user before running `python -m scripts.python.cli.hls_generator deps install
+must ask the user before running `python -m scripts.python.cli.readable_hls_generator deps install
 --all`; after installation, ask the user to restart Codex.
 
 Remote SSH confidence checks must use `scripts/python/remote/remote_vitis_acceptance.py`,
 which delegates all SSH discovery, checks, exec, and request execution to the
 configured `erie-remote-ssh` helper. Keep real server details in the erie
 server-list JSON, not in this skill.
+
+This skill no longer exposes a repo-local Python workflow dispatcher or Python
+quality gate. When `.py` files in this repository need creation, modification,
+or deletion, route that work through `readable-python-generator`.
 
 ## Confirmed HLS inputs
 
@@ -126,7 +130,7 @@ selected erie server workdir. Verified runs are archived into `backups/` by
 default instead of being left in the active `runs/` area.
 
 Comment language defaults to `auto`: resolve it from
-`~/.hls-generator/config.json`, or ask the user to choose `en` or `zh` before
+`~/.readable-hls-generator/config.json`, or ask the user to choose `en` or `zh` before
 generation. Explicit `comment_language="en"` or `"zh"` overrides the user
 config.
 

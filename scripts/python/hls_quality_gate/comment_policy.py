@@ -607,7 +607,10 @@ def _statement_policy_issues(context: LinePolicyContext) -> list[CommentPolicyIs
     if _requires_blank_plus_comment(context.code, context.top_function):
 
         # 缺失空行或中文注释都会触发同一策略问题。
-        if not _has_blank_plus_chinese_comment_above(context.lines, context.line_index):
+        if not _has_blank_plus_chinese_comment_block_above(
+            context.lines,
+            context.line_index,
+        ):
 
             # detail 使用当前源码行，便于用户定位。
             list_issues.append(
@@ -1259,7 +1262,37 @@ def _has_blank_plus_chinese_comment_above(lines: list[str], index: int) -> bool:
     # 文件开头或空行都满足块分隔要求。
     return int_blank_index < 0 or not lines[int_blank_index].strip()
 
-# 提取当前语句的紧邻上一行独立注释正文。
+# 检查目标语句上方是否存在由多行中文注释组成的完整注释块。
+def _has_blank_plus_chinese_comment_block_above(lines: list[str], index: int) -> bool:
+    """判断目标语句上方是否存在合格的多行中文注释块。
+
+    参数:
+        lines: 按行拆分后的 HLS 源码文本。
+        index: 待检查语句的零基源码行索引。
+
+    返回:
+        True 表示语句上方存在连续中文注释块且块前满足空行或文件开头；False 表示不满足该契约。
+    """
+
+    # 这里先落在语句正上方一行，因为 contract 或 pragma 说明块的末行一定紧贴目标语句。
+    int_comment_index: int = index - 1  # 向上回溯整块注释时使用的起始游标
+
+    # 第一行不是中文独立注释时，当前语句不可能拥有合格注释块。
+    if not _is_chinese_comment_line(lines, int_comment_index):
+
+        # 缺少合格的首行中文注释时直接返回失败。
+        return False
+
+    # 继续向上吞并连续的中文注释行，直到遇到空行、代码或文件开头。
+    while int_comment_index >= 0 and _is_chinese_comment_line(lines, int_comment_index):
+
+        # 每次确认一行仍属于同一注释块后，把游标继续上移。
+        int_comment_index -= 1  # 注释块向上扩展后的下一候选行
+
+    # 多行注释块前方必须是空行或文件开头，才能说明它服务于下方语句块。
+    return int_comment_index < 0 or not lines[int_comment_index].strip()
+
+# 提取目标语句紧邻上一行的独立中文注释正文。
 def _immediate_preceding_comment(lines: list[str], index: int) -> str | None:
     """提取目标语句紧邻上一行的独立注释正文。
 

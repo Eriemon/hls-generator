@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""执行 Erie HLS Generator 本地 confidence gate 的基础检查函数。"""
+"""执行 Readable HLS Generator 本地 confidence gate 的基础检查函数。"""
 
 # future annotations 保持运行期类型注解轻量。
 from __future__ import annotations
@@ -641,10 +641,10 @@ def _release_sensitivity_roots(scan_root: Path, root: Path | None) -> list[Path]
         return list_roots
 
     # 解析当前版本 dist 目录形式的发布产物路径。
-    path_release_dir = repo_root() / "dist" / f"erie-hls-generator-v{__version__}"  # 目录形式发布产物路径
+    path_release_dir = repo_root() / "dist" / f"readable-hls-generator-v{__version__}"  # 目录形式发布产物路径
 
     # 如果存在同版本 zip 归档，也把它纳入敏感文本扫描范围。
-    path_release_zip = repo_root() / "dist" / f"erie-hls-generator-v{__version__}.zip"  # 归档版发布产物路径
+    path_release_zip = repo_root() / "dist" / f"readable-hls-generator-v{__version__}.zip"  # 归档版发布产物路径
 
     # dist 目录存在时，把目录版发布产物纳入扫描集合。
     if path_release_dir.exists():

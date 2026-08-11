@@ -17,6 +17,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+# 导入 workflow 侧的端口候选名生成器，供 typed-prefix 端口与旧语义名做统一匹配。
+from scripts.python.generation.mock_hls_governance import governed_argument_candidate_names
+
 # 导入 HLS 注释治理规则，用于校验生成代码的注释边界是否满足仓库契约。
 from scripts.python.hls_quality_gate.comment_policy import validate_hls_comment_policy
 
@@ -1909,8 +1912,20 @@ def _argument_pragma_issues(
     # 读取参数要求的 bundle 名称。
     str_bundle = argument.get("bundle")  # 当前参数要求使用的 bundle 名称
 
-    # 找出当前参数端口上实际存在的 pragma 列表。
-    list_matching_pragmas = pragmas_by_port.get(str_argument_name, [])  # 当前参数命中的 pragma 列表
+    # workflow 写盘可能把原语义名升级成 typed-prefix 端口名，这里统一接受两种命名。
+    list_matching_pragmas: list[dict[str, str]] = []  # 当前参数命中的 pragma 列表
+
+    # 逐个候选端口名收集命中的 pragma，兼容 typed-prefix 改名后的端口文本。
+    for str_candidate_name in governed_argument_candidate_names(argument):
+
+        # 针对当前候选端口名，继续并入所有同名 pragma 命中项。
+        for dict_pragma in pragmas_by_port.get(str_candidate_name, []):
+
+            # 只有新的 pragma 命中项才需要加入当前参数的匹配集合。
+            if dict_pragma not in list_matching_pragmas:
+
+                # 把当前新命中的 pragma 记录到参数匹配结果里。
+                list_matching_pragmas.append(dict_pragma)
 
     # 显式要求了接口模式时，必须看到对应 pragma。
     if str_explicit_interface:

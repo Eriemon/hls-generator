@@ -1,4 +1,4 @@
-"""为 HLS 生成、修改和解释请求提供轻量级任务分流。"""
+"""为 readable HLS 的 create/write/review/annotate/validate 路线提供轻量级分流。"""
 # 启用延迟注解，避免运行期解析联合类型造成额外依赖。
 from __future__ import annotations
 # 导入标准库结构化数据与路径类型。
@@ -9,7 +9,10 @@ from typing import Any
 # 识别仅注释请求的中英文关键词。
 COMMENT_ONLY_MARKERS = (  # 仅注释请求关键词
     "comment-only",  # 英文仅注释请求
+    "comment only",  # 英文仅注释请求的空格写法
     "only comments",  # 英文仅注释表达
+    "comments only",  # 英文仅注释表达的反向语序
+    "annotate",  # 英文标注请求
     "只补注释",  # 中文直接仅注释请求
     "仅补注释",  # 中文强调只改注释请求
     "补注释",  # 中文补充注释表达
@@ -41,6 +44,19 @@ EXPLAIN_MARKERS = (  # 解释请求关键词
     "说明",  # 中文说明请求
 )
 
+# 识别验证类请求的中英文关键词。
+VALIDATE_MARKERS = (  # 验证请求关键词
+    "validate",  # 英文验证请求
+    "verify",  # 英文校验请求
+    "csim",  # Vitis HLS C 仿真阶段
+    "cosim",  # Vitis HLS 联合仿真阶段
+    "board",  # 板级验收请求
+    "验证",  # 中文验证请求
+    "校验",  # 中文校验请求
+    "仿真",  # 中文仿真请求
+    "板级",  # 中文板级验证请求
+)
+
 # 识别生成类请求的中英文关键词。
 GENERATE_MARKERS = (  # 生成请求关键词
     "generate",  # 英文生成请求
@@ -56,8 +72,11 @@ GENERATE_MARKERS = (  # 生成请求关键词
 class HlsDispatchDecision:
     """记录 HLS 请求分流结果和后续检查要求。"""
 
-    # mode 表示 generate、modify 或 explain 三类执行路径。
+    # mode 表示 generate、modify 或 explain 三类内部执行路径。
     mode: str  # 分流模式
+
+    # route 表示 readable-HLS 对外语义路线。
+    route: str = "create"  # 默认从新建 HLS artifact 的 create 路线开始。
 
     # target 固定标记当前分流面向 HLS 域。
     target: str = "hls"  # 目标领域
@@ -124,6 +143,9 @@ def classify_hls_task(
     # 模式选择保持解释优先、修改其次、生成兜底的原有语义。
     str_mode = _select_mode(str_request_text, bool_comment_only=bool_comment_only, target_path=target_path)  # HLS 任务模式
 
+    # route 是对外语义路线，保留 mode 只是为了兼容既有内部流程。
+    str_route = _select_route(str_request_text, str_mode=str_mode, bool_comment_only=bool_comment_only)  # readable-HLS 语义路线
+
     # 缺少目标时，上层工作流必须继续询问或读取代码上下文。
     bool_needs_target_or_code = _needs_target_or_code(str_mode, target_path=target_path)  # 目标或代码补齐标记
 
@@ -139,9 +161,14 @@ def classify_hls_task(
     # 汇总所有分流事实，保持返回结构稳定。
     return HlsDispatchDecision(
         mode=str_mode,
+        route=str_route,
+
+        # 注释约束字段控制 annotate 路线的安全边界。
         comment_only=bool_comment_only,
-        needs_target_or_code=bool_needs_target_or_code,
         baseline_required=bool_baseline_required,
+
+        # 上游输入补齐与验证建议直接复用已计算的门禁矩阵。
+        needs_target_or_code=bool_needs_target_or_code,
         check_matrix=dict_matrix,
         recommended_commands=tuple_commands,
     )
@@ -202,6 +229,51 @@ def _select_mode(
 
     # 其余请求默认进入生成工作流。
     return "generate"
+
+# route 用 readable-HLS 五路线表达用户意图，不替代内部 mode。
+def _select_route(
+    str_request_text: str,
+    *,
+    str_mode: str,
+    bool_comment_only: bool,
+) -> str:
+    """选择 create、write、review、annotate 或 validate 语义路线。
+
+    参数:
+        str_request_text: 已规范化的用户请求文本。
+        str_mode: 已选出的内部执行模式。
+        bool_comment_only: 是否命中仅注释请求标记。
+
+    返回:
+        readable-HLS 对外语义路线名称。
+    """
+
+    # 仅注释请求优先归入 annotate，确保调用方启用 baseline 保护。
+    if bool_comment_only:
+
+        # annotate 路线只允许注释改写，不应被普通 write 覆盖。
+        return "annotate"
+
+    # 明确的 Vitis/csim/cosim/board 语义归入 validate 路线。
+    if _contains_marker(str_request_text, VALIDATE_MARKERS):
+
+        # validate 路线强调证据闭环，而不是源码写入。
+        return "validate"
+
+    # 内部生成模式对应 create 路线。
+    if str_mode == "generate":
+
+        # create 路线从 HLS spec 或 scaffold 开始。
+        return "create"
+
+    # 内部修改模式对应 write 路线。
+    if str_mode == "modify":
+
+        # write 路线覆盖 kernel、pragma、interface 和 DATAFLOW 修改。
+        return "write"
+
+    # 剩余 explain 模式对应只读 review 路线。
+    return "review"
 
 # 目标补齐判断独立出来，避免调用方重复解释模式集合。
 def _needs_target_or_code(str_mode: str, *, target_path: str | Path | None) -> bool:
@@ -284,14 +356,14 @@ def _base_recommended_commands() -> list[str]:
 
     # 可读性门禁命令用于检查 HLS 目录结构和注释命名约束。
     str_readability_command = (
-        "python -m scripts.python.cli.hls_generator readability-gate "
+        "python -m scripts.python.cli.readable_hls_generator readability-gate "
         "--target hls --path <hls-dir> --profile kernel "
         "--style current-project --json"
     )  # 可读性门禁命令
 
     # 静态验证命令用于无外部工具条件下完成基础合同检查。
     str_static_validate_command = (
-        "python -m scripts.python.cli.hls_generator validate --target hls "
+        "python -m scripts.python.cli.readable_hls_generator validate --target hls "
         "--spec <spec.json> --path <hls-dir> --readiness static "
         "--no-external"
     )  # 静态验证命令
@@ -315,7 +387,7 @@ def _comment_plan_command() -> str:
 
     # 注释计划命令必须带 baseline，防止语义改写混入注释任务。
     return (
-        "python -m scripts.python.cli.hls_generator comment-plan --target hls "
+        "python -m scripts.python.cli.readable_hls_generator comment-plan --target hls "
         "--path <commented-dir> --baseline-path <baseline-dir> "
         "--out reports/hls_comment_rewrite_plan.json"
     )
@@ -333,7 +405,7 @@ def _comment_only_validate_command() -> str:
 
     # 仅注释验证命令使用 commented-dir 和 baseline-dir 做对照。
     return (
-        "python -m scripts.python.cli.hls_generator validate --target hls "
+        "python -m scripts.python.cli.readable_hls_generator validate --target hls "
         "--spec <spec.json> --path <commented-dir> "
         "--baseline-path <baseline-dir> --readiness static --no-external"
     )

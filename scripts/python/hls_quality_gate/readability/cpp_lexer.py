@@ -1225,6 +1225,37 @@ def find_multiline_statement_starts(lines: list[str]) -> list[tuple[int, str]]:
     # 返回多行语句起始行列表。
     return list_findings
 
+# find_avoidable_multiline_statement_starts 找出可避免拆行的短控制头、局部声明与普通赋值。
+def find_avoidable_multiline_statement_starts(
+    lines: list[str],
+) -> list[tuple[int, str, str]]:
+    """查找应由 HG031 要求恢复为单行的多行语句。
+
+    :param lines: 源码行列表。
+    :return: 元组列表，包含起始行号、合并语句文本和语句类别。
+    """
+
+    # list_findings 保存从通用多行发现结果中筛出的 HG031 候选。
+    list_findings: list[tuple[int, str, str]] = []  # HG031 多行格式发现结果
+
+    # 复用通用累积器，避免格式规则维护第二套跨行扫描状态。
+    for int_line_number, str_joined_statement in find_multiline_statement_starts(lines):
+
+        # 根据合并后的完整语句识别控制头、局部声明或普通赋值。
+        str_statement_kind = _avoidable_multiline_joined_kind(str_joined_statement)  # 当前多行语句的 HG031 类别
+
+        # 函数签名、初始化列表和其他必要多行结构不进入 HG031。
+        if str_statement_kind is None:
+
+            # 当前多行语句继续由 HG024 或其他结构规则处理。
+            continue
+
+        # 保存起始行、完整摘录和类别，长度阈值由结构规则统一解释。
+        list_findings.append((int_line_number, str_joined_statement, str_statement_kind))
+
+    # 返回全部可避免拆行候选，调用方继续应用 profile 长度阈值。
+    return list_findings
+
 # BlockCommentState 保存未闭合块注释的跨行状态。
 @dataclass
 class BlockCommentState:
@@ -2427,8 +2458,18 @@ def _advance_multiline_statement(
         # str_joined_statement 保存合并后的多行语句文本。
         str_joined_statement = " ".join(obj_state.list_buffer)  # 合并后的多行语句
 
+        # 控制头必须等圆括号完整闭合，避免 for 头内部的分号提前结束积累。
+        bool_is_control_header = _avoidable_multiline_start_kind(obj_state.list_buffer[0]) == "control_header"  # 是否为控制头候选
+
+        # 控制头使用括号深度，其他签名、声明和调用沿用原有结束标记。
+        bool_statement_complete = (
+            _parenthesis_depth_delta(str_joined_statement) <= 0  # 控制头左右括号已经配平
+            if bool_is_control_header  # 控制头不能使用内部分号作为结束标记
+            else ";" in str_joined_statement or "{" in str_joined_statement or ")" in str_code_part  # 其他多行语句结束标记
+        )  # 当前多行语句是否已经闭合
+
         # 语句闭合时记录多行发现。
-        if ";" in str_joined_statement or "{" in str_joined_statement or ")" in str_code_part:
+        if bool_statement_complete:
 
             # 起始行和结束行不同才记录为多行语句。
             if int_line_number > obj_state.int_start_line:
@@ -2462,20 +2503,17 @@ def _try_start_multiline_statement(
     :return: 成功开启多行语句时返回 True。
     """
 
-    # bool_call_like_start 判断函数调用或签名是否跨行。
-    tuple_control_prefixes = ("if", "for", "while", "switch")  # 不应被当作跨行调用候选的控制流前缀
-
-    # 先判断当前行是否存在尚未闭合的左括号。
-    bool_has_unclosed_parenthesis = "(" in str_code_part and ")" not in str_code_part  # 当前行是否带有未闭合左括号
+    # 先按词法状态判断当前行是否存在尚未闭合的语法左括号。
+    bool_has_unclosed_parenthesis = _parenthesis_depth_delta(str_code_part) > 0  # 当前行是否带有未闭合语法左括号
 
     # 当前行出现未闭合左括号且不是控制流头时，可能正在开启跨行调用或跨行签名。
-    bool_call_like_start = bool_has_unclosed_parenthesis and not str_code_part.startswith(tuple_control_prefixes)  # 是否为调用或签名式多行起点
+    bool_call_like_start = bool_has_unclosed_parenthesis and not _is_control_header_start(str_code_part)  # 是否为调用或签名式多行起点
 
-    # bool_declaration_start 判断局部声明是否跨行。
-    bool_declaration_start = is_local_declaration(str_code_part) and not str_code_part.endswith(";")  # 是否为多行声明起点
+    # HG031 起点识别补齐控制头、自定义类型声明与普通赋值的跨行入口。
+    bool_avoidable_start = _avoidable_multiline_start_kind(str_code_part) is not None  # 是否为可避免拆行起点
 
     # 当前行未开启多行语句。
-    if not bool_call_like_start and not bool_declaration_start:
+    if not bool_call_like_start and not bool_avoidable_start:
 
         # 保持未积累状态。
         return False
@@ -2491,6 +2529,202 @@ def _try_start_multiline_statement(
 
     # 返回已开启状态。
     return True
+
+# _avoidable_multiline_start_kind 识别 HG031 覆盖的多行语句起点。
+def _avoidable_multiline_start_kind(str_code_part: str) -> str | None:
+    """识别短控制头、普通局部声明或普通赋值的拆行起点。
+
+    :param str_code_part: 当前行去注释后的代码片段。
+    :return: 命中时返回稳定类别，否则返回 None。
+    """
+
+    # 控制头必须带未闭合左括号，完整单行控制语句不进入候选。
+    bool_control_header = _is_control_header_start(str_code_part)  # 是否命中控制头前缀
+
+    # 只有括号仍未闭合的控制头才需要继续跨行积累。
+    bool_control_header = bool_control_header and _parenthesis_depth_delta(str_code_part) > 0  # 是否为拆行控制头起点
+
+    # 控制头优先返回，避免 for 初始化里的等号被普通赋值模式误判。
+    if bool_control_header:
+
+        # 返回稳定类别供结构规则生成专属报告。
+        return "control_header"
+
+    # 声明模式先覆盖可选存储修饰符和类型名称部分。
+    str_declaration_pattern = r"^(?:(?:const|static|volatile)\s+)*"  # 局部声明修饰符模式
+
+    # 类型部分允许命名空间限定、模板参数和指针或引用修饰。
+    str_declaration_pattern += r"[A-Za-z_]\w*(?:::[A-Za-z_]\w*)?(?:\s*<[^;{}]+>)?(?:\s*[*&]+)?"  # 局部声明类型模式
+
+    # 声明尾部要求变量名、可选数组维度和行末赋值运算符。
+    str_declaration_pattern += r"\s+[A-Za-z_]\w*(?:\[[^\]]*\])?\s*(?:=|\+=|-=|\*=|/=|%=|&=|\|=|\^=|<<=|>>=)\s*$"  # 局部声明尾部模式
+
+    # 用完整声明模式识别自定义 typedef、模板类型和常见标量声明。
+    bool_local_declaration = bool(re.match(str_declaration_pattern, str_code_part))  # 是否为拆行局部声明起点
+
+    # 局部声明保留独立类别，便于报告明确指出变量定义格式。
+    if bool_local_declaration:
+
+        # 返回局部声明类别供 HG031 使用。
+        return "local_declaration"
+
+    # 普通赋值模式只接受标识符、下标或成员访问左值。
+    str_assignment_pattern = r"^[A-Za-z_]\w*(?:(?:\[[^\]]+\])|(?:\.|->)[A-Za-z_]\w*)*\s*"  # 普通赋值左值模式
+
+    # 赋值尾部允许普通、复合和位移赋值运算符，但行内不能已有右值。
+    str_assignment_pattern += r"(?:=|\+=|-=|\*=|/=|%=|&=|\|=|\^=|<<=|>>=)\s*$"  # 普通赋值运算符模式
+
+    # 用完整赋值模式排除函数签名和其他复杂表达式。
+    bool_assignment = bool(re.match(str_assignment_pattern, str_code_part))  # 是否为拆行普通赋值起点
+
+    # 命中普通赋值时返回对应类别，未命中则保持 None。
+    return "assignment" if bool_assignment else None
+
+# _avoidable_multiline_joined_kind 识别已经合并完成的 HG031 语句类别。
+def _avoidable_multiline_joined_kind(str_joined_statement: str) -> str | None:
+    """从完整多行语句中恢复起点形态并识别 HG031 类别。
+
+    :param str_joined_statement: 通用累积器合并后的完整语句。
+    :return: 命中时返回稳定类别，必要多行结构返回 None。
+    """
+
+    # 控制头的起点形态在合并后仍保持稳定，可以直接按前缀分类。
+    if _is_control_header_start(str_joined_statement):
+
+        # 返回控制头类别，长度阈值由结构规则继续判断。
+        return "control_header"
+
+    # 初始化列表有明确多行价值，不应被恢复成单行候选。
+    if _multiline_rhs_starts_initializer_list(str_joined_statement):
+
+        # 保留初始化列表原始布局。
+        return None
+
+    # 保存赋值起点提取模式，覆盖普通、复合和位移赋值运算符。
+    str_assignment_start_pattern = r"^(.*?(?:=|\+=|-=|\*=|/=|%=|&=|\|=|\^=|<<=|>>=))\s+.+"  # 多行赋值起点模式
+
+    # 提取赋值运算符及其左侧文本，恢复成起点检测器接受的形态。
+    regex_assignment_start: re.Match[str] | None = re.match(str_assignment_start_pattern, str_joined_statement)  # 多行赋值起点匹配结果
+
+    # 不含可识别赋值起点的语句继续交给 HG024 人工复核。
+    if regex_assignment_start is None:
+
+        # 函数签名和普通调用不会进入 HG031。
+        return None
+
+    # 把左侧及赋值运算符交回统一起点分类器，避免重复维护正则。
+    return _avoidable_multiline_start_kind(regex_assignment_start.group(1))
+
+# _is_control_header_start 识别普通控制头及带结构前缀的控制头。
+def _is_control_header_start(str_code_part: str) -> bool:
+    """判断代码片段是否从受 HG031 管理的控制头开始。
+
+    :param str_code_part: 当前行或已合并语句的有效代码片段。
+    :return: 命中普通控制头、else if 或 do while 尾条件时返回 True。
+    """
+
+    # 控制头模式区分普通入口、else if 分支链和右花括号后的尾条件。
+    str_control_header_pattern = r"^(?:for|while|if|switch|else\s+if|}\s*(?:while|else\s+if))\s*\("  # HG031 控制头起点模式
+
+    # 返回统一判定，保证起点扫描和合并分类不会发生规则漂移。
+    return bool(re.match(str_control_header_pattern, str_code_part))
+
+# _parenthesis_depth_delta 计算单行圆括号深度变化。
+def _parenthesis_depth_delta(str_code_part: str) -> int:
+    """计算当前代码片段带来的圆括号深度变化。
+
+    :param str_code_part: 当前行去注释后的代码片段。
+    :return: 忽略字符串与字符字面量后，左括号数量减去右括号数量。
+    """
+
+    # int_parenthesis_depth 只累计普通代码状态中的语法括号。
+    int_parenthesis_depth = 0  # 当前代码片段的语法圆括号深度差
+
+    # str_active_quote 记录当前字符串或字符字面量使用的引号。
+    str_active_quote = ""  # 空字符串表示当前处于普通代码状态
+
+    # bool_escape_next 标记字面量内的下一字符是否被反斜杠转义。
+    bool_escape_next = False  # 当前是否需要跳过下一字符的引号语义
+
+    # 单遍扫描避免字面量内容干扰控制头配平。
+    for str_char in str_code_part:
+
+        # 字面量状态只处理转义与闭合引号，不累计其中的括号。
+        if str_active_quote:
+
+            # 被转义字符不具备闭合字面量的语义。
+            if bool_escape_next:
+
+                # 当前字符已由上一反斜杠保护，下一字符恢复普通字面量扫描。
+                bool_escape_next = False  # 清除转义等待状态
+
+                # 转义字符处理结束后继续扫描字面量正文。
+                continue
+
+            # 反斜杠使字面量内的下一字符失去特殊含义。
+            if str_char == "\\":
+
+                # 下一字符必须作为普通字面量内容跳过。
+                bool_escape_next = True  # 开启下一字符转义状态
+
+                # 转义起点不参与括号统计。
+                continue
+
+            # 与起始引号相同的字符闭合当前字面量。
+            if str_char == str_active_quote:
+
+                # 闭合后恢复普通代码状态。
+                str_active_quote = ""  # 清除活动字面量引号
+
+            # 字面量内其他字符全部忽略。
+            continue
+
+        # 双引号和单引号分别开启字符串或字符字面量保护状态。
+        if str_char in {'"', "'"}:
+
+            # 保存引号类型，直到同类未转义引号闭合。
+            str_active_quote = str_char  # 当前活动字面量引号
+
+            # 起始引号不参与括号统计。
+            continue
+
+        # 普通代码中的左括号增加语法深度。
+        if str_char == "(":
+
+            # 进入一层新的圆括号结构。
+            int_parenthesis_depth += 1  # 累加左括号
+
+        # 普通代码中的右括号退出一层语法深度。
+        elif str_char == ")":
+
+            # 记录右括号带来的深度减少。
+            int_parenthesis_depth -= 1  # 累减右括号
+
+    # 返回供控制头起止判断复用的语法括号深度差。
+    return int_parenthesis_depth
+
+# _multiline_rhs_starts_initializer_list 判断赋值右侧是否为初始化列表。
+def _multiline_rhs_starts_initializer_list(str_joined_statement: str) -> bool:
+    """判断跨行声明或赋值是否使用需要保留多行形态的初始化列表。
+
+    :param str_joined_statement: 已合并的完整多行语句。
+    :return: 赋值右侧以左花括号开始时返回 True。
+    """
+
+    # 保存普通赋值右侧提取模式，复合赋值不会形成初始化列表。
+    str_assignment_rhs_pattern = r"(?<![=!<>])=(?!=)\s*(.*)$"  # 普通赋值右侧模式
+
+    # 分离第一个普通赋值运算符右侧文本，供初始化列表例外判断。
+    regex_assignment: re.Match[str] | None = re.search(str_assignment_rhs_pattern, str_joined_statement)  # 普通赋值右侧匹配结果
+
+    # 没有普通赋值运算符时不是初始化列表声明。
+    if regex_assignment is None:
+
+        # 复合赋值保持 HG031 普通赋值语义。
+        return False
+
+    # 初始化列表右侧会在合并后以左花括号开头。
+    return regex_assignment.group(1).lstrip().startswith("{")
 
 # _reset_multiline_statement 清空多行语句积累状态。
 def _reset_multiline_statement(obj_state: MultilineStatementState) -> None:

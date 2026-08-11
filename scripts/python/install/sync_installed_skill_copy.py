@@ -32,7 +32,7 @@ def skill_source_root() -> Path:
     返回当前脚本所属的 skill 根目录。
 
     :param: 当前辅助函数不接收外部业务参数。
-    :return: `skills/erie-hls-generator` 的绝对路径。
+    :return: `skills/readable-hls-generator` 的绝对路径。
     """
 
     # 脚本位于 scripts/python/install 下，向上三层到达 skill 根
@@ -205,7 +205,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     # 解析器说明该命令会替换本机 Codex 已安装副本
     parser = argparse.ArgumentParser(  # 安装同步参数解析器
-        description="Sync the current erie-hls-generator source tree into the local Codex installed copy."  # CLI 主说明文案
+        description="Sync the current readable-hls-generator source tree into the local Codex installed copy."  # CLI 主说明文案
     )
 
     # source 允许测试或人工指定替代源码目录

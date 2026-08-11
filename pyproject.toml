@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "readable-hls-generator"
+version = "0.5.0"
+description = "A Codex-ready skill for readable AMD/Xilinx Vitis HLS workflows."
+readme = { file = "README.md", content-type = "text/markdown" }
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [
+  { name = "Jiyuan Liu" },
+  { name = "He Li" },
+]
+keywords = ["Vitis HLS", "high-level synthesis", "AMD-Xilinx", "agent skill"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Topic :: Software Development :: Code Generators",
+]
+
+[project.urls]
+Homepage = "https://github.com/Eriemon/hls-generator"
+Repository = "https://github.com/Eriemon/hls-generator.git"
+Documentation = "https://github.com/Eriemon/hls-generator/blob/main/README.md"
+
+[tool.setuptools]
+include-package-data = true

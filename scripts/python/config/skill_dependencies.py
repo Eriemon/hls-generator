@@ -244,14 +244,17 @@ def build_dependency_request(report: DependencyRecord) -> DependencyRecord:
         "action": "ask_install_skill_dependencies",
         "status": BLOCKED_DEPENDENCY if list_blocked_dependencies else DEPENDENCY_OK,
         "question": (
-            "Required HLSGenerator skill dependencies are missing or invalid. "
+            "Required readable-hls-generator skill dependencies are missing or invalid. "
             "Ask the user whether to install or repair them before continuing."
         ),
         "missing_or_invalid": list_blocked_dependencies,
         "recommended_commands": [
-            "python -m scripts.python.cli.hls_generator deps check --json",
-            "python -m scripts.python.cli.hls_generator deps request --out reports/skill_dependency_request.json",
-            "python -m scripts.python.cli.hls_generator deps install --all",
+            "python -m scripts.python.cli.readable_hls_generator deps check --json",
+            (
+                "python -m scripts.python.cli.readable_hls_generator deps request "
+                "--out reports/skill_dependency_request.json"
+            ),
+            "python -m scripts.python.cli.readable_hls_generator deps install --all",
         ],
         "restart_required": (
             "Restart Codex after installing new skills so trigger metadata is reloaded."
@@ -1625,7 +1628,7 @@ def _default_install_root() -> Path:
     """
 
     # 优先使用显式环境变量覆盖的技能目录列表。
-    list_override_dirs = _path_list_env("HLS_GENERATOR_SKILLS_DIRS")  # 技能目录环境变量结果
+    list_override_dirs = _path_list_env("READABLE_HLS_GENERATOR_SKILLS_DIRS")  # 技能目录环境变量结果
 
     # 在存在覆盖目录时选择第一项作为默认安装根目录。
     if list_override_dirs:
@@ -1649,7 +1652,7 @@ def _default_skill_dirs() -> list[Path]:
     """
 
     # 优先尊重显式环境变量覆盖的技能目录集合。
-    list_override_dirs = _path_list_env("HLS_GENERATOR_SKILLS_DIRS")  # HLS_GENERATOR_SKILLS_DIRS 解析得到的技能目录覆盖列表
+    list_override_dirs = _path_list_env("READABLE_HLS_GENERATOR_SKILLS_DIRS")  # READABLE_HLS_GENERATOR_SKILLS_DIRS 解析得到的技能目录覆盖列表
 
     # 若调用方显式配置了插件缓存覆盖目录，就直接沿用该结果，不再拼默认缓存路径。
     if list_override_dirs is not None:
@@ -1685,7 +1688,7 @@ def _default_plugin_cache_dirs() -> list[Path]:
     """
 
     # 优先尊重显式环境变量覆盖的插件缓存目录集合。
-    list_override_dirs = _path_list_env("HLS_GENERATOR_PLUGIN_CACHE_DIRS")  # HLS_GENERATOR_PLUGIN_CACHE_DIRS 解析得到的插件缓存覆盖列表
+    list_override_dirs = _path_list_env("READABLE_HLS_GENERATOR_PLUGIN_CACHE_DIRS")  # READABLE_HLS_GENERATOR_PLUGIN_CACHE_DIRS 解析得到的插件缓存覆盖列表
 
     # 在环境变量显式提供时直接返回覆盖结果。
     if list_override_dirs is not None:

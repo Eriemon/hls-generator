@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-评估 Erie HLS skill 语料并计算有无技能时的通过率差异。
+评估 Readable HLS skill 语料并计算有无技能时的通过率差异。
 
 命令行协议:
     默认 stdout 输出紧凑文本摘要；传入 --json 时 stdout 输出完整 JSON 报告。
@@ -17,10 +17,10 @@ from pathlib import Path
 from typing import Any, cast
 
 # skill 根目录用于解析 evals.json 中相对 skill 的资源路径。
-SKILL_ROOT = Path(__file__).resolve().parents[3]  # erie-hls-generator 技能根目录。
+SKILL_ROOT = Path(__file__).resolve().parents[3]  # readable-hls-generator 技能根目录。
 
 # 仓库根目录用于兼容 evals.json 中相对工作区的资源路径。
-REPO_ROOT = SKILL_ROOT.parents[1]  # HLSGenerator 工作区根目录。
+REPO_ROOT = SKILL_ROOT.parents[1]  # readable-hls-generator 工作区根目录。
 
 # CLI 入口读取评估语料并输出指定模式的报告。
 def main(argv: list[str] | None = None) -> int:
@@ -36,7 +36,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # argparse 负责保持历史 CLI 参数和帮助文本兼容。
     parser = argparse.ArgumentParser(  # 评估命令参数解析器。
-        description="Evaluate the Erie HLS skill corpus and expected with-skill delta."  # CLI 帮助中的命令说明。
+        description="Evaluate the Readable HLS skill corpus and expected with-skill delta."  # CLI 帮助中的命令说明。
     )
 
     # evals 路径默认指向技能内置语料文件。
@@ -167,7 +167,7 @@ def evaluate_payload(payload: dict[str, Any]) -> dict[str, Any]:
     # 返回完整评估报告，字段名保持历史兼容。
     return {
         "version": payload.get("version", 1),
-        "title": payload.get("title", "Erie HLS Skill Evaluation"),
+        "title": payload.get("title", "Readable HLS Skill Evaluation"),
         "design_patterns": payload.get("design_patterns", []),
         "with_skill": dict_with_summary,
         "without_skill": dict_without_summary,

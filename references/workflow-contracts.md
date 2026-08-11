@@ -87,7 +87,7 @@ a user choice.
 When `blocked_human` is caused by an unconfigured comment language,
 `workflow_result.json` includes `comment_language_request`. The request offers
 only `en` and `zh`; the selected value should be saved in
-`~/.hls-generator/config.json` before rerunning generation.
+`~/.readable-hls-generator/config.json` before rerunning generation.
 
 Remote Vitis acceptance stages work under the governed project root relative to
 the selected erie server workdir. After required verification passes, the

@@ -35,7 +35,7 @@ PRESERVE_MARKERS = (  # 需要保留的注释语义标记
 
 # 这些 HLS readability 规则需要人工语义改写，而不是脚本生成替换文本。
 COMMENT_REWRITE_RULES = frozenset(  # 需要进入改写计划的规则集合
-    "HG001 HG002 HG003 HG004 HG005 HG006 HG007 HG008 HG009 HG010 HG011 HG015 HG022 HG024".split()  # 人工改写相关的 HG 规则编号
+    "HG001 HG002 HG003 HG004 HG005 HG006 HG007 HG008 HG009 HG010 HG011 HG015 HG022 HG024 HG029 HG030".split()  # 人工改写相关的 HG 规则编号
 )
 
 # 生成 HLS 注释治理计划，供人工逐项处理。
@@ -336,6 +336,8 @@ def _semantic_context_for_rule(rule: str) -> str:
         "HG015": "document top port direction, protocol, depth, shape and unit",  # 顶层端口契约
         "HG022": "document DATAFLOW/STREAM channel depth and producer-consumer relationship",  # DATAFLOW/STREAM 关系说明
         "HG024": "review multi-line statement and place semantic comments at the owning construct",  # 多行语句归属注释
+        "HG029": "rewrite duplicate or near-duplicate comments so each line explains its own local HLS semantics",  # 重复注释去重改写
+        "HG030": "replace block comments with contiguous // lines while preserving the original contract semantics",  # 块注释语法替换
     }  # HLS 规则到人工审查语义提示的映射
 
     # 未知规则使用保守提示，仍强调不得改动 code token。
@@ -360,7 +362,7 @@ def _recheck_commands(root: Path, baseline_root: Path | None, profile: str) -> l
     # readability gate 命令用于复查注释治理后的 HLS 规则状态。
     list_commands = [
         (
-            "python -m scripts.python.cli.hls_generator readability-gate "
+            "python -m scripts.python.cli.readable_hls_generator readability-gate "
             f"--target hls --path <target-path> --profile {profile} "
             "--style current-project --json"
         ),
@@ -371,7 +373,7 @@ def _recheck_commands(root: Path, baseline_root: Path | None, profile: str) -> l
 
         # 只要提供 baseline，就补一条带 AST/token 对照的 validate 命令供人工回归。
         list_commands.append(
-            "python -m scripts.python.cli.hls_generator validate --target hls --spec <spec.json> "
+            "python -m scripts.python.cli.readable_hls_generator validate --target hls --spec <spec.json> "
             "--path <target-path> --baseline-path <baseline-path> "
             "--readiness static --no-external"
         )

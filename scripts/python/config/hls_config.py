@@ -28,7 +28,7 @@ from scripts.python.config.skill_dependencies import (
 )
 
 # 环境变量允许调用方覆盖 runtime_config.json 位置。
-CONFIG_ENV_VAR = "HLS_GENERATOR_RUNTIME_CONFIG"  # runtime 配置覆盖环境变量名
+CONFIG_ENV_VAR = "READABLE_HLS_GENERATOR_RUNTIME_CONFIG"  # runtime 配置覆盖环境变量名
 
 # 默认配置文件与本模块位于同一目录。
 DEFAULT_CONFIG_NAME = "runtime_config.json"  # 默认 runtime 配置文件名
@@ -44,23 +44,20 @@ def skill_root() -> Path:
         已解析的技能根目录路径。
 
     异常:
-        ValueError: 当当前文件不在有效 HLS generator 技能树下时抛出。
+        ValueError: 当当前文件不在 readable-hls-generator 技能树下时抛出。
     """
 
-    # 新包布局位于 scripts/python 下，向上查找 SKILL.md 与脚本目录比固定名称更稳。
+    # 新包布局位于 scripts/python 下，向上查找 SKILL.md 比固定层级更稳。
     for path_parent in Path(__file__).resolve().parents:
 
-        # 公开仓库目录名可能是 hls-generator，因此这里只要求技能合同文件和脚本目录同时存在。
-        if (
-            (path_parent / "SKILL.md").is_file()
-            and (path_parent / "scripts" / "python").is_dir()
-        ):
+        # 技能根目录以 SKILL.md 和目录名共同确认，避免误命中仓库根。
+        if path_parent.name == "readable-hls-generator" and (path_parent / "SKILL.md").is_file():
 
             # 返回已确认的技能根目录。
             return path_parent
 
     # 找不到技能根时直接阻断，避免后续路径校验落到错误目录。
-    raise ValueError("> ERR: [Python] Could not locate the HLS generator skill root.")
+    raise ValueError("> ERR: [Python] Could not locate readable-hls-generator skill root.")
 
 # 返回仓库根目录，供环境变量覆盖路径做仓库边界约束。
 def repo_root() -> Path:
@@ -73,8 +70,8 @@ def repo_root() -> Path:
         已解析的仓库根目录路径。
     """
 
-    # 公开仓库直接以技能根作为仓库根，避免把工作区上层误判为发布根目录。
-    return skill_root()
+    # 当前技能固定位于仓库根下的 skills/readable-hls-generator 位置。
+    return skill_root().parents[1]
 
 # 解析 runtime 配置文件路径，并拒绝越出仓库的环境变量覆盖值。
 def config_path() -> Path:
@@ -82,7 +79,7 @@ def config_path() -> Path:
     返回当前应读取的 runtime 配置文件路径。
 
     参数:
-        无外部业务参数；可选覆盖值来自环境变量 ``HLS_GENERATOR_RUNTIME_CONFIG``。
+        无外部业务参数；可选覆盖值来自环境变量 ``READABLE_HLS_GENERATOR_RUNTIME_CONFIG``。
     返回:
         已解析的 runtime 配置文件绝对路径。
     异常:
@@ -952,7 +949,7 @@ def _resolve_erie_remote_skill_dir(config: dict[str, Any]) -> Path:
 
     # 环境变量显式声明技能搜索目录时，优先尝试依赖发现结果。
     if (
-        os.environ.get("HLS_GENERATOR_SKILLS_DIRS") is not None
+        os.environ.get("READABLE_HLS_GENERATOR_SKILLS_DIRS") is not None
         or os.environ.get("CODEX_HOME")
     ):
 

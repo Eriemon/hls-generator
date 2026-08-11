@@ -23,7 +23,7 @@ def repo_root_from_skill_root(skill_root: Path) -> Path:
         当前工作仓库根目录路径。
     """
 
-    # erie-hls-generator 位于 skills/ 下，向上两级是仓库根。
+    # readable-hls-generator 位于 skills/ 下，向上两级是仓库根。
     return skill_root.parents[1]
 
 # 根据技能根目录定位根级 AGENTS.md。

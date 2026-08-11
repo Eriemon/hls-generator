@@ -32,7 +32,7 @@ def main() -> int:
         sys.path.insert(0, str_governance_dir)
 
     # 路径准备完成后再导入委托模块。
-    from _skill_tool_delegate import run_delegate, skill_creator_script
+    from skill_tool_delegate import run_delegate, skill_creator_script
 
     # 转交给 skill-creator 的快速验证脚本。
     return run_delegate(skill_creator_script("quick_validate.py"))

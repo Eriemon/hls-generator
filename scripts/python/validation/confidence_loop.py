@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""运行 Erie HLS Generator 可重复的本地与远端 confidence gate。
+"""运行 Readable HLS Generator 可重复的本地与远端 confidence gate。
 
 机器可读 stdout 协议:
     stdout_protocol: json
@@ -14,6 +14,11 @@ import datetime as dt
 import json
 import os
 import sys
+
+# tempfile 为 compileall 临时 pycache 根目录提供自动清理。
+import tempfile
+
+# 函数式 helper、路径对象和类型工具支撑后续 gate 编排。
 from functools import partial
 from pathlib import Path
 from typing import Any, Callable
@@ -1598,7 +1603,7 @@ def repo_root() -> Path:
         无。
 
     返回:
-        HLSGenerator 仓库根路径。
+        readable-hls-generator 仓库根路径。
     """
 
     # 返回技能根的上两级目录，保持 reports/smoke/tests 位于工作区根。
@@ -1726,7 +1731,10 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     """
 
     # parser 描述本脚本的本地/远端 confidence gate 用法。
-    parser = argparse.ArgumentParser(description="Run Erie HLS Generator local and optional remote confidence gates.")  # CLI 参数解析对象
+    str_parser_description = "Run Readable HLS Generator local and optional remote confidence gates."  # 描述本地与远端信心门禁入口。
+
+    # 创建本地/远端 confidence gate 的参数解析器。
+    parser = argparse.ArgumentParser(description=str_parser_description)  # CLI 参数解析对象
 
     # 单服务器远端验收目标。
     parser.add_argument("--server", help="Optional erie-remote-ssh server for real remote Vitis validation.")
@@ -1936,14 +1944,24 @@ def _run_local_command_gates(dict_gates: dict[str, dict[str, Any]], namespace_ar
     # compileall 只验证迁移后的 Python 功能域能否完成语法编译。
     if not namespace_args.skip_compileall:
 
-        # 运行 scripts/python compileall，确保技能核心功能域可语法编译。
-        _record_command_gate(
-            dict_gates,
-            "compileall",
-            [sys.executable, "-m", "compileall", "scripts/python"],
-            cwd=SKILL_ROOT,
-            timeout_s=namespace_args.gate_timeout_s,
-        )
+        # 临时重定向 pycache 输出，避免 compileall 把 __pycache__ 写回技能源码树。
+        with tempfile.TemporaryDirectory() as str_temp_pycache_root:
+
+            # 运行 scripts/python compileall，确保技能核心功能域可语法编译。
+            _record_command_gate(
+                dict_gates,
+                "compileall",
+                [
+                    sys.executable,
+                    "-X",
+                    f"pycache_prefix={Path(str_temp_pycache_root).resolve()}",
+                    "-m",
+                    "compileall",
+                    "scripts/python",
+                ],
+                cwd=SKILL_ROOT,
+                timeout_s=namespace_args.gate_timeout_s,
+            )
 
     # quick_validate 负责资源布局与关键入口的快速自检。
     if not namespace_args.skip_quick_validate:

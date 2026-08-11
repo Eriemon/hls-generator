@@ -44,27 +44,27 @@
     "top_function": "vector_scale_kernel",
     "arguments": [
       {
-        "name": "input",
+        "name": "ptr_input_values",
         "type": "const ap_uint<32> *",
         "direction": "input",
         "interface": "m_axi",
         "bundle": "gmem0"
       },
       {
-        "name": "output",
+        "name": "ptr_output_values",
         "type": "ap_uint<32> *",
         "direction": "output",
         "interface": "m_axi",
         "bundle": "gmem1"
       },
       {
-        "name": "scale",
+        "name": "uint_scale_factor",
         "type": "ap_uint<16>",
         "direction": "input",
         "interface": "s_axilite"
       },
       {
-        "name": "length",
+        "name": "int_vector_length",
         "type": "int",
         "direction": "input",
         "interface": "s_axilite"
@@ -73,9 +73,9 @@
     "control": "s_axilite"
   },
   "behavior": [
-    "For each index below length, output[index] equals input[index] multiplied by scale.",
+    "For each index below int_vector_length, ptr_output_values[index] equals ptr_input_values[index] multiplied by uint_scale_factor.",
     "Use a pipelined loop with II=1 if memory bandwidth permits.",
-    "Ignore elements at indexes greater than or equal to length."
+    "Ignore elements at indexes greater than or equal to int_vector_length."
   ],
   "clock": {
     "period_ns": 10.0,

@@ -16,8 +16,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol, Sequence
 
-# mock 渲染器保证 HLS C/C++ 片段满足当前注释语言覆盖要求。
-from .mock_comment_rendering import _ensure_hls_line_comment_coverage
+# workflow 写盘治理器负责在落盘前补齐 typed-prefix、contract 与输出边界。
+from .mock_hls_governance import govern_mock_hls_text
 
 # mock artifact helper 继续由本模块兼容导出，供旧测试和调试脚本复用。
 from .mock_hls_artifacts import (
@@ -957,6 +957,8 @@ def _mock_hls_file_text(
         # 生成并补齐 HLS 行注释覆盖。
         return _covered_hls_text(
             _mock_hls_header_text(context.spec, context.comment_language),
+            context.spec,
+            rel_path,
             context.comment_language,
         )
 
@@ -966,6 +968,8 @@ def _mock_hls_file_text(
         # 生成并补齐 kernel 源码行注释覆盖。
         return _covered_hls_text(
             _mock_hls_source_text(context.spec, header_name, context.comment_language),
+            context.spec,
+            rel_path,
             context.comment_language,
         )
 
@@ -975,6 +979,8 @@ def _mock_hls_file_text(
         # testbench 文本要额外写入向量摘要，方便后续做结果对账。
         return _covered_hls_text(
             _mock_hls_testbench_text(context.spec, vectors, vector_hash, context.comment_language),
+            context.spec,
+            rel_path,
             context.comment_language,
         )
 
@@ -988,19 +994,26 @@ def _mock_hls_file_text(
     return "\n"
 
 # 补齐 HLS mock 文本的行注释覆盖。
-def _covered_hls_text(text: str, comment_language: str) -> str:
+def _covered_hls_text(
+    text: str,
+    spec: dict[str, Any],
+    rel_path: str,
+    comment_language: str,
+) -> str:
     """
-    对 HLS mock C/C++ 文本应用行注释覆盖规则。
+    对 workflow HLS mock C/C++ 文本应用落盘前治理规则。
 
     参数:
         text: 原始 HLS mock 文本，dtype=str，unit=text。
+        spec: 当前 HLS 规范字典，shape=(n fields)，dtype=dict[str, Any]，unit=JSON object。
+        rel_path: 当前 manifest 文件相对路径，dtype=str，unit=filesystem path。
         comment_language: 注释语言，dtype=str，unit=dimensionless。
     返回:
-        已补齐注释覆盖的 HLS 文本，dtype=str，unit=text。
+        已按 workflow 治理规则规范化的 HLS 文本，dtype=str，unit=text。
     """
 
-    # 委托 mock_comment_rendering 保持 C/C++ 注释策略一致。
-    return _ensure_hls_line_comment_coverage(text, comment_language)
+    # 只在 workflow 写盘路径做治理，避免影响 raw 模板函数的直测行为。
+    return govern_mock_hls_text(text, spec, rel_path, comment_language)
 
 # 为未知阶段生成默认文件内容。
 def _default_file_contents(files: list[dict[str, Any]]) -> dict[str, str]:

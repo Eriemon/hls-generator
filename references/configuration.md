@@ -10,7 +10,7 @@
 
 The runtime configuration lives at `scripts/python/config/runtime_config.json`.
 Keep this file inside the skill root. To test an alternate config, set
-`HLS_GENERATOR_RUNTIME_CONFIG` to another JSON file under this same skill root.
+`READABLE_HLS_GENERATOR_RUNTIME_CONFIG` to another JSON file under this same skill root.
 
 ## Path Policy
 
@@ -21,8 +21,8 @@ directory.
 
 `paths.protected_roots` and `paths.protected_files` list source and reference
 areas that generated artifacts must not overwrite. Keep runtime code,
-integration APIs, references, examples, eval assets, `SKILL.md`, and
-`DESIGN_GOALS.md` protected. The `scripts/` directory is also protected because
+integration APIs, references, examples, eval assets, and `SKILL.md` protected.
+The `scripts/` directory is also protected because
 it contains executable skill support code, not generated output.
 
 `paths.default_workflow_config`, `paths.examples_dir`, `paths.smoke_root`, and
@@ -85,8 +85,8 @@ to be installed before HLS workflows run. Each dependency entry includes:
 
 The dependency scanner checks `$CODEX_HOME/skills`, `~/.codex/skills`, and
 Codex plugin caches. For tests or controlled hosts, override discovery with
-`HLS_GENERATOR_SKILLS_DIRS` and `HLS_GENERATOR_PLUGIN_CACHE_DIRS` using the
-platform path separator. When `HLS_GENERATOR_SKILLS_DIRS` is set, `deps
+`READABLE_HLS_GENERATOR_SKILLS_DIRS` and `READABLE_HLS_GENERATOR_PLUGIN_CACHE_DIRS` using the
+platform path separator. When `READABLE_HLS_GENERATOR_SKILLS_DIRS` is set, `deps
 install` also defaults to the first listed skills directory. This lets the
 Superpowers plugin satisfy the Superpowers dependency without copying each skill
 into the normal skills directory.
@@ -100,9 +100,9 @@ Use these commands from the skill root or another workspace. Choose an
 explicit writable output directory for generated request/spec artifacts:
 
 ```powershell
-python -m scripts.python.cli.hls_generator deps check --json
-python -m scripts.python.cli.hls_generator deps request --out <output-dir>\skill_dependency_request.json
-python -m scripts.python.cli.hls_generator deps install --all
+python -m scripts.python.cli.readable_hls_generator deps check --json
+python -m scripts.python.cli.readable_hls_generator deps request --out <output-dir>\skill_dependency_request.json
+python -m scripts.python.cli.readable_hls_generator deps install --all
 ```
 
 `deps install` does not overwrite existing skill directories. If an installed
@@ -127,10 +127,10 @@ credentials into this skill. Server ids and names must come from the
   plans, overlays, requests, and reports.
 - `directory_contract.project_root_dirname` is the governed remote project root
   relative to the selected erie server workdir. The default is
-  `erie-hls-generator`.
+  `readable-hls-generator`.
 - `directory_contract.conda_prefix_path` is the project-local prefix conda
   environment path relative to that governed project root. The default is
-  `.conda/hls-generator`.
+  `.conda/readable-hls-generator`.
 - `directory_contract.platform_root_path_template` is the governed remote root
   for user-supplied board platform payloads. The default is
   `platforms/alveo/<platform-name>`.
@@ -156,14 +156,14 @@ script reports `blocked_remote_profile_config`. If the expected tool is
 missing, the script reports `blocked_vitis_server`.
 
 Vitis mode runs `erie scan-software` before selecting a remote Vitis install. If
-the scan reports multiple versions and `~/.hls-generator/config.json` has no
+the scan reports multiple versions and `~/.readable-hls-generator/config.json` has no
 saved choice for that server, the script reports
 `blocked_remote_version_choice` and writes `remote_vitis_version_request.json`.
 Rerun with `--vitis-version <version>` to save and use that version. The user
 config stores only the selected version, settings script, expected tool,
 target part, and timestamp.
 
-Board mode also uses `~/.hls-generator/config.json` when the user provides an
+Board mode also uses `~/.readable-hls-generator/config.json` when the user provides an
 explicit uploaded platform payload. The user config stores
 `board_platform_selection.<server>.platform_name`,
 `board_platform_selection.<server>.remote_platform_root`,
@@ -184,7 +184,7 @@ JSON result records both active and archived relative paths plus the retained
 For board mode, a user-provided U55C platform payload must live under the
 governed remote platform root and not under `/tools/Xilinx` by default. The
 preferred shape is an uploaded extracted directory such as
-`erie-hls-generator/platforms/alveo/xilinx_u55c_gen3x16_xdma_3_202210_1/`
+`readable-hls-generator/platforms/alveo/xilinx_u55c_gen3x16_xdma_3_202210_1/`
 containing the matching `.xpfm`.
 
 ## Inspection
@@ -192,11 +192,11 @@ containing the matching `.xpfm`.
 Print the active config:
 
 ```powershell
-python -m scripts.python.cli.hls_generator config
+python -m scripts.python.cli.readable_hls_generator config
 ```
 
 Print only the active config path:
 
 ```powershell
-python -m scripts.python.cli.hls_generator config --path
+python -m scripts.python.cli.readable_hls_generator config --path
 ```

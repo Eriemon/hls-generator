@@ -213,14 +213,26 @@ def run_hls_workflow(
     # 先拒绝未声明关键字，防止 **kwargs 兼容层吞掉拼写错误。
     _reject_unknown_options(dict_options, WORKFLOW_OPTION_NAMES, "run_hls_workflow")
 
-    # workflow 入口需要确认核心依赖、远程辅助和 Vitis 工具契约已声明。
-    require_skill_dependencies(skill_dependencies_config(), scopes={"core", "remote", "vitis"})
-
     # facade 只服务 HLS，不允许调用方把 RTL 目标混入本技能。
     _reject_non_hls_target(dict_options.get("target"))
 
     # 收集默认配置和调用方覆盖项，供新 run 与恢复 run 共用。
     dict_runtime_options = _collect_workflow_runtime_options(dict_options)  # workflow 运行参数集合
+
+    # workflow 默认只要求本地 core 路径；只有真正推进外部 Vitis 验证时才追加 vitis scope。
+    set_dependency_scopes = {"core"}  # 当前 workflow 调用需要请求的依赖 scope 集合
+
+    # 外部验证且目标 readiness 超过 static 时，才把 Vitis 指导依赖纳入阻断范围。
+    if (
+        bool(dict_runtime_options.get("run_external"))
+        and str(dict_runtime_options.get("readiness") or "static") != "static"
+    ):
+
+        # 非 static 外部验证阶段需要显式请求 vitis scope 依赖。
+        set_dependency_scopes.add("vitis")
+
+    # 按当前 workflow 真实执行深度请求依赖，避免本地路径被远端链路误拦。
+    require_skill_dependencies(skill_dependencies_config(), scopes=set_dependency_scopes)
 
     # resume_dir 存在时进入恢复流程，不再要求 spec 和 out_dir。
     if dict_options.get("resume_dir") is not None:
@@ -328,11 +340,20 @@ def validate_hls_artifacts(
     # 验证入口不接受未声明关键字，防止报告缺项。
     _reject_unknown_options(dict_options, VALIDATION_OPTION_NAMES, "validate_hls_artifacts")
 
-    # artifact 验证只要求核心 runtime 能力可用。
-    require_skill_dependencies(skill_dependencies_config(), scopes={"core"})
-
     # 验证入口仍然禁止非 HLS target。
     _reject_non_hls_target(dict_options.get("target"))
+
+    # static-only 验证只要求本地 core 路径；更高 readiness 且允许外部工具时才追加 vitis scope。
+    set_dependency_scopes = {"core"}  # 当前 artifact 验证要请求的依赖 scope 集合
+
+    # 只有显式允许外部工具且 readiness 超过 static 时，才请求 vitis 指导依赖。
+    if bool(dict_options.get("run_external", True)) and str(dict_options.get("readiness") or "static") != "static":
+
+        # 非 static 的外部 artifact 验证需要显式请求 vitis scope。
+        set_dependency_scopes.add("vitis")
+
+    # 按当前验证深度请求依赖，避免 static-only 路径被远端或 Vitis 指导依赖误拦。
+    require_skill_dependencies(skill_dependencies_config(), scopes=set_dependency_scopes)
 
     # facade spec 先补齐需求默认值和显式确认字段。
     dict_resolved_spec = _prepare_facade_spec(  # 已补齐需求默认值并准备用于验证的 HLS spec

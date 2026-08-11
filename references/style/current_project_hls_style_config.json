@@ -65,14 +65,23 @@
   },
   "hls_language_adjustments": {
     "pg033_mapping": "HG005 applies to single-line local declarations and assignments. Long template-heavy or multi-line declarations may be exempted from right-side comments by profile, but HG024 reports them so reviewers add a nearby contract instead.",
+    "hg031_mapping": "HG031 blocks short control headers, ordinary local declarations, and ordinary assignments that were split across physical lines even though the merged statement fits max_line_length. Function signatures, initializer lists, and genuinely over-limit statements remain exempt.",
     "typed_prefix_mapping": "Python typed-prefix rules are not applied mechanically to C++. HG014 uses HLS-aware names for ports, streams, AXIS words, buffers, accumulators, indexes, and constants.",
     "docstring_mapping": "Python docstring contracts become HLS file, function, top-port, array, stream, pragma, loop, and testbench contracts."
   },
   "checks": {
     "require_chinese_comments": true,
+    "require_file_header": true,
+    "require_function_contract": true,
     "require_declaration_inline_comment": true,
     "require_declaration_above_comment": true,
-    "require_top_port_contract": true
+    "require_top_port_contract": true,
+    "require_typed_prefix": true,
+    "forbid_ref_primary_prefix": true,
+    "allow_alias_secondary_token": true,
+    "require_hls_print_prefix": true,
+    "forbid_repeated_comment_text": true,
+    "forbid_block_comment_syntax": true
   },
   "thresholds": {
     "inline_comment_max_code_chars": 130,
@@ -83,7 +92,13 @@
     "warn_branch_loop_count": 12,
     "block_branch_loop_count": 22,
     "warn_magic_number_count": 6,
-    "block_magic_number_count": 12
+    "block_magic_number_count": 12,
+    "max_exact_comment_reuse": 1,
+    "near_duplicate_similarity_threshold": 0.86,
+    "function_comment_similarity_threshold": 0.92,
+    "function_template_similarity_threshold": 0.76,
+    "min_near_duplicate_cjk_chars": 8,
+    "min_function_similarity_cjk_chars": 8
   },
   "comment_quality": {
     "banned_generic_comment_phrases": [
@@ -137,6 +152,62 @@
       "函数",
       "参数",
       "对象"
+    ],
+    "function_similarity_template_terms": [
+      "中间状态",
+      "中间语义状态",
+      "临时状态",
+      "后续逻辑",
+      "后续检查",
+      "后续判断",
+      "当前检查",
+      "当前语义",
+      "当前规则",
+      "当前步骤",
+      "当前流程",
+      "处理路径",
+      "诊断路径",
+      "路径清晰",
+      "语义分支",
+      "规则诊断",
+      "规则检查",
+      "请求解析",
+      "字段取值",
+      "载荷来源确认",
+      "步骤说明",
+      "条件守卫",
+      "函数入口",
+      "函数边界",
+      "契约返回",
+      "服务器标识",
+      "夹具核验片",
+      "场景锚定位",
+      "调用核验",
+      "复用",
+      "供"
+    ]
+  },
+  "typed_naming": {
+    "typed_prefix_families": [
+      "bool",
+      "int",
+      "uint",
+      "float",
+      "double",
+      "fixed",
+      "ufixed",
+      "ptr",
+      "arr",
+      "stream",
+      "axis"
+    ],
+    "custom_type_prefixes": []
+  },
+  "print_output": {
+    "allowed_prefixes": [
+      "> INFO: [HLS]",
+      "> WARNING: [HLS]",
+      "> ERR: [HLS]"
     ]
   }
 }

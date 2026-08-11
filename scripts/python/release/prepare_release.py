@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""准备 erie-hls-generator 的版本化发布目录和 zip 包。
+"""准备 readable-hls-generator 的版本化发布目录和 zip 包。
 
 stdout_protocol: json
 本模块的 CLI stdout 是 machine-readable stdout protocol；调用方依赖完整 JSON 对象读取发布摘要。
@@ -31,11 +31,11 @@ from typing import Any, cast
 # 主技能根目录固定为 skill body，所有发布输入都从这里向下收敛。
 SKILL_ROOT = Path(__file__).resolve().parents[3]  # 主技能根目录
 
-# 公开仓库直接以技能根作为仓库根，dist 与 git 元数据都应收口到当前仓库。
-REPO_ROOT = SKILL_ROOT  # 当前仓库根目录
+# 仓库根目录负责 dist、reports 与 git 元数据查询边界。
+REPO_ROOT = SKILL_ROOT.parents[1]  # 当前仓库根目录
 
 # 包名同时用于发布目录、zip 文件名和收据中的 package 字段。
-PACKAGE_NAME = "erie-hls-generator"  # 发布包名
+PACKAGE_NAME = "readable-hls-generator"  # 发布包名
 
 # 发布版本必须是严格 SemVer，不能混入 latest 或宽松版本占位。
 SEMVER_RE = re.compile(  # `--version` 参数输入使用的严格 SemVer 正则
@@ -69,7 +69,7 @@ EXCLUDED_FILE_SUFFIXES = {".pyc", ".pyo"}  # 发布时排除的文件后缀
 # 这些文件名要么是派生清单，要么是设计草稿，不应进入最终包。
 EXCLUDED_FILE_NAMES = {
     "checksums.sha256",  # 派生校验清单
-    "DESIGN_GOALS.md",  # 设计草稿文档
+    "DESIGN_GOALS.md",  # 历史设计文档即使误留在源码树也不得进入发布包
 }  # 发布时排除的文件名
 
 # 这些通配模式覆盖 Vivado/Vitis 日志、中间脚本与 solution 工件。
@@ -77,21 +77,27 @@ EXCLUDED_GLOBS = (
     "*.jou",  # Vivado/Vitis 命令日志文件
     "*.log",  # 构建与运行过程日志
     "*.str",  # 工具状态追踪文件
-    ".hls_generator_*.tcl",  # 生成器临时 Tcl 脚本
-    ".hls_generator_vitis_*",  # 生成器临时 Vitis 目录
+    ".readable_hls_generator_*.tcl",  # 生成器临时 Tcl 脚本
+    ".readable_hls_generator_vitis_*",  # 生成器临时 Vitis 目录
     "solution*",  # HLS solution 产物目录
 )  # 发布时排除的通配模式
 
 # 发布收据里需要保留建议验证命令，提醒安装后如何做最低限度回归检查。
 VALIDATION_COMMANDS = [
-    r"python -m scripts.python.cli.hls_generator --version",  # 公开 CLI 版本核对命令
-    r"python -m scripts.python.cli.hls_generator selfcheck --json",  # 公开 CLI 自检命令
-    r"python -m compileall .\scripts\python",  # Python 功能域语法编译检查
+    r"python .\tests\smoke\run_smoke.py",  # smoke 回归命令
     (
-        r"python .\scripts\python\validation\confidence_loop.py "
+        r"python .\skills\readable-hls-generator\scripts\python\validation\run_compileall_no_cache.py "
+        r".\skills\readable-hls-generator\scripts\python"
+    ),  # Python 功能域无 `__pycache__` 语法编译检查
+    (
+        r"python %CODEX_HOME%\skills\.system\skill-creator\scripts\quick_validate.py "
+        r".\skills\readable-hls-generator"
+    ),  # 安装前 quick_validate 命令
+    (
+        r"python .\skills\readable-hls-generator\scripts\python\validation\confidence_loop.py "
         r"--server <remote-hls-validation-primary> --vitis-version <configured-vitis-version> "
         r"--readiness cosim --remote-parallelism 3 --json-out "
-        r".\tmp\validation\hls-generator\latest-remote.json"
+        r".\reports\confidence-loop\latest-remote.json"
     ),  # 远端 confidence loop 命令
 ]  # 发布后建议保留的验证命令
 
@@ -111,7 +117,10 @@ def main(argv: list[str] | None = None) -> int:
     """
 
     # 命令行只暴露版本号，dist-root 仍保留给仓库内脚本链路使用。
-    parser = argparse.ArgumentParser(description="Prepare a versioned erie-hls-generator release directory and zip.")  # 发布脚本参数解析器
+    str_parser_description = "Prepare a versioned readable-hls-generator release directory and zip."  # 发布 help 文本。
+
+    # 创建发布脚本参数解析器。
+    parser = argparse.ArgumentParser(description=str_parser_description)  # 发布脚本参数解析器
 
     # 版本号必须由调用方显式给出，避免从环境或当前分支隐式推断。
     parser.add_argument(
@@ -203,7 +212,7 @@ def prepare_release(version: str, dist_root: Path) -> dict[str, object]:
 
         # CLI 版本漂移时直接阻断，避免安装后 `--version` 与元数据不一致。
         raise ReleaseError(
-            f"> ERR: [Python] hls-gen --version reported {str_cli_version!r}, expected {str_version!r}."
+            f"> ERR: [Python] readable-hls-gen --version reported {str_cli_version!r}, expected {str_version!r}."
         )
 
     # 发布前必须先确认技能依赖清单没有破坏 blocking 策略。
@@ -221,7 +230,7 @@ def prepare_release(version: str, dist_root: Path) -> dict[str, object]:
     # 先清理当前版本旧产物，再生成新的目录与 zip 占位边界。
     _replace_release_outputs(path_release_dir, path_zip)
 
-    # 复制 skill body 到发布目录，并返回稳定的仓库相对路径清单。
+    # 复制 skill body 到发布目录，并返回稳定的 skill 相对路径清单。
     list_included_files = _copy_skill_tree(path_release_dir)  # 被包含的发布文件清单
 
     # 发布目录中的 Markdown 必须满足 UTF-8 与无 BOM 的文本约束。
@@ -246,14 +255,25 @@ def prepare_release(version: str, dist_root: Path) -> dict[str, object]:
     # Manifest 固定落在发布目录根部，便于人工和自动化工具直接读取。
     path_manifest = path_release_dir / "RELEASE_MANIFEST.json"  # 发布清单路径
 
-    # 先写 manifest，再继续补充 checksum、receipt 与 zip 产物。
+    # 先写 manifest，再执行清洗、checksum、receipt 与 zip 产物生成。
     _write_json_file(path_manifest, dict_manifest)
+
+    # 复用 agents-md-generator 的发布清洗规则，确保安装端可以回放同一策略。
+    dict_sanitization = _sanitize_release_copy(path_release_dir)  # 发布副本清洗收据
 
     # 为当前发布目录生成每个文件的 sha256 清单。
     list_checksum_entries = _write_checksums(path_release_dir)  # checksum 条目列表
 
+    # 清洗完成并写入 checksum 后，内容策略才与最终发布树一致。
+    dict_release_policy = _build_release_content_policy(path_release_dir)  # 发布内容策略收据
+
     # RELEASE_RECEIPT 是 installable release 的强制治理凭据。
-    path_receipt = _write_release_receipt(path_release_dir, str_version)  # 发布收据路径
+    path_receipt = _write_release_receipt(  # 发布收据路径
+        path_release_dir,  # 发布目录参数
+        str_version,  # 发布版本参数
+        dict_sanitization=dict_sanitization,  # 清洗收据参数
+        dict_release_policy=dict_release_policy,  # 内容策略参数
+    )
 
     # 目录内部验证完成后，最后一步才打成 zip 包。
     _write_zip(path_release_dir, path_zip)
@@ -424,7 +444,7 @@ def _read_cli_version() -> str:
         无。
 
     Returns:
-        从 `python -m scripts.python.cli.hls_generator --version` 输出中提取的版本号。
+        从 `python -m scripts.python.cli.readable_hls_generator --version` 输出中提取的版本号。
 
     Raises:
         ReleaseError: CLI 运行失败或 stdout 里无法解析出版本号时抛出。
@@ -438,7 +458,7 @@ def _read_cli_version() -> str:
 
     # 用当前 Python 解释器执行功能域 CLI 模块，避免跨环境差异。
     completed_process_obj_process: subprocess.CompletedProcess[str] = subprocess.run(  # CLI 版本查询结果
-        [sys.executable, "-m", "scripts.python.cli.hls_generator", "--version"],  # CLI 版本查询命令
+        [sys.executable, "-m", "scripts.python.cli.readable_hls_generator", "--version"],  # CLI 版本查询命令
         cwd=SKILL_ROOT,  # 在当前 skill 根目录执行
         env=dict_env,  # 使用前面准备好的 CLI 导入环境
         capture_output=True,  # 同时抓取 stdout 与 stderr 供版本失败诊断
@@ -577,23 +597,23 @@ def _copy_skill_tree(release_dir: Path) -> list[str]:
         release_dir: 已通过路径边界校验的目标发布目录。
 
     Returns:
-        使用 POSIX 风格记录的仓库相对路径列表。
+        使用 POSIX 风格记录的 skill 相对路径列表。
 
     Raises:
         OSError: 创建目录、复制文件或读取文件系统元数据时的异常向上传递。
     """
 
     # included_files 会写入 manifest，必须与最终 zip 内容保持稳定一致。
-    list_included: list[str] = []  # 被包含的仓库相对路径
+    list_included: list[str] = []  # 被包含的 skill 相对路径
 
     # 源文件顺序必须稳定，后续 checksum、manifest 与 zip 才能一致。
     for path_source in _sorted_release_sources(SKILL_ROOT):
 
-        # manifest 记录的是仓库相对路径，而不是发布目录内相对路径。
-        path_repo_relative = path_source.relative_to(REPO_ROOT)  # 源文件仓库相对路径
+        # 版本化 release 根必须直接暴露 SKILL.md 等 skill 文件。
+        path_skill_relative = path_source.relative_to(SKILL_ROOT)  # 源文件 skill 相对路径
 
-        # 目标路径保留原始仓库层级，方便安装后回溯来源位置。
-        path_destination = release_dir / path_repo_relative  # 发布目录目标路径
+        # 目标路径使用 skill 相对路径，符合安装器的扁平 release 合同。
+        path_destination = release_dir / path_skill_relative  # 发布目录目标路径
 
         # 父目录必须先存在，copy2 才能稳定落盘。
         path_destination.parent.mkdir(parents=True, exist_ok=True)
@@ -602,7 +622,7 @@ def _copy_skill_tree(release_dir: Path) -> list[str]:
         shutil.copy2(path_source, path_destination)
 
         # manifest 使用 POSIX 路径，保证跨平台下比较结果稳定。
-        list_included.append(path_repo_relative.as_posix())
+        list_included.append(path_skill_relative.as_posix())
 
     # 返回稳定路径清单给 manifest 与 CLI 摘要复用。
     return list_included
@@ -762,13 +782,306 @@ def _write_checksums(release_dir: Path) -> list[str]:
     # 返回条目列表给主流程统计数量并写入对外摘要。
     return list_entries
 
+# 发布规则模块必须与安装器同源，避免收据字段自行漂移。
+def _load_release_governance_modules() -> tuple[Any, Any]:
+    """加载 agents-md-generator 的发布内容策略与清洗实现。
+
+    Args:
+        无；模块位置由 `CODEX_HOME` 或本机默认安装位置解析。
+
+    Returns:
+        `(release_content_policy, release_policy)` 模块元组。
+
+    Raises:
+        ReleaseError: 当前环境没有可用的 agents-md-generator 发布模块。
+    """
+
+    # 先尝试调用方已经配置好的 Python 模块路径，避免修改运行环境。
+    try:
+
+        # 生产调用通常已经把两个发布模块放在 PYTHONPATH 中。
+        module_content_policy: Any = importlib.import_module("release_content_policy")  # 内容策略模块
+
+        # 清洗模块负责发布副本改写和历史文件摘要。
+        module_release_policy: Any = importlib.import_module("release_policy")  # 清洗与历史快照模块
+
+        # 两个模块来自同一运行环境时才允许继续打包。
+        return module_content_policy, module_release_policy
+
+    # 未配置模块路径时继续探测标准 Codex 安装位置。
+    except ImportError:
+
+        # 当前异常只表示导入路径未准备好，后续候选路径仍可恢复。
+        pass
+
+    # CODEX_HOME 允许受管运行器显式指定技能安装根。
+    list_codex_roots: list[Path] = []  # 待探测的 Codex 根目录
+
+    # 读取显式 Codex 根，支持受管运行器覆盖默认安装位置。
+    str_codex_home = os.environ.get("CODEX_HOME", "").strip()  # 可选 Codex 根环境变量
+
+    # 只有非空环境变量才转换为路径，避免产生当前目录候选。
+    if str_codex_home:
+
+        # 环境变量优先于用户目录默认值。
+        list_codex_roots.append(Path(str_codex_home))
+
+    # 本机默认安装位置覆盖未设置 CODEX_HOME 的开发终端。
+    path_default_codex_root = Path.home() / ".codex"  # 本机默认 Codex 根
+
+    # 仅在显式路径没有重复出现时追加默认根。
+    if path_default_codex_root not in list_codex_roots:
+
+        # 同一根目录不重复加入候选列表。
+        list_codex_roots.append(path_default_codex_root)
+
+    # 去重后逐一加入 release/docs 两个模块目录。
+    list_module_roots: list[Path] = []  # 已解析的 agents-md-generator 模块目录
+
+    # 每个 Codex 根目录都贡献一组 release/docs 模块路径。
+    for path_codex_root in list_codex_roots:
+
+        # 两个模块分别位于已安装技能的 release 与 docs 子目录。
+        list_module_roots.extend(
+            [
+                path_codex_root / "skills" / "agents-md-generator" / "scripts" / "python" / "common",
+                path_codex_root / "skills" / "agents-md-generator" / "scripts" / "python" / "release",
+                path_codex_root / "skills" / "agents-md-generator" / "scripts" / "python" / "docs",
+            ]
+        )
+
+    # 只有存在的目录才进入 sys.path，避免污染模块搜索。
+    for path_module_root in list_module_roots:
+
+        # 缺失目录不是错误，继续尝试下一个已安装位置。
+        if not path_module_root.is_dir():
+
+            # 当前候选无效，保留后续候选恢复机会。
+            continue
+
+        # 插入头部确保当前受管版本优先于旧缓存。
+        str_module_root: str = str(path_module_root)  # 当前模块目录字符串
+
+        # 仅在路径尚未出现时插入，避免同一模块目录重复排列。
+        if str_module_root not in sys.path:
+
+            # release 与 docs 模块必须共享同一安装版本。
+            sys.path.insert(0, str_module_root)
+
+        # 当前候选目录需要通过成对导入检查。
+        try:
+
+            # 两个模块都成功加载后才返回，避免规则版本混用。
+            module_content_policy: Any = importlib.import_module("release_content_policy")  # 已安装的内容扫描入口
+
+            # 当前候选目录提供清洗与历史快照实现。
+            module_release_policy: Any = importlib.import_module("release_policy")  # 已安装的清洗快照入口
+
+            # 两个模块都来自当前候选安装目录。
+            return module_content_policy, module_release_policy
+
+        # 当前候选可能只有一个子目录，继续等待另一候选补齐。
+        except ImportError:
+
+            # 清理内容策略模块缓存，防止下一候选沿用错误版本。
+            sys.modules.pop("release_content_policy", None)
+
+            # 清理发布策略模块缓存，保证下一候选成对加载。
+            sys.modules.pop("release_policy", None)
+
+    # 缺少同源模块时不能生成安装器无法复核的收据。
+    # 没有治理模块时不能生成安装器无法复核的旧版收据。
+    raise ReleaseError(
+        "> ERR: [Python] agents-md-generator release policy modules are required; "
+        "install the governed skill or configure CODEX_HOME."
+    )
+
+# 使用治理清洗器处理版本化发布副本。
+def _sanitize_release_copy(release_dir: Path) -> dict[str, Any]:
+    """按 agents-md-generator 当前清洗合同处理版本化发布副本。
+
+    Args:
+        release_dir: 已复制 skill 内容的版本化发布目录。
+
+    Returns:
+        与安装端一致的 sanitization 收据区块。
+
+    Raises:
+        ReleaseError: 清洗策略发现阻断项或治理配置不可读。
+        OSError: 读取配置或修改发布副本时的文件系统异常向上传递。
+    """
+
+    # 发布清洗策略读取仓库治理配置，而不是从技能正文推断。
+    path_profile = REPO_ROOT / ".agents" / "agents-control.json"  # 发布治理配置路径
+
+    # 配置文件读取必须先通过独立异常边界。
+    try:
+
+        # JSON 配置是当前仓库发布合同的唯一来源。
+        dict_profile: dict[str, Any] = json.loads(path_profile.read_text(encoding="utf-8"))  # 发布治理配置
+
+    # 配置损坏时不能生成无法复核的发布收据。
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+
+        # 将底层异常转成发布脚本稳定错误协议。
+        raise ReleaseError(f"> ERR: [Python] unable to read release profile: {path_profile}") from exc
+
+    # 发布模块由 agents-md-generator 提供，保证清洗规则与安装器同源。
+    tuple_governance_modules: tuple[Any, Any] = _load_release_governance_modules()  # 同源治理模块
+
+    # 从同源模块元组取出发布副本清洗实现。
+    module_release_policy: Any = tuple_governance_modules[1]  # 发布副本清洗与历史快照
+
+    # 清洗函数返回收据区块和可恢复的规则错误列表。
+    tuple_sanitization_result: tuple[dict[str, Any], list[str]] = module_release_policy.sanitize_release_tree(  # 清洗调用
+        dict_profile,  # 传入清洗器的治理映射
+        "skill",  # 技能项目类型
+        SKILL_ROOT,  # 技能源码根
+        release_dir,  # 发布副本根
+    )  # 清洗收据与错误列表
+
+    # 清洗区块随后写入发布收据。
+    dict_sanitization: dict[str, Any] = tuple_sanitization_result[0]  # 清洗收据
+
+    # 清洗错误必须在 checksum 生成前处理。
+    list_errors: list[str] = tuple_sanitization_result[1]  # 清洗错误
+
+    # 任何清洗诊断都必须在 checksum 生成前阻断，避免摘要失真。
+    if list_errors:
+
+        # 合并全部规则命中，帮助调用方一次性修复。
+        raise ReleaseError(
+            "> ERR: [Python] release sanitization failed: "
+            + "; ".join(str(item) for item in list_errors)
+        )
+
+    # 保留治理模块主字段，并把历史 required 名称映射到当前清洗启用状态。
+    dict_sanitization = dict(dict_sanitization)  # 可扩展的清洗收据副本
+
+    # 兼容旧调用方时优先沿用已有 required，其次读取当前清洗启用字段。
+    value_required = dict_sanitization.get("required")  # 历史 required 原始值
+
+    # 缺少旧字段时回退到当前收据的显式必需标志。
+    if value_required is None:
+
+        # 读取 v2.1.1 清洗器的 receipt_required 字段。
+        value_required = dict_sanitization.get("receipt_required")  # 当前清洗收据必需值
+
+    # 两个字段都缺少时再使用 enabled 作为最终回退。
+    if value_required is None:
+
+        # 以 enabled 覆盖更旧清洗模块缺少必需字段的情况。
+        value_required = dict_sanitization.get("enabled", False)  # 当前清洗启用值
+
+    # 统一转换为布尔值，避免旧收据字段携带非布尔真值。
+    bool_required = bool(value_required)  # 历史 required 兼容值
+
+    # 把兼容布尔值写入收据，同时保留 v2.1.1 主字段不变。
+    dict_sanitization["required"] = bool_required  # 历史清洗必需标志
+
+    # 返回含兼容别名的治理结构，安装端仍以 enabled/receipt_required 为准。
+    return dict_sanitization
+
+# 生成发布树内容策略收据。
+def _build_release_content_policy(release_dir: Path) -> dict[str, Any]:
+    """分析源码与发布副本并生成安装端可回放的内容策略收据。
+
+    Args:
+        release_dir: 已清洗并写入 checksum 的版本化发布目录。
+
+    Returns:
+        与 agents-md-generator 安装验证器一致的策略收据区块。
+
+    Raises:
+        ReleaseError: 源码或发布副本命中禁止路径、顶层结构或公开合同错误。
+    """
+
+    # 内容策略模块负责公开文件、README 插图和目录白名单的统一分析。
+    tuple_governance_modules: tuple[Any, Any] = _load_release_governance_modules()  # 内容策略运行时模块
+
+    # 从同源模块元组取出公开文件与目录扫描实现。
+    module_content_policy: Any = tuple_governance_modules[0]  # 发布内容扫描器
+
+    # 发布树分析必须覆盖 checksum 等最终写入的文件。
+    dict_release_analysis: dict[str, Any] = module_content_policy.analyze_release_content_root(  # 发布树分析
+        release_dir,  # 待复核的版本目录
+        strict_public_contract=True,  # 启用公开文件强校验
+    )
+
+    # 源码分析只提取需要写入收据的禁止路径证据。
+    dict_source_analysis: dict[str, Any] = module_content_policy.analyze_release_content_root(  # 源码树分析
+        SKILL_ROOT,  # 需要写入收据的源码根
+        allow_source_only_repo_local=True,  # 保留源码开发态扫描
+        strict_public_contract=True,  # 同步执行源码公开合同
+    )
+
+    # 两侧任何阻断事实都不能被收据字段掩盖。
+    list_errors: list[str] = [  # 内容策略错误
+        *dict_source_analysis.get("forbidden_paths", []),  # 源码禁入路径
+        *dict_release_analysis.get("forbidden_paths", []),  # 发布树禁入路径
+        *dict_release_analysis.get("unexpected_top_level_entries", []),  # 顶层结构偏差
+        *dict_release_analysis.get("public_skill_errors", []),  # 公开文件合同错误
+    ]
+
+    # 非空错误集合表示发布树不能进入安装阶段。
+    if list_errors:
+
+        # 保留原始相对路径或合同错误，便于发布者定位问题。
+        raise ReleaseError(
+            "> ERR: [Python] release content policy failed: "
+            + "; ".join(str(item) for item in list_errors)
+        )
+
+    # 收据区块只记录安装端需要重放的稳定字段。
+    return dict(
+        module_content_policy.release_content_policy_receipt(
+            dict_release_analysis,
+            forbidden_source_paths=list(dict_source_analysis.get("forbidden_paths", [])),
+        )
+    )
+
+# 记录当前版本之外的 dist 历史文件摘要。
+def _list_other_version_artifacts(dist_root: Path, version: str) -> list[dict[str, str]]:
+    """记录当前版本之外的 dist 文件快照，保护逐版本历史不可变性。
+
+    Args:
+        dist_root: 仓库内 dist 根目录。
+        version: 当前正在生成的版本号。
+
+    Returns:
+        按项目相对路径排序的历史文件摘要列表。
+    """
+
+    # 当前目录和 zip 是本次允许变化的两个目标。
+    set_excluded: set[str] = {  # 当前版本允许变化的路径
+        f"dist/{PACKAGE_NAME}-v{version}",  # 当前版本目录
+        f"dist/{PACKAGE_NAME}-v{version}.zip",  # 当前版本压缩包
+    }
+
+    # 使用治理模块的同源快照算法，避免手工遗漏嵌套历史文件。
+    tuple_governance_modules: tuple[Any, Any] = _load_release_governance_modules()  # 历史快照运行时模块
+
+    # 从同源模块元组取出历史产物摘要实现。
+    module_release_policy: Any = tuple_governance_modules[1]  # 历史产物快照器
+
+    # 快照路径以仓库根为基准，便于发布门禁直接比较。
+    return list(module_release_policy.dist_artifact_snapshot(dist_root.parent, set_excluded))
+
 # `_write_release_receipt` 写出 installable release 必需的治理收据。
-def _write_release_receipt(release_dir: Path, version: str) -> Path:
+def _write_release_receipt(
+    release_dir: Path,
+    version: str,
+    *,
+    dict_sanitization: dict[str, Any],
+    dict_release_policy: dict[str, Any],
+) -> Path:
     """写出 installable release 必需的发布收据。
 
     Args:
         release_dir: 当前版本的发布目录。
         version: 要写入收据中的 SemVer 发布版本号。
+        dict_sanitization: agents-md-generator 清洗收据区块。
+        dict_release_policy: agents-md-generator 内容策略收据区块。
 
     Returns:
         已写出的 `RELEASE_RECEIPT.json` 路径。
@@ -780,19 +1093,50 @@ def _write_release_receipt(release_dir: Path, version: str) -> Path:
     # 收据文件名是 release contract 明确要求的固定名称。
     path_receipt = release_dir / "RELEASE_RECEIPT.json"  # 收据文件路径
 
-    # 收据除了记录版本和文件清单，还要声明 sanitization 已完成。
+    # 当前仓库的相对源码路径绑定发布包与对应 skill body。
+    str_source_path = SKILL_ROOT.relative_to(REPO_ROOT).as_posix()  # 发布源码相对路径
+
+    # Git 字段用于强验证来源和安装后的历史追踪。
+    str_current_branch = _optional_git_output(["branch", "--show-current"])  # 当前检出分支
+
+    # 分支列表决定发布收据是否能声明强来源。
+    str_branch_output = _optional_git_output(["branch", "--list"])  # 本地分支原始输出
+
+    # 将 Git 装饰标志清理成稳定的本地分支集合。
+    list_local_branches = sorted(  # 收据 local_branches 字段用此集合验证受保护分支齐全
+        str_line.strip().lstrip("*+ ").strip()  # 当前分支文本
+        for str_line in str_branch_output.splitlines()  # 读取 Git 分支文本
+        if str_line.strip()  # 忽略空行
+    ) if str_branch_output != "unavailable" else []  # 无 Git 时保留空拓扑
+
+    # 短状态输出用于记录生成收据时的工作区事实。
+    str_status_output = _optional_git_output(["status", "--short"])  # 工作区状态输出
+
+    # 只有成功读取且没有状态行才声明工作区干净。
+    bool_worktree_clean = str_status_output != "unavailable" and not str_status_output.strip()  # 工作区是否干净
+
+    # 分支和本地拓扑都可读时才建立强验证来源。
+    bool_repository_context = str_current_branch != "unavailable" and bool(list_local_branches)  # 是否可强验证
+
+    # 收据除了记录版本和文件清单，还要声明完整 sanitization 合同。
     dict_receipt = {  # 发布收据内容
-        "version": version,  # 收据记录的发布版本
+        "skill_name": PACKAGE_NAME,  # 收据记录的技能名称
+        "version": f"v{version}",  # 收据版本与版本化发布目录保持一致
+        "source_path": str_source_path,  # 收据记录的源码相对路径
         "tag": f"v{version}",  # 收据记录的发布标签
         "package": PACKAGE_NAME,  # 收据记录的包名
         "generated_at": _utc_timestamp(),  # 收据生成时间
+        "current_branch": str_current_branch,  # 收据记录的当前分支
+        "local_branches": list_local_branches,  # 收据记录的本地分支
+        "worktree_clean": bool_worktree_clean,  # 收据记录的工作区状态
+        "phase_results": {"pre": True, "post": True},  # 发布前后阶段结果
+        "packaging_mode": "repository-dist",  # 当前发布目录模式
+        "validation_level": "strong" if bool_repository_context else "reduced_assurance",  # 来源验证强度
+        "provenance_mode": "repository-dist" if bool_repository_context else "external-copy",  # 来源证明模式
         "files": _release_file_manifest(release_dir, receipt_name=path_receipt.name),  # 收据文件清单
-        "sanitization": {  # 脱敏治理摘要
-            "required": True,  # 发布前必须执行脱敏
-            "mode": "auto-redact-dist-copy",  # 当前脱敏模式
-            "status": "completed",  # 当前脱敏状态
-            "files": [],  # 暂无额外逐文件脱敏记录
-        },
+        "sanitization": dict_sanitization,  # 脱敏治理摘要
+        "release_content_policy": dict_release_policy,  # 发布内容策略摘要
+        "other_version_artifacts": _list_other_version_artifacts(REPO_ROOT / "dist", version),  # 历史产物快照
     }
 
     # 先把收据落盘，再让上游把它计入最终摘要与 zip。

@@ -263,7 +263,7 @@ def resolve_host_template_path(path_skill_root: Path, str_template_name: str) ->
     """解析 board host 模板文件路径。
 
     Args:
-        path_skill_root: erie-hls-generator 技能根目录。
+        path_skill_root: readable-hls-generator 技能根目录。
         str_template_name: workflow.board_acceptance.host_template 中的模板名称。
 
     Returns:

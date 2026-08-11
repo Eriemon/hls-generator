@@ -31,14 +31,23 @@ The HLS readability gate adapts maintainability ideas from readable governance i
 | HG022 | error | dataflow/stream | DATAFLOW/STREAM channel comments lack FIFO depth, producer-consumer relation, or stage overlap explanation. |
 | HG023 | error | pragma/ports | Interface pragma contradicts inferred port role, for example an input pointer assigned an output-only interface comment. |
 | HG024 | warning | line/AST bridge | Multi-line declaration or function signature may escape line-based comment checks. Add a nearby contract or keep a single-line declaration if practical. |
+| HG025 | error | typed-prefix | Top ports, ordinary parameters, local declarations, and assignment targets must use a typed-prefix derived from inferred type, payload family, or storage form. `ref_` is forbidden, and `alias_` may only appear as a secondary semantic token after the real typed-prefix. |
+| HG026 | note | typed-prefix | The gate cannot reliably infer a typed-prefix family from the available type context, so it emits a manual-review note instead of inventing a rename. |
+| HG027 | error | typed-prefix boundary | The required typed-prefix rename touches a public parameter, assignment target, or custom-type boundary that must be reviewed manually instead of auto-renamed blindly. |
+| HG028 | error | print boundary | Human-facing HLS transcript output must use `> INFO: [HLS] ...`, `> WARNING: [HLS] ...`, or `> ERR: [HLS] ...`. Naked `PASS/FAIL`, raw `printf`, `fprintf(stdout/stderr, ...)`, `puts`, `std::cout`, `std::cerr`, and `std::clog` output are blocked. |
+| HG029 | error | comment similarity | Generic/vague comments are still blocked by HG006, and repeated or highly similar comment text is additionally blocked when the file contains exact duplicates, template-marker near duplicates, or function-local high-similarity comment reuse. |
+| HG030 | error | comment syntax | HLS comments must use `//` single-line comments or contiguous `//` blocks only. `/* ... */`, `/** ... */`, and block-comment continuation lines are not legal comment syntax in current-project style. |
+| HG031 | error | formatting | Short control headers, ordinary local declarations, and ordinary assignments must stay on one line when the merged statement fits the configured line limit. Function signatures, long template types, initializer lists, and genuinely over-limit statements are exempt. |
 
 ## HLS-specific adaptations
 
-HLS code does not mechanically reuse Python typed-prefix or docstring rules. Instead, this catalog maps general readability ideas to HLS concepts:
+HLS code now reuses the Python-side typed-prefix and comment-dedup intent at the policy level, while still mapping them onto HLS concepts:
 
 - Inline purpose comments become HG005 for single-line local C/C++ declarations and assignments. HLS often uses long template types, arrays, and streams, so profiles can exempt long or multi-line declarations from right-side comments. The exemption is not silent: HG024 keeps the construct visible to reviewers.
-- Naming discipline becomes HG014 HLS-aware naming. `i/j/k` are allowed as tight loop indexes, but streams should include stream/channel semantics, AXIS packets should include axis/word/token/packet semantics, accumulators should include acc/sum plus the accumulated domain, and arrays/buffers should carry shape or role hints.
-- Public contract comments become HG007/HG008/HG015/HG009/HG010/HG011 contracts covering file role, function role, top ports, pragmas, loops, and testbench acceptance.
+- Naming discipline splits into HG014 plus HG025/HG026/HG027. HG014 still rejects vague names such as `tmp` or `value`, while the typed-prefix rules require prefixes such as `bool_`, `int_`, `uint_`, `ptr_`, `arr_`, `stream_`, `axis_`, or an explicit custom typedef prefix. `ref_` is banned; if alias semantics must be exposed, use `typeprefix_alias_*`.
+- Public contract comments become HG007/HG008/HG015/HG009/HG010/HG011 contracts covering file role, function role, top ports, pragmas, loops, and testbench acceptance. HG007 now requires the file head to be a contiguous `//` contract block, and HG008 requires every checked function contract to contain `职责：`, `参数：`, `返回：`, and `副作用：`.
+- Comment quality now has a second line of defense after HG006. HG029 blocks exact duplicate and near-duplicate Chinese comment reuse, and HG030 forbids block-comment syntax so contract text stays line-oriented and reviewable.
+- HG031 closes the line-based detection gap for avoidable formatting splits. It reports the first physical line, the merged statement excerpt, and a direct single-line repair instruction while leaving genuinely long C++ constructs to HG024 review.
 
 ## AST provider behavior
 

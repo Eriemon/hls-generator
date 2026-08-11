@@ -83,7 +83,7 @@ class SpecTemplate:
 
 # 解析当前脚本所在技能根，所有输出路径都从这里派生。
 def skill_root() -> Path:
-    """返回当前 erie-hls-generator 技能根目录。
+    """返回当前 readable-hls-generator 技能根目录。
 
     参数:
         无外部业务参数。

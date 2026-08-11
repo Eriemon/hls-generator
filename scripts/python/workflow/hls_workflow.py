@@ -2709,7 +2709,7 @@ def _write_remote_toolchain_request(
                 "Select one enabled erie server id or name before any SSH execution."  # 在任何 SSH 操作前必须先明确选定目标服务器
             ),
         },
-        "hls_generator_remote_commands": list_remote_commands,  # 远端服务器选定后需要依次执行的 hls-generator 命令
+        "hls_generator_remote_commands": list_remote_commands,  # 远端服务器选定后需要依次执行的 readable-hls-generator 命令
         "remote_artifact_policy": {  # 远端验证目录默认保留并允许用户显式覆盖清理策略
             "default": "retain",  # 远端验证成功后默认保留目录供人工复核
             "location": (  # helper 报告里返回的 remote_dir 相对工作区位置说明
@@ -2723,7 +2723,7 @@ def _write_remote_toolchain_request(
         },
         "remote_vitis_version_policy": {  # 远端 Vitis 版本发现、多版本选择与配置持久化策略
             "default": "scan_and_require_choice_when_multiple",  # 多版本时先扫描再要求用户确认
-            "user_config_path": "~/.hls-generator/config.json",  # 保存远端版本偏好的本地配置路径
+            "user_config_path": "~/.readable-hls-generator/config.json",  # 保存远端版本偏好的本地配置路径
             "selection_override": (  # 用户显式指定时优先保存并复用远端 Vitis 版本
                 "Pass --vitis-version <version> to save and use a specific remote "
                 "Vitis version for the selected server."

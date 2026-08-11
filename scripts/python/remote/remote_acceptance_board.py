@@ -1593,14 +1593,14 @@ def _board_platform_recommended_commands(
         "python %CODEX_HOME%/skills/erie-remote-ssh/scripts/remote_ssh.py request-upload "
         f"--settings <erie-settings.json> --server {server} "
         "--local <local-platform-archive> "
-        f"--remote erie-hls-generator/platforms/alveo/{str_platform_name}.tar.gz "
+        f"--remote readable-hls-generator/platforms/alveo/{str_platform_name}.tar.gz "
         "--reason \"upload U55C platform payload\""
     )  # 平台归档上传参考命令
 
     # 解压命令中的远端平台根目录必须经过 shell quote。
     str_extract_inner = (
         f"mkdir -p {shlex.quote(dict_selection['remote_platform_root'])} && "
-        f"tar -xzf erie-hls-generator/platforms/alveo/{str_platform_name}.tar.gz "
+        f"tar -xzf readable-hls-generator/platforms/alveo/{str_platform_name}.tar.gz "
         f"-C {shlex.quote(dict_selection['remote_platform_root'])} --strip-components=1"
     )  # 远端平台归档解压命令体
 

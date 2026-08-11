@@ -32,7 +32,7 @@ def main() -> int:
         sys.path.insert(0, str_governance_dir)
 
     # 路径准备完成后再导入委托模块。
-    from _skill_tool_delegate import agents_md_generator_script, run_delegate
+    from skill_tool_delegate import agents_md_generator_script, run_delegate
 
     # 转交给统一治理脚本，保持本地 wrapper 行为稳定。
     return run_delegate(agents_md_generator_script("inspect_project.py"))

@@ -28,7 +28,7 @@ from typing import Any, Callable, Iterator
 path_module_dir = Path(__file__).resolve().parent  # 当前 remote 脚本目录
 
 # skill 根目录用于直接执行脚本时导入 scripts.python 包。
-path_skill_root = Path(__file__).resolve().parents[3]  # erie-hls-generator 技能根目录
+path_skill_root = Path(__file__).resolve().parents[3]  # readable-hls-generator 技能根目录
 
 # 直接按文件路径加载 facade 时，也要能解析同目录 short import 与 skill 内包导入。
 site.addsitedir(str(path_module_dir))
@@ -309,7 +309,7 @@ func_orig_upload_local_board_platform_payload: Callable[..., Any] = _rb._upload_
 
 # 远端 pytest 源码快照只包含当前仓库的受控源文件和测试资产。
 TUPLE_REMOTE_PYTEST_SOURCE_INCLUDED_DIRS = (  # 允许进入远端 pytest 快照的源码目录
-    Path("skills") / "erie-hls-generator",  # 当前技能主体源码与资产
+    Path("skills") / "readable-hls-generator",  # 当前技能主体源码与资产
     Path("tests"),  # 仓库级 pytest 回归用例
 )
 
@@ -672,8 +672,8 @@ def run_acceptance(args: argparse.Namespace) -> dict[str, Any]:
         dict[str, Any]: 远端验收结果报告。
     """
 
-    # core 依赖必须先满足，避免远端流程执行到一半才失败。
-    require_skill_dependencies(skill_dependencies_config(), scopes={"core"})
+    # 远端验收入口只要求 remote scope 依赖，避免误把本地 core 路径绑定到远端链路。
+    require_skill_dependencies(skill_dependencies_config(), scopes={"remote"})
 
     # 远端验收配置来自技能治理配置和用户本地配置。
     dict_config = remote_validation_config()  # 远端验收配置
@@ -1013,7 +1013,7 @@ def _create_remote_pytest_source_archive(path_run_dir: Path) -> Path:
         Path: 生成的 tar.gz 源码快照路径。
     """
 
-    # 当前技能根固定在 repo_root/skills/erie-hls-generator。
+    # 当前技能根固定在 repo_root/skills/readable-hls-generator。
     path_repo_root = path_skill_root.parents[1]  # 当前工作树根目录
 
     # 归档名称带 run id，避免多轮远端 pytest 上传互相覆盖。
@@ -1144,7 +1144,7 @@ def _prepare_remote_pytest_source_snapshot(
         f"tar -xzf {shlex.quote(path_remote_archive.as_posix())} "
         f"-C {shlex.quote(path_remote_source_root.as_posix())} && "
         f"test -d {shlex.quote((path_remote_source_root / 'tests').as_posix())} && "
-        f"test -d {shlex.quote((path_remote_source_root / 'skills' / 'erie-hls-generator').as_posix())}"
+        f"test -d {shlex.quote((path_remote_source_root / 'skills' / 'readable-hls-generator').as_posix())}"
     )
 
     # 解压和校验也走 request-command，避免不可审计的远端状态变化。

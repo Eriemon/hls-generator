@@ -350,7 +350,7 @@ def _comment_quality_summary(list_issues: list[HlsGateIssue]) -> dict[str, Any]:
     """
 
     # 注释质量相关的 HLS 规则编号
-    set_comment_rules = {f"HG{int_index:03d}" for int_index in range(1, 12)}  # HG001-HG011 全部计入注释质量摘要
+    set_comment_rules = {*(f"HG{int_index:03d}" for int_index in range(1, 12)), "HG029", "HG030"}  # HG001-HG011 加上注释去重与块注释语法门禁
 
     # 统计已聚合问题中属于注释质量规则的数量
     int_comment_issue_count = sum(1 for obj_issue in list_issues if obj_issue.rule in set_comment_rules)  # 从总问题集中筛出注释质量规则命中的条数

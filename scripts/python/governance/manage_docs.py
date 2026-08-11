@@ -31,7 +31,7 @@ from typing import Any
 sys.dont_write_bytecode = True  # 当前治理包装层禁写 Python 字节码缓存
 
 # 委托 helper 负责定位 agents-md-generator 中的真实治理脚本。
-from _skill_tool_delegate import agents_md_generator_script, run_delegate_retrying_transient_fs
+from skill_tool_delegate import agents_md_generator_script, run_delegate_retrying_transient_fs
 
 # release 打包时不应进入 dist 的顶层治理和缓存目录。
 TOP_LEVEL_EXCLUDES = {  # release 顶层排除项集合

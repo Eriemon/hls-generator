@@ -57,11 +57,26 @@ def workspace_root() -> Path:
         # 返回规范化后的覆盖路径，避免相对路径影响边界判断。
         return path_override.resolve()
 
-    # 使用当前进程目录作为默认 workspace root。
-    path_current_root = Path.cwd().resolve()  # 默认工作区根目录
+    # 先解析当前进程目录，供“仓库内执行”和“仓库外执行”分支共用。
+    path_current_root = Path.cwd().resolve()  # 当前进程工作目录
 
-    # 返回给所有路径约束函数复用。
-    return path_current_root
+    # 仓库内任意子目录直接执行时，也要把 reports 等相对输出锚定回仓库根。
+    path_repo_root = repo_root()  # 当前技能所属仓库根目录
+
+    # 当前目录不在仓库内时，仍保留调用方自己的工作目录语义。
+    try:
+
+        # relative_to 成功说明当前执行位置位于受管仓库内部。
+        path_current_root.relative_to(path_repo_root)
+
+    # 仓库外执行保留原本的 cwd 语义，兼容外部调用方的独立工作区。
+    except ValueError:
+
+        # 返回仓库外调用方自己的工作目录。
+        return path_current_root
+
+    # 仓库内执行统一回到仓库根，避免 reports 被写进 skill 子目录。
+    return path_repo_root
 
 # 临时覆盖 workspace root，供嵌套 workflow 在指定根目录下解析路径。
 def use_workspace_root(root: Path) -> ContextManager[Path]:

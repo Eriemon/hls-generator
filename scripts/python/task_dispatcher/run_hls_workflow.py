@@ -24,7 +24,7 @@ def _configure_import_path() -> None:
         无业务返回值；函数只在必要时更新 ``sys.path``。
     """
 
-    # 根据当前脚本位置定位 erie-hls-generator 技能根目录
+    # 根据当前脚本位置定位 readable-hls-generator 技能根目录
     path_skill_root = Path(__file__).resolve().parents[3]  # 技能包根目录路径
 
     # sys.path 中保存字符串路径，先规整成可比较文本
@@ -50,7 +50,7 @@ def build_parser() -> argparse.ArgumentParser:
     # argparse 解析器集中保存 CLI 协议和帮助文本
     parser = argparse.ArgumentParser(description="Classify an HLS task and show required readability gates.")  # CLI 参数解析器
 
-    # 请求文本是 HLS 调度器判断 generate/modify/explain 的主输入
+    # 请求文本是 HLS 调度器判断内部 mode 与 readable-HLS route 的主输入
     parser.add_argument("request", help="Natural-language HLS request text.")
 
     # 目标路径用于已有 HLS 代码的修改或注释治理流程
@@ -104,6 +104,9 @@ def main(argv: list[str] | None = None) -> int:
         # 把模式提取成标量字符串，便于终端摘要直接复用。
         str_mode = hls_dispatch_decision_result.mode  # 当前请求匹配到的 HLS 工作流模式
 
+        # route 用 create/write/review/annotate/validate 表达对外路线。
+        str_route = hls_dispatch_decision_result.route  # 当前请求匹配到的 readable-HLS 路线
+
         # 仅注释标记决定后续是否允许进入带语义改写风险的流程。
         bool_comment_only = hls_dispatch_decision_result.comment_only  # 当前请求是否限制为仅注释改写
 
@@ -115,6 +118,9 @@ def main(argv: list[str] | None = None) -> int:
 
         # 输出分流模式，便于人工先确认当前请求会进入哪条工作流。
         print(f"> INFO: [Python] mode: {str_mode}")
+
+        # 输出 readable-HLS 路线，便于人工区分审查、标注和验证。
+        print(f"> INFO: [Python] route: {str_route}")
 
         # 输出仅注释标记，提醒调用方是否需要附带基线保护。
         print(f"> INFO: [Python] comment_only: {bool_comment_only}")

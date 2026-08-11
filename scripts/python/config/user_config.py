@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 # 指向用户配置文件的环境变量名称，便于测试和本地覆盖。
-USER_CONFIG_ENV = "HLS_GENERATOR_USER_CONFIG"  # 用户配置路径覆盖环境变量
+USER_CONFIG_ENV = "READABLE_HLS_GENERATOR_USER_CONFIG"  # 用户配置路径覆盖环境变量
 
 # HLS 生成阶段允许的注释语言集合。
 COMMENT_LANGUAGES = ("en", "zh")  # 注释语言协议值
@@ -35,7 +35,7 @@ def user_config_path() -> Path:
         return Path(str_override).expanduser().resolve()
 
     # 使用用户主目录下的稳定默认位置。
-    path_default_config = Path.home() / ".hls-generator" / "config.json"  # 默认配置文件路径
+    path_default_config = Path.home() / ".readable-hls-generator" / "config.json"  # 默认配置文件路径
 
     # 返回规范化后的默认配置文件路径。
     return path_default_config.resolve()
@@ -226,12 +226,12 @@ def comment_language_request() -> dict[str, Any]:
         "version": 1,  # 请求载荷 schema 版本
         "action": "record_comment_language_default",  # 兼容旧 workflow 的动作名
         "primary_source": "strict_chinese_comment_policy",  # 默认中文策略来源
-        "question": "当前 HLSGenerator 默认使用中文注释；无需再为 auto 模式选择语言。",  # 面向用户的确认说明
+        "question": "当前 readable-hls-generator 默认使用中文注释；无需再为 auto 模式选择语言。",  # 面向用户的确认说明
         "options": [{"value": "zh", "label": "中文注释"}],  # 旧交互界面可展示的唯一推荐选项
         "user_config_path": str(user_config_path()),  # 当前本地偏好文件的绝对路径文本
         "persistence": "可继续保存 comment_language，但生成、校验和 mock 输出都会执行中文注释规范。",  # 持久化兼容说明
         "recommended_commands": [  # 用户手动保存偏好的兼容命令
-            "python -m scripts.python.cli.hls_generator user-config --set-comment-language zh",  # 保存中文注释偏好的命令
+            "python -m scripts.python.cli.readable_hls_generator user-config --set-comment-language zh",  # 保存中文注释偏好的命令
         ],
     }
 

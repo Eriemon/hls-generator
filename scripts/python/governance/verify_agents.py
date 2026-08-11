@@ -19,11 +19,17 @@ from pathlib import Path
 from typing import Any, TextIO, cast
 from urllib.parse import urlsplit
 
+# 阻止当前包装层进程在源码树里回写 __pycache__。
+sys.dont_write_bytecode = True  # 当前治理包装层禁写 Python 字节码缓存
+
 # 本地委托解析器集中维护已安装 agents-md-generator 的脚本路径。
-from _skill_tool_delegate import agents_md_generator_script
+from skill_tool_delegate import agents_md_generator_script
 
 # 根 AGENTS 中的相对路径引用会驱动官方 verifier 的路径存在性检查。
 PATH_REFERENCE_PATTERN = re.compile(r"(?P<path>\.?[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+)")  # AGENTS Markdown 中常见的相对路径片段
+
+# 临时 CODEX_HOME 必须保留双 readable skill 的真实安装事实，但不复制技能实现。
+READABLE_SKILL_NAMES = ("readable-python-generator", "readable-script-generator")  # 语言路由依赖的技能目录名
 
 # 这些文本只对应旧 agents-md-generator 尚未理解本仓库新注释策略时的误报。
 SEMANTIC_TRAILING_ERROR_MARKERS = (  # 可被本地兼容层过滤的旧规则错误片段。
@@ -732,6 +738,12 @@ def build_delegate_environment(project: Path, installed_skill_dir: Path) -> tupl
     # 无论是否切到 temp CODEX_HOME，都显式暴露真实 installed skill 目录。
     dict_delegate_env["AGENTS_MD_INSTALLED_SKILL_DIR"] = str(installed_skill_dir)  # 委托验证器应使用的真实 installed skill 根目录。
 
+    # 子进程输入输出统一使用 UTF-8，避免 Windows 默认代码页损坏中文治理诊断。
+    dict_delegate_env["PYTHONUTF8"] = "1"  # 委托 Python UTF-8 模式开关
+
+    # 标准流显式声明 UTF-8，使委托脚本与父进程保持同一编码合同。
+    dict_delegate_env["PYTHONIOENCODING"] = "utf-8"  # 委托标准流编码
+
     # 先解析真实 CODEX_HOME 根目录，避免 temp 镜像再反向引用自身。
     # 先读取调用方显式传入的 CODEX_HOME 文本，避免同一表达式里重复访问环境变量。
     str_codex_home_override = dict_delegate_env.get("CODEX_HOME", "").strip()  # 当前进程显式传入的 CODEX_HOME 文本。
@@ -780,6 +792,15 @@ def build_delegate_environment(project: Path, installed_skill_dir: Path) -> tupl
 
             # 保持全局 AGENTS 文本完全一致，避免 temp HOME 引入额外 baseline 漂移。
             shutil.copy2(path_global_agents, path_temp_codex_home / "AGENTS.md")
+
+        # 新版 verifier 按 CODEX_HOME/skills 目录判断语言 owner 是否真实可加载。
+        for str_skill_name in READABLE_SKILL_NAMES:
+
+            # 只镜像真实存在的安装标记，不能为未安装技能伪造可用性。
+            if (path_real_codex_home / "skills" / str_skill_name).is_dir():
+
+                # 空目录已足以保留安装事实，同时避免复制完整技能树扩大临时输入面。
+                (path_temp_codex_home / "skills" / str_skill_name).mkdir(parents=True, exist_ok=True)
 
         # 预先解析真实 sessions 根目录绝对路径，便于计算稳定的相对路径。
         path_real_sessions_root_resolved = path_real_sessions_root.resolve()  # 真实 sessions 根目录的绝对路径。
@@ -894,6 +915,7 @@ def run_delegate_capture(
             check=False,  # 委托退出码交由 wrapper 自行解释。
             capture_output=True,  # 同时捕获 stdout 与 stderr 供 wrapper 过滤。
             env=delegate_env,  # 透传经过缩面的 CODEX_HOME 和真实 installed skill 目录。
+            encoding="utf-8",  # 显式解码中文 JSON，避免 Windows 默认代码页产生乱码。
             text=True,  # 使用文本模式读取委托器输出，便于直接做 JSON 解析。
         )  # 委托验证器的退出码、stdout 和 stderr。
 

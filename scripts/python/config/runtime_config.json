@@ -16,7 +16,6 @@
       "scripts"
     ],
     "protected_files": [
-      "DESIGN_GOALS.md",
       "SKILL.md"
     ]
   },
@@ -47,8 +46,8 @@
       }
     ],
     "tcl": {
-      "temp_tcl_prefix": ".hls_generator_",
-      "project_dir_prefix": ".hls_generator_vitis_",
+      "temp_tcl_prefix": ".readable_hls_generator_",
+      "project_dir_prefix": ".readable_hls_generator_vitis_",
       "solution_name": "solution1"
     },
     "timeouts_s": {
@@ -68,10 +67,10 @@
     "erie_skill_dir": "${home}/.codex/skills/erie-remote-ssh",
     "erie_settings_path": "${erie_skill_dir}/assets/defaults.json",
     "local_run_root": "reports/remote-validation",
-    "remote_tmp_dir": ".hls-generator-remote-validation",
+    "remote_tmp_dir": ".readable-hls-generator-remote-validation",
     "directory_contract": {
-      "project_root_dirname": "erie-hls-generator",
-      "conda_prefix_path": ".conda/hls-generator",
+      "project_root_dirname": "readable-hls-generator",
+      "conda_prefix_path": ".conda/readable-hls-generator",
       "platform_root_path_template": "platforms/alveo/<platform-name>",
       "active_run_path_template": "runs/<run-id>",
       "backup_run_path_template": "backups/<run-id>",
@@ -100,7 +99,7 @@
       "level": "required",
       "purpose": "Remote SSH server discovery, remote links, and remote Vitis HLS validation.",
       "scopes": [
-        "core"
+        "remote"
       ],
       "repo_url": "https://github.com/Eriemon/remote-ssh.git",
       "ref": "main",
@@ -126,7 +125,7 @@
       "level": "required",
       "purpose": "Core Vitis HLS skill routing for generation, simulation, cosim, and HLS debug guidance.",
       "scopes": [
-        "core"
+        "vitis"
       ],
       "repo_url": "https://github.com/adeleempurpled290/FPGA-Agent-skills.git",
       "ref": "main",

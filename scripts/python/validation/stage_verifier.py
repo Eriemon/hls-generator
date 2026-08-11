@@ -4,6 +4,10 @@ from __future__ import annotations
 # 标准库用于规整 C/C++ 接口类型文本。
 import re
 from typing import Any
+
+# 导入 workflow 侧的 typed-prefix 参数名映射器，供 ABI 比较时回映旧语义名。
+from scripts.python.generation.mock_hls_governance import governed_top_argument_name_map
+
 # planning 入口负责把旧版 spec 补齐为 verifier 可读取的计划结构。
 from scripts.python.generation.planning import decompose_spec
 
@@ -193,8 +197,11 @@ def _exact_named_interface_issues(
     # 按 name 建立计划声明参数索引。
     dict_expected_by_name: dict[str, dict[str, Any]] = _items_by_name(expected_items)  # 计划参数索引
 
-    # 按 name 建立下游接口审计参数索引。
-    dict_observed_by_name: dict[str, dict[str, Any]] = _items_by_name(observed_items)  # 下游参数索引
+    # 允许 workflow 写盘后的 typed-prefix 名称回映到计划里的原始语义名。
+    dict_expected_aliases = _expected_argument_aliases(expected_items)  # 计划原名到 typed-prefix 名的别名表
+
+    # 用计划别名表把下游 typed-prefix 名称回映成计划语义名。
+    dict_observed_by_name = _normalized_observed_items_by_expected_names(observed_items, dict_expected_aliases)  # 下游参数索引
 
     # 缺失或额外参数会导致顶层函数 ABI 不一致。
     list_issues: list[dict[str, Any]] = _named_item_membership_issues(dict_expected_by_name, dict_observed_by_name)  # 参数集合差异问题
@@ -210,6 +217,72 @@ def _exact_named_interface_issues(
 
     # 返回参数集合与字段漂移问题。
     return list_issues
+
+# 为计划侧接口参数生成“原名 -> typed-prefix 名”的回映别名表。
+def _expected_argument_aliases(expected_items: Any) -> dict[str, str]:
+    """为计划侧接口参数生成原名到 typed-prefix 名的别名映射。
+
+    参数:
+        expected_items: 计划侧声明的接口参数序列或脏数据，dtype=Any，unit=interface items。
+
+    返回:
+        只包含发生改名项的原名到 typed-prefix 名映射，dtype=dict[str, str]，unit=alias mapping。
+    """
+
+    # 先请求 workflow 命名治理器生成计划参数的规范别名映射。
+    dict_aliases = governed_top_argument_name_map({"interfaces": {"arguments": list(expected_items or [])}})  # 计划参数的原名到规范名映射
+
+    # 仅保留真正发生改名的条目，避免把恒等映射带入后续回映比较。
+    return {
+        str_expected_name: str_alias_name
+        for str_expected_name, str_alias_name in dict_aliases.items()
+        if str_alias_name != str_expected_name
+    }
+
+# 把下游 typed-prefix 端口名归一回计划侧的语义名，避免误报 ABI 漂移。
+def _normalized_observed_items_by_expected_names(
+    observed_items: Any,
+    expected_aliases: dict[str, str],
+) -> dict[str, dict[str, Any]]:
+    """把下游 typed-prefix 参数名回映到计划侧语义名。
+
+    参数:
+        observed_items: 下游阶段观测到的接口参数序列或脏数据，dtype=Any，unit=interface items。
+        expected_aliases: 计划侧原名到 typed-prefix 名的别名映射，dtype=dict[str, str]，unit=alias mapping。
+
+    返回:
+        用计划侧语义名归一化后的参数索引，dtype=dict[str, dict[str, Any]]，unit=name index。
+    """
+
+    # 先按观测到的 name 字段建立原始参数索引。
+    dict_observed_by_name = _items_by_name(observed_items)  # 下游原始参数索引
+
+    # 复制一份可变字典，后续在其上做 alias 回映替换。
+    dict_normalized = dict(dict_observed_by_name)  # 归一化过程中的可变参数索引
+
+    # 逐个计划别名检查下游是否需要把 typed-prefix 名回映成原始语义名。
+    for str_expected_name, str_alias_name in expected_aliases.items():
+
+        # 计划原名已经直接存在时，说明该参数无需再做 alias 回映。
+        if str_expected_name in dict_normalized:
+
+            # 当前参数已经按原名出现，继续处理下一组别名。
+            continue
+
+        # 下游根本没有 typed-prefix 别名时，同样不需要构造回映项。
+        if str_alias_name not in dict_observed_by_name:
+
+            # 缺少 alias 命中时跳过当前参数，等待其他诊断说明缺口。
+            continue
+
+        # 先移除 typed-prefix 名键，避免同一参数在归一化结果里出现双份。
+        dict_normalized.pop(str_alias_name, None)
+
+        # 再把同一条观测记录改写成计划语义名键，供后续字段比较复用。
+        dict_normalized[str_expected_name] = {**dict_observed_by_name[str_alias_name], "name": str_expected_name}  # 使用计划原名回写后的观测参数记录
+
+    # 返回已经按计划语义名归一化的观测参数索引。
+    return dict_normalized
 
 # 构造以 name 字段为键的接口项索引。
 def _items_by_name(items: Any) -> dict[str, dict[str, Any]]:

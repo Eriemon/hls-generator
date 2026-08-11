@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "title": "Erie HLS Generator Evaluation Corpus",
+  "title": "Readable HLS Generator Evaluation Corpus",
   "design_patterns": [
     "Tool Wrapper",
     "Generator",
@@ -152,6 +152,37 @@
         {
           "file": "../../tests/smoke/run_smoke.py",
           "terms": ["TUPLE_SMOKE_TEST_TARGETS", "test_comment_policy.py", "comment_policy"]
+        }
+      ]
+    },
+    {
+      "id": "hg031-single-line-formatting-contract",
+      "title": "HG031 binds generation guidance to executable formatting checks",
+      "with_skill_expected_pass": true,
+      "without_skill_expected_pass": false,
+      "without_skill_reason": "A baseline setup does not guarantee the repo-specific HG031 formatting contract or its regression coverage.",
+      "required_files": [
+        "references/hls_readability_rules.md",
+        "scripts/python/generation/prompt_rules.py",
+        "scripts/python/hls_quality_gate/readability/cpp_lexer.py",
+        "../../tests/test_hls_readability_gate.py"
+      ],
+      "required_terms": [
+        {
+          "file": "references/hls_readability_rules.md",
+          "terms": ["HG031", "Short control headers", "ordinary local declarations", "ordinary assignments"]
+        },
+        {
+          "file": "scripts/python/generation/prompt_rules.py",
+          "terms": ["短控制头", "普通局部声明", "普通赋值"]
+        },
+        {
+          "file": "scripts/python/hls_quality_gate/readability/cpp_lexer.py",
+          "terms": ["_avoidable_multiline_start_kind", "_is_control_header_start", "_parenthesis_depth_delta"]
+        },
+        {
+          "file": "../../tests/test_hls_readability_gate.py",
+          "terms": ["test_short_multiline_for_header_is_blocked_by_hg031", "test_short_multiline_else_if_header_is_blocked_by_hg031", "test_short_multiline_do_while_header_is_blocked_by_hg031", "test_string_parenthesis_does_not_hide_multiline_header_from_hg031"]
         }
       ]
     },

@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "If readable-hls-generator supports your research or engineering workflow, please cite this release."
+title: "Readable HLS Generator"
+type: software
+version: 0.5.0
+date-released: 2026-08-11
+abstract: >-
+  A Codex-ready skill for readable AMD/Xilinx Vitis HLS generation,
+  modification, review, annotation, validation, and remote acceptance support.
+authors:
+  - family-names: Liu
+    given-names: Jiyuan
+  - family-names: Li
+    given-names: He
+  - name: Heterogeneous Intelligence and Quantum Computing Laboratory
+    affiliation: Southeast University
+repository-code: "https://github.com/Eriemon/hls-generator"
+license: Apache-2.0
+keywords:
+  - AMD-Xilinx
+  - Vitis HLS
+  - high-level synthesis
+  - hardware acceleration
+  - agent skill

@@ -38,7 +38,7 @@ from typing import Any
 MODULE_DIR = Path(__file__).resolve().parent  # remote 脚本目录
 
 # skill 根目录用于直接运行子入口时导入 scripts.python 包。
-SKILL_ROOT = Path(__file__).resolve().parents[3]  # erie-hls-generator 技能根目录
+SKILL_ROOT = Path(__file__).resolve().parents[3]  # readable-hls-generator 技能根目录
 
 # 直接执行旧入口时仍需兼容历史短模块导入路径。
 site.addsitedir(str(MODULE_DIR))
@@ -475,6 +475,12 @@ class ErieHelper:
         # 单行赋值便于 current-project 规则稳定识别右侧语义注释。
         path_request_settings = self._ensure_request_settings_timeout(settings, timeout_s=int_upload_request_timeout)  # 上传控制流已抬升超时的 settings
 
+        # 先固定当前 payload 的真实字节数，避免多行调用里的表达式失去右侧语义注释。
+        int_bytes = local_path.stat().st_size  # 本次 request-upload 需要放行的本地 payload 字节数
+
+        # 上传文件大小会受 overlay 里的 max_transfer_bytes 约束，这里按真实 payload 大小自动抬高上限。
+        path_request_settings = self._ensure_request_settings_transfer_limit(path_request_settings, min_bytes=int_bytes)  # 上传上限覆写结果
+
         # 上传 request 会把本地 payload 送到远端活动 run，并带回 request 文件路径。
         str_request_stdout = self._run(  # 保存 upload request 的 request 路径输出
             [
@@ -808,6 +814,69 @@ class ErieHelper:
             ) from exc
 
         # 返回原路径，调用方继续按当前 run 的 overlay settings 使用即可。
+        return settings
+
+    # request-upload 读取 overlay 时需要看到足够大的 files.max_transfer_bytes，避免合法 payload 被默认上限误拦截。
+    def _ensure_request_settings_transfer_limit(self, settings: Path, *, min_bytes: int) -> Path:
+
+        """确保 request-upload 读取到足够大的 files.max_transfer_bytes。
+
+        参数:
+            settings: 本轮 request-upload 要复用的 settings overlay 路径。
+            min_bytes: 当前上传 payload 至少需要允许的字节数。
+
+        返回:
+            Path: 已校正过 files.max_transfer_bytes 的 settings 路径。
+
+        异常:
+            RemoteAcceptanceError: settings 无法读取、解析或回写时抛出。
+        """
+
+        # 上传大小下限至少为 1 字节，避免把无效或负数上限写回 overlay。
+        int_target_limit = max(int(min_bytes), 1)  # request-upload 至少需要允许的 payload 字节数
+
+        # 这一步会就地更新当前 run 的 overlay，保证 request-upload 读取到和 requests/downloads/tmp 同源的隔离配置。
+        try:
+
+            # 先把当前 overlay 解析成可变字典，后续只补充传输大小约束，不动已生成的路径字段。
+            dict_settings = json.loads(settings.read_text(encoding="utf-8"))  # 保留本轮路径隔离字段的 overlay 可变副本
+
+            # files 字典同时承接 upload_roots 和 max_transfer_bytes，这里沿用它承接本次上传大小上限。
+            dict_file_settings = dict_settings.setdefault("files", {})  # request-upload 大小限制回写目标 files 配置
+
+            # 旧上限可能来自字符串配置，需要先规范成整数后再和当前 payload 比较。
+            try:
+
+                # 旧值可能来自字符串或整数配置，这里统一解析成 int。
+                int_current_limit = int(dict_file_settings.get("max_transfer_bytes", 0))  # overlay 当前允许的最大上传字节数
+
+            # 非法旧值按缺失处理，让当前 payload 需要的上限可以稳定覆盖回去。
+            except (TypeError, ValueError):
+
+                # 解析失败时回退到 0，让新的上限按当前 payload 真实大小回写。
+                int_current_limit = 0  # 非法旧值视为未配置的上传大小上限
+
+            # 现有上限已经覆盖当前 payload 时，不需要重写 overlay。
+            if int_current_limit >= int_target_limit:
+
+                # 继续复用当前 settings 路径即可，后面的 request-upload 不需要读取新文件名。
+                return settings
+
+            # 现有上限不足时，把 max_transfer_bytes 抬到这次 payload 的真实字节数。
+            dict_file_settings["max_transfer_bytes"] = int_target_limit  # request-upload 阶段写回 overlay 的最大上传字节数
+
+            # 写回同一份 overlay 文件，让 request-upload 和 run-request 读取到一致的大小约束。
+            settings.write_text(json.dumps(dict_settings, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+        # 遇到配置读写或 JSON 解析失败时立刻停止，避免 request-upload 继续使用未知大小限制。
+        except (OSError, json.JSONDecodeError) as exc:
+
+            # 把失败的 settings 路径带回错误，方便定位是哪一轮 run 的 overlay 出问题。
+            raise RemoteAcceptanceError(
+                f"> ERR: [Python] failed to refresh request upload size limit in settings overlay: {settings}: {exc}"
+            ) from exc
+
+        # 正常路径继续复用当前 overlay 文件路径，不需要切换 settings 文件名。
         return settings
 
     # 该判断只依赖传入参数，不读取实例状态，因此保持为静态工具函数。
