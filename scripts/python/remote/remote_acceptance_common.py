@@ -1161,7 +1161,7 @@ def _expand_settings_path(value: str, *, skill_dir: Path, settings_dir: Path) ->
         展开占位符后的绝对路径对象。
     """
 
-    # 按约定顺序展开 skill/settings/home/cwd/project_root 等路径占位符。
+    # 按约定顺序展开 skill、settings、home、cwd、project_root 等逻辑路径占位符。
     str_expanded_settings_path = (
         str(value)  # settings 里声明的原始路径文本
         .replace("${skill_dir}", str(skill_dir))  # 把 skill 根目录占位符替换成本地绝对路径

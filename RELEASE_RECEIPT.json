@@ -4,7 +4,7 @@
   "source_path": "skills/readable-hls-generator",
   "tag": "v0.5.0",
   "package": "readable-hls-generator",
-  "generated_at": "2026-08-11T14:15:54Z",
+  "generated_at": "2026-08-11T14:32:49Z",
   "current_branch": "master",
   "local_branches": [
     "master",
@@ -417,7 +417,7 @@
     },
     {
       "path": "checksums.sha256",
-      "sha256": "5a87325971636622e41d218c0facc21f86520c6810be831b519f9f9830a73f3d"
+      "sha256": "9bbfd1a232f5e361591b50f37e55f25d1922bf8a182345628d26a2a85efffe4a"
     },
     {
       "path": "CITATION.cff",
@@ -569,7 +569,7 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "d654dd62a484aabb240e5cd1037044a2c7a8261e00f4ac6ceab2cb5d0b483b37"
+      "sha256": "1bab6fdada58d9f47d4260291f0b2c8828daa2e53294dc1fabe930b95b374282"
     },
     {
       "path": "scripts/__init__.py",
@@ -929,7 +929,7 @@
     },
     {
       "path": "scripts/python/remote/remote_acceptance_common.py",
-      "sha256": "18285042b6ce8115ad878aeb2e0d0dae9b9db912ddef54d05fec5fdc7a452a3a"
+      "sha256": "6508bea3dcb4e66ef49e48bf446d12a314741f272ef90f3275fc47020cd8033e"
     },
     {
       "path": "scripts/python/remote/remote_acceptance_link.py",
@@ -14941,7 +14941,7 @@
     },
     {
       "path": "dist/readable-hls-generator-v0.5.0/checksums.sha256",
-      "sha256": "5a87325971636622e41d218c0facc21f86520c6810be831b519f9f9830a73f3d"
+      "sha256": "9bbfd1a232f5e361591b50f37e55f25d1922bf8a182345628d26a2a85efffe4a"
     },
     {
       "path": "dist/readable-hls-generator-v0.5.0/CITATION.cff",
@@ -15093,7 +15093,7 @@
     },
     {
       "path": "dist/readable-hls-generator-v0.5.0/RELEASE_MANIFEST.json",
-      "sha256": "d654dd62a484aabb240e5cd1037044a2c7a8261e00f4ac6ceab2cb5d0b483b37"
+      "sha256": "1bab6fdada58d9f47d4260291f0b2c8828daa2e53294dc1fabe930b95b374282"
     },
     {
       "path": "dist/readable-hls-generator-v0.5.0/scripts/__init__.py",
@@ -15453,7 +15453,7 @@
     },
     {
       "path": "dist/readable-hls-generator-v0.5.0/scripts/python/remote/remote_acceptance_common.py",
-      "sha256": "18285042b6ce8115ad878aeb2e0d0dae9b9db912ddef54d05fec5fdc7a452a3a"
+      "sha256": "6508bea3dcb4e66ef49e48bf446d12a314741f272ef90f3275fc47020cd8033e"
     },
     {
       "path": "dist/readable-hls-generator-v0.5.0/scripts/python/remote/remote_acceptance_link.py",

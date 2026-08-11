@@ -2,9 +2,9 @@
   "version": "0.5.0",
   "tag": "v0.5.0",
   "package": "readable-hls-generator",
-  "source_commit": "e15fe1d7d9b2ae87246d4629fc848087f3b825f4",
+  "source_commit": "3fea1ca7f96821df84f3226935c70bc38b79807a",
   "source_branch": "master",
-  "built_at_utc": "2026-08-11T14:15:52Z",
+  "built_at_utc": "2026-08-11T14:32:48Z",
   "included_files": [
     ".gitignore",
     "agents/openai.yaml",
