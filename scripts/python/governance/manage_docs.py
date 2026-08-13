@@ -967,6 +967,9 @@ def _run_versioned_release_gate_payload(path_script: Path, list_argv: list[str])
     # 兼容分支先解析调用方参数，再保持标准实现的参数语义。
     namespace_args = _parse_release_gate_args(list_argv)  # release-gate 兼容参数
 
+    # 统一项目根路径，避免相对路径改变发布副本和收据的解析基准。
+    namespace_args.project = Path(namespace_args.project).resolve()  # release-gate 使用绝对项目根
+
     # 从已安装治理 skill 动态加载标准 docs CLI，不修改其磁盘文件。
     module_spec = importlib.util.spec_from_file_location("agents_md_delegate_manage_docs", path_script)  # 按已安装文件路径绑定官方 docs 实现
 

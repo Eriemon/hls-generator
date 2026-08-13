@@ -2,7 +2,7 @@
   "skill_name": "readable-hls-generator",
   "version": "v0.5.1",
   "source_path": "skills/readable-hls-generator",
-  "generated_at": "2026-08-14T04:10:33",
+  "generated_at": "2026-08-14T07:09:57",
   "current_branch": "master",
   "local_branches": [
     "master",
@@ -1238,7 +1238,7 @@
     },
     {
       "path": "scripts/python/governance/manage_docs.py",
-      "sha256": "206454076abd3c93ac2c7a95344e95aad6f5087061b95cecf3bb560132c3b3f0"
+      "sha256": "d735dc1c256d4b245c6805f770b158ed0a48549e2deec5028d52fa7a232f0305"
     },
     {
       "path": "scripts/python/governance/render_agents.py",
