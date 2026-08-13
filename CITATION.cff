@@ -2,7 +2,7 @@ cff-version: 1.2.0
 message: "If readable-hls-generator supports your research or engineering workflow, please cite this release."
 title: "Readable HLS Generator"
 type: software
-version: 0.5.0
+version: 0.5.1
 date-released: 2026-08-11
 abstract: >-
   A Codex-ready skill for readable AMD/Xilinx Vitis HLS generation,

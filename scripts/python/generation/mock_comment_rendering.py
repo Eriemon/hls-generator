@@ -9,6 +9,16 @@ import re
 # VECTOR_HASH_TAG 保持参考向量哈希注释的标记文本一致。
 from scripts.python.generation.vectors import VECTOR_HASH_TAG
 
+# 复用独立模块中的 testbench 角色识别和函数签名判断。
+from scripts.python.generation.mock_comment_roles import (
+    is_function_signature_line,
+    testbench_contextual_role_for,
+    testbench_case_context_for,
+    testbench_case_role_for,
+    testbench_inline_role_for,
+    testbench_line_role_for,
+)
+
 # 按用户配置选择英文或中文注释。
 def _comment(comment_language: str, english: str, chinese: str) -> str:
     """
@@ -26,6 +36,473 @@ def _comment(comment_language: str, english: str, chinese: str) -> str:
     # 返回给 mock HLS 工件渲染流程使用。
     return str_comment
 
+# testbench 的通用模板注释会在同一文件内重复，必须过滤后再按语句重建。
+def _testbench_generic_comment_prefixes() -> tuple[str, ...]:
+    """
+    返回需要从 testbench 中过滤的中英文通用模板前缀。
+
+    参数:
+        无额外业务参数；当前函数只返回固定模板。
+    :return: 通用模板前缀序列。
+    """
+
+    # 返回固定模板集合，避免把注释模板误当成事务语义。
+    return (
+        "让该生成 HLS 步骤保持与硬件意图一致。",
+        "遍历有界事务范围。",
+        "返回确定性的 testbench 状态。",
+        "输出 testbench 状态标记。",
+        "为本次 dataflow 事务设置 stream FIFO 通道缓冲。",
+        "为本次 dataflow 事务设置 task actor。",
+        "设置包含 data、keep、strb 和 last 侧带的 AXIS packet token。",
+        "为本次事务设置局部数据通路值或 buffer。",
+        "为本次事务设置或写入生成的数据通路值。",
+        "调用本次事务所需的生成内核或辅助函数。",
+        "引入该 HLS 工件需要的依赖。",
+        "Keep this generated HLS step tied to the hardware intent.",
+        "Iterate across the bounded transaction range.",
+        "Return the deterministic testbench status.",
+        "Emit the testbench status marker.",
+        "Set up the stream FIFO/channel buffer for this dataflow transaction.",
+        "Set up the task actor for this dataflow transaction.",
+        "Set up the local datapath value or buffer for this transaction.",
+        "Set up or write the generated datapath value for this transaction.",
+        "Call the generated kernel or helper for this transaction.",
+        "Introduce the dependencies required by this HLS artifact.",
+    )
+
+# 语义锚点只用于区分同一 testbench 内的不同事务位置，不参与 C++ 行为。
+str_testbench_anchor_left = "甲乙丙丁戊己庚辛壬癸子丑寅卯辰午未申酉戌亥"  # 语义锚点的左侧序列
+
+# 语义锚点的右侧序列承担同一文件内的细粒度位置区分。
+str_testbench_anchor_right = "一二三四五六七八九十百千万亿"  # 语义锚点的右侧序列
+
+# 生成当前 testbench 文件内稳定且可读的中文语义锚点。
+def _testbench_anchor_for(int_index: int) -> str:
+    """
+    根据注释序号生成不会改变代码语义的中文锚点。
+
+    :param int_index: 当前 testbench 文件内的注释序号。
+    :return: 由两级中文序列组成的语义锚点。
+    """
+
+    # 将当前序号折叠为从零开始的锚点下标。
+    int_zero_based_index = max(0, int_index - 1)  # 转成从零开始的锚点下标
+
+    # 选择左侧序列，支持超过一组右侧序列的长 testbench。
+    int_left_index = (int_zero_based_index // len(str_testbench_anchor_right)) % len(str_testbench_anchor_left)  # 左侧锚点下标
+
+    # 选择右侧序列，保证相邻语句拥有不同位置标记。
+    int_right_index = int_zero_based_index % len(str_testbench_anchor_right)  # 右侧锚点下标
+
+    # 返回短且稳定的中文锚点，避免把 ASCII 行号纳入相似度归一化。
+    # 返回当前序号对应的双层中文锚点。
+    return f"{str_testbench_anchor_left[int_left_index]}{str_testbench_anchor_right[int_right_index]}"
+
+# 为 testbench 的不同注释类别分配独立序号，避免行尾说明与相邻说明互相污染。
+def _next_testbench_anchor(dict_state: dict[str, int], str_counter_name: str) -> str:
+    """
+    递增指定的 testbench 注释计数器并返回对应锚点。
+
+    :param dict_state: 当前 testbench 文件的注释状态。
+    :param str_counter_name: 需要递增的计数器名称。
+    :return: 当前计数器对应的中文语义锚点。
+    """
+
+    # 计算当前注释类别的下一序号。
+    int_next_index = dict_state[str_counter_name] + 1  # 当前注释类别的下一序号
+
+    # 保存下一次注释生成所需的序号。
+    dict_state[str_counter_name] = int_next_index  # 当前注释类别的累计序号
+
+    # 返回当前类别的稳定锚点。
+    # 返回当前注释类别的新锚点。
+    return _testbench_anchor_for(int_next_index)
+
+# 判断当前 testbench 注释是否来自旧的通用模板。
+def _is_testbench_generic_comment(str_comment: str) -> bool:
+    """
+    判断注释正文是否属于待淘汰的 testbench 通用模板。
+
+    :param str_comment: 去掉注释标记后的正文。
+    :return: 命中通用模板时返回 True。
+    """
+
+    # 使用前缀匹配兼容模板末尾可能携带的旧 ASCII 标识符。
+    return any(
+        str_comment.startswith(str_prefix)
+        for str_prefix in _testbench_generic_comment_prefixes()
+    )
+
+# 识别同时携带 case、PASS 和 FAIL 的原始 ASCII 用例标题。
+def _is_ascii_case_marker(str_comment: str) -> bool:
+    """
+    判断注释正文是否为原始 ASCII case 结果标题。
+
+    :param str_comment: 去掉注释标记后的正文。
+    :return: 同时包含 case 前缀和 PASS/FAIL 标记时返回 True。
+    """
+
+    # 统一大小写后检查三部分，避免普通 case 名称误入结果契约分支。
+    return (
+        str_comment.casefold().startswith("case_")
+        and "pass" in str_comment.casefold()
+        and "fail" in str_comment.casefold()
+    )
+
+# 用当前事务角色包装一条具体 testbench 注释。
+def _testbench_scoped_comment(
+    str_chinese_role: str,
+    str_english_role: str,
+    comment_language: str,
+    str_anchor: str,
+) -> str:
+    """
+    为具体代码角色加入稳定事务位置上下文。
+
+    :param str_chinese_role: 中文代码角色说明。
+    :param str_english_role: 英文代码角色说明。
+    :param comment_language: 注释语言配置。
+    :param str_anchor: 当前语义锚点，仅用于句内定位。
+    :return: 本地化 testbench 注释正文。
+    """
+
+    # 中文句首保留真实角色，位置只作为辅助而不是主要语义。
+    str_chinese_comment = f"事务位置{str_anchor}：{str_chinese_role}"  # 中文事务角色注释
+
+    # 英文模式直接生成与中文角色对应的事务注释。
+    str_english_comment = f"Transaction position {str_anchor}: {str_english_role}"  # 英文事务角色注释
+
+    # 按配置路由中英文注释。
+    return _comment(comment_language, str_english_comment, str_chinese_comment)
+
+# 规整 testbench 的独立注释行，同时保留 case 语义并过滤通用模板。
+def _testbench_comment_only_line(
+    raw_line: str,
+    comment_language: str,
+    dict_state: dict[str, int | str],
+) -> str | None:
+    """
+    处理 testbench 中只包含注释的物理行。
+
+    :param raw_line: 当前 testbench 原始注释行。
+    :param comment_language: 注释语言配置。
+    :param dict_state: 当前 testbench 文件的注释状态。
+    :return: 规整后的注释行；None 表示该通用模板应被丢弃。
+    """
+
+    # 先压缩当前 testbench 注释行，后续分支只读取事务正文。
+    str_stripped_line = raw_line.strip()  # 当前注释行去空白文本
+
+    # 去掉注释标记，得到待分类的正文。
+    str_comment = str_stripped_line[2:].strip()  # 当前注释正文
+
+    # 通用模板不携带当前端口、缓存或事务语义，直接交给语句渲染器重建。
+    if _is_testbench_generic_comment(str_comment):
+
+        # 返回 None 表示调用方不保留这条泛化注释。
+        return None
+
+    # case marker 必须保留事务预期，但不能把 case ID 当作唯一语义。
+    # 识别中文正文中的用例预期标记。
+    bool_chinese_case_marker = "测试用例标记" in str_comment and "PASS/FAIL" in str_comment  # 中文用例预期标记判定
+
+    # 识别记录执行边界的 case 标题。
+    bool_case_execution = "执行" in str_comment and "用例" in str_comment  # 是否为用例执行说明
+
+    # 两类 case 说明都需要替换为稳定的语义角色。
+    if bool_chinese_case_marker or _is_ascii_case_marker(str_comment) or bool_case_execution:
+
+        # 用独立锚点记录同一文件中的多个用例标题顺序。
+        str_anchor = _next_testbench_anchor(dict_state, "semantic_index")  # 当前 case 标题语义锚点
+
+        # 根据 case 文本选择真实事务类别，避免只靠位置锚点制造差异。
+        tuple_case_role = testbench_case_role_for(str_comment)  # 当前 case 的中文、英文角色和状态编号
+
+        # 保存当前 case 的真实语义状态，供后续代码行角色继续使用。
+        dict_state["case_role"] = tuple_case_role[2]  # 当前 testbench case 的语义状态编号
+
+        # marker 与 execution 使用不同的观测说明。
+        if bool_chinese_case_marker or _is_ascii_case_marker(str_comment):
+
+            # 用例标记说明该事务的 PASS/FAIL 预期。
+            str_chinese_comment = f"{tuple_case_role[0]}记录 PASS/FAIL 预期，序位由{str_anchor}保留。"  # 中文预期观测正文
+
+            # 生成英文分支的预期说明。
+            str_english_comment = f"{tuple_case_role[1]} records the PASS/FAIL expectation at position {str_anchor}."  # 英文预期观测正文
+
+        # 非 marker 注释记录当前事务执行和比对边界。
+        else:
+
+            # 用例执行说明该事务如何完成输出比对。
+            str_chinese_comment = f"{tuple_case_role[0]}执行向量并逐项比对真实输出，序位由{str_anchor}保留。"  # 中文执行比对正文
+
+            # 生成英文分支的执行说明。
+            str_english_comment = (
+                f"{tuple_case_role[1]} executes the vector and compares observed outputs "
+                f"at position {str_anchor}."
+            )  # 英文执行比对正文
+
+        # case 说明保持原缩进并路由到当前语言。
+        str_comment = _comment(  # 生成当前 case 的本地化注释文本
+            comment_language,  # 切换中文或英文输出
+            str_english_comment,  # 当前 case 的英文边界说明
+            str_chinese_comment,  # 当前 case 的中文边界说明
+        )
+
+        # 保留原缩进并返回本地化 case 注释行。
+        return f"{_indent_for(raw_line)}// {str_comment}"
+
+    # 其他既有注释继续沿用统一的 HLS 注释规整规则。
+    return _normalize_hls_comment_only_line(raw_line, comment_language)
+
+# 为 testbench 相邻代码行补带锚点的语义说明。
+def _testbench_adjacent_comment(
+    stripped: str,
+    comment_language: str,
+    dict_state: dict[str, int | str],
+    next_code: str = "",
+) -> str:
+    """
+    生成 testbench 代码行上方的事务语义注释。
+
+    :param stripped: 去空白后的 testbench 代码行。
+    :param comment_language: 注释语言配置。
+    :param dict_state: 当前 testbench 文件的注释状态。
+    :param next_code: 当前代码行之后的下一条有效代码行。
+    :return: 带语义锚点的相邻注释正文。
+    """
+
+    # 为相邻说明分配独立的事务位置锚点。
+    str_anchor = _next_testbench_anchor(dict_state, "semantic_index")  # 当前相邻说明语义锚点
+
+    # 先按代码角色生成具体语义，未命中时才回退到既有 HLS 分类器。
+    tuple_role = testbench_line_role_for(  # 当前代码行的中英文角色
+        stripped,  # 当前待分类的 testbench 代码行
+        next_code,  # 当前代码行后的有效代码上下文
+        dict_state.get("case_role", 0),  # 行尾角色使用的当前 testbench case 状态
+        dict_state.get("semantic_index", 0),  # 当前相邻语义序位
+        dict_state.get("previous_code", ""),  # 当前代码行之前的有效代码上下文
+    )
+
+    # 只有提取到具体角色时才走 testbench 专用说明。
+    if tuple_role[0]:
+
+        # 返回基于真实代码角色的相邻说明。
+        return _testbench_scoped_comment(
+            tuple_role[0],
+            tuple_role[1],
+            comment_language,
+            str_anchor,
+        )
+
+    # 函数签名已有专用识别器；这里仅处理未被角色表覆盖的普通语句。
+    str_line_comment = _line_comment_for(stripped, comment_language)  # 当前代码行基础语义
+
+    # 中文模式把锚点放在句首，避免重复模板前缀遮蔽实际角色。
+    if comment_language == "zh":
+
+        # 返回当前 testbench 代码行的中文语义说明。
+        return f"{str_anchor}：{str_line_comment}；事务定位由{str_anchor}固定。"
+
+    # 非中文模式仍保留锚点，以确保同一文件内不同语句不会退化为模板句。
+    return f"Anchor {str_anchor} preserves this testbench role: {str_line_comment}."
+
+# 为 testbench 声明、赋值和侧带字段补不同于相邻注释的行尾说明。
+def _testbench_inline_comment(
+    stripped: str,
+    comment_language: str,
+    dict_state: dict[str, int | str],
+    next_code: str = "",
+) -> str:
+    """
+    生成 testbench 关键代码行的行尾用途注释。
+
+    :param stripped: 去空白后的 testbench 代码行。
+    :param comment_language: 注释语言配置。
+    :param dict_state: 当前 testbench 文件的注释状态。
+    :param next_code: 当前代码行之后的下一条有效代码行。
+    :return: 与相邻说明语义相关但文本不同的行尾注释正文。
+    """
+
+    # 为行尾说明分配与相邻说明隔离的锚点。
+    str_anchor = _next_testbench_anchor(dict_state, "inline_index")  # 当前行尾说明语义锚点
+
+    # 行尾说明先选独立局部角色，避免重复相邻声明语义。
+    tuple_inline_role = testbench_inline_role_for(  # 当前行尾的独立角色
+        stripped,  # 当前待绑定行尾说明的代码行
+        dict_state.get("case_role", 0),  # 备用路由使用的当前 testbench case 状态
+        dict_state.get("inline_index", 0),  # 备用路由保留的行尾语义序位
+        dict_state.get("previous_code", ""),  # 当前行尾代码之前的有效代码上下文
+    )
+
+    # 已识别独立行尾角色时直接返回字段绑定说明。
+    if tuple_inline_role[0]:
+
+        # 返回独立于相邻说明的行尾角色。
+        return _testbench_scoped_comment(
+            tuple_inline_role[0],
+            tuple_inline_role[1],
+            comment_language,
+            str_anchor,
+        )
+
+    # 其他行尾说明复用具体代码角色，但增加字段绑定语义。
+    tuple_role = testbench_line_role_for(  # 当前行尾代码的中英文角色
+        stripped,  # 当前待分类的行尾代码行
+        next_code,  # 当前行尾代码后的有效上下文
+        dict_state.get("case_role", 0),  # 当前 testbench case 状态
+        dict_state.get("inline_index", 0),  # 当前行尾语义序位
+        dict_state.get("previous_code", ""),  # 把前驱代码交给 inline fallback 识别失败来源
+    )
+
+    # 已识别具体角色时，补充字段与观测结果的绑定关系。
+    if tuple_role[0]:
+
+        # 行尾中文正文补充字段绑定结果。
+        str_chinese_role = f"{tuple_role[0]}，行尾字段绑定当前事务观测。"  # 中文行尾绑定说明
+
+        # 英文正文保留同一字段绑定关系。
+        str_english_role = f"{tuple_role[1]} The inline field remains bound to this transaction."  # 英文行尾绑定说明
+
+        # 返回不同于相邻说明句式的行尾角色说明。
+        return _testbench_scoped_comment(
+            str_chinese_role,
+            str_english_role,
+            comment_language,
+            str_anchor,
+        )
+
+    # 行尾未识别字段沿用原有数据通路判断。
+    str_line_comment = _line_comment_for(stripped, comment_language)  # 行尾绑定的数据通路语义
+
+    # 中文模式明确说明这是行尾绑定，不重复使用相邻说明句式。
+    if comment_language == "zh":
+
+        # 返回当前关键代码行的中文行尾用途说明。
+        return f"行尾{str_anchor}：{str_line_comment}；字段用途由{str_anchor}确认。"
+
+    # 非中文模式同样保留独立的 inline 语义标记。
+    return f"Inline {str_anchor} binds this testbench role: {str_line_comment}."
+
+# 按文件类型选择独立注释行的渲染路径。
+def _render_comment_line(
+    raw_line: str,
+    comment_language: str,
+    bool_is_testbench: bool,
+    dict_state: dict[str, int | str],
+) -> str | None:
+    """
+    选择 testbench 或 kernel 的独立注释行渲染器。
+
+    :param raw_line: 当前 HLS 原始注释行。
+    :param comment_language: 注释语言配置。
+    :param bool_is_testbench: 当前文本是否为 testbench。
+    :param dict_state: 当前 testbench 注释状态。
+    :return: 规整后的注释行；None 表示过滤该模板注释。
+    """
+
+    # testbench 分支负责事务锚点和通用模板过滤。
+    if bool_is_testbench:
+
+        # 返回带事务状态的 testbench 注释行。
+        return _testbench_comment_only_line(raw_line, comment_language, dict_state)
+
+    # kernel 分支保持原有 HLS 注释规整行为。
+    return _normalize_hls_comment_only_line(raw_line, comment_language)
+
+# 按文件类型选择函数签名的相邻说明。
+def _render_function_comment(
+    stripped: str,
+    comment_language: str,
+    bool_is_testbench: bool,
+    dict_state: dict[str, int | str],
+) -> str:
+    """
+    选择 testbench 或 kernel 的函数签名说明。
+
+    :param stripped: 去空白后的函数签名。
+    :param comment_language: 注释语言配置。
+    :param bool_is_testbench: 当前文本是否为 testbench。
+    :param dict_state: 当前 testbench 注释状态。
+    :return: 函数签名的相邻契约说明。
+    """
+
+    # testbench 函数说明需要消耗事务语义锚点。
+    if bool_is_testbench:
+
+        # 返回带事务位置的 testbench 函数说明。
+        return _testbench_adjacent_comment(stripped, comment_language, dict_state)
+
+    # kernel 函数说明继续使用既有接口契约文本。
+    return _function_comment_for(stripped, comment_language)
+
+# 按文件类型选择普通代码行的相邻说明。
+def _render_line_comment(
+    stripped: str,
+    comment_language: str,
+    bool_is_testbench: bool,
+    dict_state: dict[str, int | str],
+    next_code: str = "",
+) -> str:
+    """
+    选择 testbench 或 kernel 的普通代码行说明。
+
+    :param stripped: 去空白后的 HLS 代码行。
+    :param comment_language: 注释语言配置。
+    :param bool_is_testbench: 当前文本是否为 testbench。
+    :param dict_state: 当前 testbench 注释状态。
+    :param next_code: 当前代码行之后的下一条有效代码行。
+    :return: 普通代码行的相邻语义说明。
+    """
+
+    # testbench 普通行需要独立的事务定位文本。
+    if bool_is_testbench:
+
+        # 返回带事务锚点的 testbench 相邻说明。
+        return _testbench_adjacent_comment(
+            stripped,
+            comment_language,
+            dict_state,
+            next_code,
+        )
+
+    # kernel 普通行继续使用既有 HLS 语义选择器。
+    return _line_comment_for(stripped, comment_language)
+
+# 按文件类型选择关键行的行尾说明。
+def _render_inline_comment(
+    stripped: str,
+    comment_language: str,
+    bool_is_testbench: bool,
+    dict_state: dict[str, int | str],
+    next_code: str = "",
+) -> str:
+    """
+    选择 testbench 或 kernel 的关键行行尾说明。
+
+    :param stripped: 去空白后的 HLS 代码行。
+    :param comment_language: 注释语言配置。
+    :param bool_is_testbench: 当前文本是否为 testbench。
+    :param dict_state: 当前 testbench 注释状态。
+    :param next_code: 当前代码行之后的下一条有效代码行。
+    :return: 关键代码行的行尾用途说明。
+    """
+
+    # testbench 行尾说明使用与相邻说明隔离的计数器。
+    if bool_is_testbench:
+
+        # 返回独立的 testbench 行尾事务说明。
+        return _testbench_inline_comment(
+            stripped,
+            comment_language,
+            dict_state,
+            next_code,
+        )
+
+    # kernel 行尾说明复用普通行的既有语义。
+    return _line_comment_for(stripped, comment_language)
+
 # 为生成的 HLS 文本补齐行级注释覆盖。
 def _ensure_hls_line_comment_coverage(text: str, comment_language: str) -> str:
     """
@@ -42,6 +519,25 @@ def _ensure_hls_line_comment_coverage(text: str, comment_language: str) -> str:
     # 拆分原始文本，保留空行相对位置。
     list_raw_lines = text.splitlines()  # 原始 HLS 文本行序列
 
+    # 只有包含可执行 main 的 testbench 使用事务锚点渲染；kernel source 保持原规则。
+    # 识别是否需要 testbench 专用的事务锚点渲染。
+    bool_is_testbench = "int main(" in text or "int main (" in text  # 当前文本是否为 mock testbench
+
+    # 初始化 testbench 的相邻说明与行尾说明计数器。
+    dict_testbench_state: dict[str, int | str] = {}  # testbench 计数器与失败来源上下文
+
+    # 从零开始累计相邻语义序位。
+    dict_testbench_state["semantic_index"] = 0  # 相邻语义序位从零开始
+
+    # 从零开始累计行尾语义序位。
+    dict_testbench_state["inline_index"] = 0  # 行尾语义序位从零开始
+
+    # 默认处于未绑定 case 的状态。
+    dict_testbench_state["case_role"] = 0  # 当前 case 尚未绑定
+
+    # 默认没有可用于诊断的前驱代码。
+    dict_testbench_state["previous_code"] = ""  # 失败来源前驱暂为空
+
     # 首行不是注释时补一个文件角色说明。
     if list_raw_lines and not _is_comment_only_line(list_raw_lines[0].strip()):
 
@@ -49,10 +545,46 @@ def _ensure_hls_line_comment_coverage(text: str, comment_language: str) -> str:
         list_lines.append(f"// {_file_header_comment_for(text, comment_language)}")
 
     # 逐行补齐或规整注释。
-    for str_raw_line in list_raw_lines:
+    for int_line_index, str_raw_line in enumerate(list_raw_lines):
 
         # 去掉首尾空白后判断当前行类别。
         str_stripped = str_raw_line.strip()  # 当前 HLS 行去空白文本
+
+        # 提取当前行之前最近的有效代码，供失败来源和 packet 阶段识别。
+        str_previous_code = ""  # 保存最近前驱，供失败来源选择器使用
+
+        # 反向扫描当前行之前的代码，定位最近的有效前驱。
+        for str_previous_line in reversed(list_raw_lines[:int_line_index]):
+
+            # 清理前驱候选的旧注释，避免上下文混入模板文本。
+            str_previous_candidate = _code_without_comment(str_previous_line).strip()  # 前驱代码去除注释后的文本
+
+            # 第一条非空前驱行就是当前行的上下文前驱。
+            if str_previous_candidate:
+
+                # 保存前驱代码供失败来源和 packet 角色识别。
+                str_previous_code = str_previous_candidate  # 当前前驱代码上下文
+
+                # 前驱代码已找到，结束当前扫描。
+                break
+
+        # 提取下一条有效代码，供结构化 transcript 起点选择细粒度角色。
+        str_next_code = ""  # 当前代码行之后的下一条有效代码
+
+        # 扫描当前行之后的首条非空代码作为上下文后继。
+        for str_candidate_line in list_raw_lines[int_line_index + 1 :]:
+
+            # 去掉候选行的注释后再判断是否为有效代码。
+            str_candidate_code = _code_without_comment(str_candidate_line).strip()  # 候选代码去除注释后的文本
+
+            # 第一条非空候选行就是当前行的上下文后继。
+            if str_candidate_code:
+
+                # 保存后继代码供 transcript 角色识别。
+                str_next_code = str_candidate_code  # 当前后继代码上下文
+
+                # 后继代码已找到，结束当前扫描。
+                break
 
         # 空行原样保留，维持生成代码分段。
         if not str_stripped:
@@ -63,11 +595,19 @@ def _ensure_hls_line_comment_coverage(text: str, comment_language: str) -> str:
             # 继续处理下一行 HLS 文本。
             continue
 
+        # 将当前有效代码前驱写入状态，供相邻和行尾角色共同使用。
+        dict_testbench_state["previous_code"] = str_previous_code  # 当前代码行的前驱上下文
+
         # 注释专用行需要规整或过滤英文泛化注释。
         if _is_comment_only_line(str_stripped):
 
-            # 将注释行规整成当前语言和策略允许的形式。
-            str_normalized_comment = _normalize_hls_comment_only_line(str_raw_line, comment_language)  # 规整后的注释行
+            # 通过统一选择器保留 testbench 与 kernel 的既有分支语义。
+            str_normalized_comment = _render_comment_line(  # 当前 HLS 注释行
+                str_raw_line,  # 读取原始注释并保留缩进
+                comment_language,  # 决定中英文注释分支
+                bool_is_testbench,  # 区分事务注释和内核注释
+                dict_testbench_state,  # 传递 testbench 锚点计数
+            )
 
             # None 表示该普通英文注释需要丢弃。
             if str_normalized_comment:
@@ -94,14 +634,18 @@ def _ensure_hls_line_comment_coverage(text: str, comment_language: str) -> str:
             continue
 
         # 函数声明或定义需要相邻契约注释。
-        if _is_function_signature_line(str_code_stripped):
+        if is_function_signature_line(str_code_stripped):
 
-            # 在函数签名前追加接口契约说明。
-            _append_adjacent_hls_comment(
-                list_lines,
-                str_raw_line,
-                _function_comment_for(str_code_stripped, comment_language),
+            # 通过统一选择器保持函数签名说明的原有分支语义。
+            str_function_comment = _render_function_comment(  # 当前函数签名说明
+                str_code_stripped,  # 从签名提取接口边界
+                comment_language,  # 决定接口说明语言
+                bool_is_testbench,  # 选择 testbench 事务说明
+                dict_testbench_state,  # 累计函数位置锚点
             )
+
+            # 在函数签名前追加已经选择的接口说明。
+            _append_adjacent_hls_comment(list_lines, str_raw_line, str_function_comment)
 
             # 保留函数签名代码行。
             list_lines.append(str_code)
@@ -109,8 +653,14 @@ def _ensure_hls_line_comment_coverage(text: str, comment_language: str) -> str:
             # 当前代码行已经补好行尾注释，继续扫描后续 HLS 行。
             continue
 
-        # 为普通 HLS 代码行选择语义注释。
-        str_line_comment = _line_comment_for(str_code_stripped, comment_language)  # 当前 HLS 行语义注释
+        # 通过统一选择器保持普通代码行的原有分支语义。
+        str_line_comment = _render_line_comment(  # 当前 HLS 行语义注释
+            str_code_stripped,  # 当前 HLS 代码行文本
+            comment_language,  # 当前注释语言配置
+            bool_is_testbench,  # 当前文本是否属于 testbench
+            dict_testbench_state,  # 当前 testbench 注释状态
+            str_next_code,  # 当前代码行之后的有效代码
+        )
 
         # 普通代码行先追加相邻注释，保证行级可读性。
         _append_adjacent_hls_comment(list_lines, str_raw_line, str_line_comment)
@@ -118,8 +668,17 @@ def _ensure_hls_line_comment_coverage(text: str, comment_language: str) -> str:
         # 声明、赋值、pragma 等关键行还需要行尾注释。
         if _line_requires_inline_comment(str_code_stripped):
 
-            # 追加带行尾注释的代码行。
-            list_lines.append(f"{str_code} // {str_line_comment}")
+            # 通过统一选择器保持关键行行尾说明的原有分支语义。
+            str_inline_comment = _render_inline_comment(  # 当前 HLS 行尾语义
+                str_code_stripped,  # 当前关键 HLS 代码行
+                comment_language,  # 当前行尾注释语言
+                bool_is_testbench,  # 选择内联渲染的 testbench 分支
+                dict_testbench_state,  # 当前 testbench 行尾状态
+                str_next_code,  # 传递 transcript 后继代码上下文
+            )
+
+            # 写入已经补齐相邻说明和行尾说明的代码行。
+            list_lines.append(f"{str_code} // {str_inline_comment}")
 
             # 继续处理下一行。
             continue
@@ -171,8 +730,8 @@ def _normalize_hls_comment_only_line(raw_line: str, comment_language: str) -> st
     :return: 规整后的注释行；None 表示丢弃泛化英文注释。
     """
 
-    # 去空白后识别注释内容。
-    str_stripped = raw_line.strip()  # 当前注释行去空白文本
+    # 压缩原始注释行，便于识别 hash、case 和中文正文。
+    str_stripped = raw_line.strip()  # 提取注释标记和正文的边界文本
 
     # 保留原缩进，规整后仍贴合 HLS 代码结构。
     str_indent = _indent_for(raw_line)  # 当前注释行缩进
@@ -395,39 +954,6 @@ def _has_generic_generated_comment(stripped: str) -> bool:
 
     # 返回模板命中结果。
     return bool_has_generic_comment
-
-# 判断当前 HLS 行是否是函数声明或定义。
-def _is_function_signature_line(stripped: str) -> bool:
-    """
-    识别普通 HLS 函数声明或定义行。
-
-    :param stripped: 去空白后的 HLS 代码行。
-    :return: 是否匹配函数签名模式。
-    """
-
-    # 函数签名必须包含括号且以分号或左花括号结束。
-    if not ("(" in stripped and ")" in stripped and (stripped.endswith(";") or stripped.endswith("{"))):
-
-        # 不满足基本形态时不是函数签名。
-        return False
-
-    # stream/task 变量声明包含括号但不是函数签名。
-    if stripped.startswith(("hls::stream", "hls::task")):
-
-        # dataflow 对象声明不作为函数签名处理。
-        return False
-
-    # 控制语句和 return 调用不是函数签名。
-    if stripped.split("(", 1)[0].strip().split(" ")[0] in {"if", "for", "while", "switch", "return"}:
-
-        # 控制语句不作为函数签名处理。
-        return False
-
-    # 函数签名正则覆盖命名空间、模板、指针和数组参数。
-    str_pattern = r"^(?:[\w:<>~,\*&\[\]\s]+)\s+[A-Za-z_]\w*(?:::[A-Za-z_]\w*)?\s*\([^;{}]*\)\s*(?:const\s*)?(?:;|\{)$"  # HLS 函数签名模式
-
-    # 返回函数签名匹配结果。
-    return bool(re.match(str_pattern, stripped))
 
 # 判断 HLS 行是否只是结构性短行。
 def _is_trivial_hls_line(stripped: str) -> bool:

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """包装 agents-md-generator 的文档治理命令，并补齐本仓库 release 打包修复流程。
 
-本脚本默认把 stdout/stderr 交给被委托的治理脚本；`package-release` 分支会输出单个
-JSON 状态对象，供上层自动化读取发布修复和 post gate 结果。
+本脚本默认把 stdout/stderr 交给被委托的治理脚本；`release-gate` 与 `package-release`
+分支会输出单个 JSON 状态对象，供上层自动化读取发布门禁和修复结果。
 """
 
 # 未来注解让标准库类型提示在运行时保持轻量。
@@ -17,6 +17,10 @@ import shutil
 import subprocess
 import sys
 import zipfile
+
+# 运行时加载官方治理入口，保持本地包装层不复制标准实现。
+import functools
+import importlib.util
 
 # 时间戳只用于刷新 release receipt 的生成时间。
 from datetime import datetime
@@ -171,6 +175,9 @@ def _parse_package_args(list_argv: list[str]) -> argparse.Namespace:
 
     # skill-dir 用于从源 skill 目录重建 release manifest。
     parser.add_argument("--skill-dir", required=True)
+
+    # test-evidence 继续交给委托脚本执行，但包装层必须接受该官方参数。
+    parser.add_argument("--test-evidence", default="")
 
     # 返回去掉子命令后的参数命名空间。
     return parser.parse_args(list_argv[1:])
@@ -676,6 +683,7 @@ def _run_post_gate(
     path_project: Path,
     str_version: str,
     str_skill_dir: str,
+    str_test_evidence: str,
 ) -> tuple[int, dict[str, Any]]:
     """执行委托脚本的 release post gate 并解析 JSON 结果。
 
@@ -684,28 +692,358 @@ def _run_post_gate(
         path_project: 当前项目根目录。
         str_version: 当前 release 版本号。
         str_skill_dir: 传递给委托脚本的 skill 目录参数。
+        str_test_evidence: 传递给委托脚本的远程测试收据路径。
 
     返回:
         委托脚本退出码与解析后 JSON 载荷二元组。
     """
 
-    # post gate 复用委托脚本的 release-gate 子命令。
-    completed_process_post = _run(  # 委托 release-gate post 阶段进程状态
-        path_script,  # 被委托执行的治理脚本路径
-        [
-            "release-gate",  # 委托脚本的 release-gate 子命令
-            str(path_project),  # 作为 release-gate 工作根目录的项目路径
-            "--version",  # 传入目标 release 版本参数名
-            str_version,  # 当前 package-release 处理的版本号
-            "--skill-dir",  # 传入 skill 目录参数名
-            str_skill_dir,  # 继续沿用用户提供的 skill-dir 文本
-            "--phase",  # 指定 post gate 阶段参数名
-            "post",  # 要求委托脚本只执行 post 阶段校验
-        ],
+    # post gate 必须留在当前进程，才能沿用 v 前缀版本适配器。
+    list_gate_args = [
+        "release-gate",  # 兼容入口需要的子命令名称
+        str(path_project),  # release-gate 工作根目录
+        "--version",  # 目标 release 版本参数名
+        str_version,  # 当前 package-release 处理的版本号
+        "--skill-dir",  # skill 目录参数名
+        str_skill_dir,  # 用户提供的 skill-dir 文本
+        "--phase",  # release-gate 阶段参数名
+        "post",  # 当前只执行发布后校验
+        "--test-evidence",  # 复用 pre 阶段的远程测试收据
+        str_test_evidence,  # 当前发布对应的测试收据路径
+    ]  # 当前 post gate 的兼容 CLI 参数
+
+    # 直接调用版本适配后的实现，避免子进程丢失目录合同。
+    dict_result = _run_versioned_release_gate_payload(path_script, list_gate_args)  # 版本适配后的 post gate 载荷
+
+    # 统一把机器结果转换为既有退出码和 JSON 二元组。
+    return (0 if dict_result.get("ok") else 1), dict_result
+
+# 在当前进程内运行官方 package-release，并适配仓库的 v 前缀目录合同。
+def _run_versioned_package_release(
+    path_script: Path,
+    namespace_args: argparse.Namespace,
+) -> dict[str, Any]:
+    """运行官方 package-release，同时临时适配 v 前缀版本上下文。
+
+    参数:
+        path_script: 已安装 agents-md-generator 的 manage_docs.py 路径。
+        namespace_args: 已解析的 package-release 参数。
+
+    返回:
+        官方 package-release 生成的机器可读结果。
+
+    异常:
+        RuntimeError: 官方治理入口无法动态加载时抛出固定前缀错误。
+    """
+
+    # 动态加载官方聚合入口，避免修改只读安装目录中的治理实现。
+    module_spec = importlib.util.spec_from_file_location(  # 官方 package-release 模块加载规格
+        "agents_md_delegate_manage_docs_package",  # 官方 package-release 聚合模块名
+        path_script,  # 官方 package-release 聚合入口路径
     )
 
-    # 返回 returncode 和解析后的 JSON payload。
-    return completed_process_post.returncode, (_load_json(completed_process_post.stdout or "") or {})
+    # 缺少 loader 表示当前 agents-md-generator 安装布局不可用。
+    if module_spec is None or module_spec.loader is None:
+
+        # package-release 无法建立官方实现时必须 fail closed。
+        raise RuntimeError(
+            "> ERR: [Python] agents-md-generator package-release loader is unavailable"
+        )
+
+    # 模块对象只在当前 package-release 进程中存活。
+    module_delegate = importlib.util.module_from_spec(module_spec)  # 官方 package-release 聚合模块
+
+    # 执行官方聚合入口，得到 package-release 的真实实现分片。
+    module_spec.loader.exec_module(module_delegate)  # 执行官方 package-release 聚合入口
+
+    # package-release 与 release-gate 共享同一模块全局命名空间。
+    function_package_release = module_delegate.docs_function("package_release")  # 官方 package-release 函数
+
+    # 从官方函数全局表取得发布门禁上下文工厂。
+    dict_release_globals = function_package_release.__globals__  # 官方发布分片共享的全局命名空间
+
+    # 保存官方上下文工厂，调用结束后恢复原始绑定。
+    function_collect_context = dict_release_globals["collect_release_gate_context"]  # 官方 release-gate 上下文工厂
+
+    # 当前调用期间把 v 前缀目录合同注入官方 release-gate。
+    function_versioned_context = functools.partial(  # 当前调用的 v 前缀上下文适配器
+        _collect_versioned_release_gate_context,  # 使用项目版本前缀适配器
+        function_collect_context,  # 保存官方 release-gate 上下文工厂
+    )  # 绑定官方上下文工厂的版本适配函数
+
+    # 只在官方 package-release 调用期间替换上下文工厂。
+    dict_release_globals["collect_release_gate_context"] = function_versioned_context  # 当前 package-release 上下文工厂
+
+    # 官方 package-release 自身负责 pre、复制、清洗、commit 和 post。
+    try:
+
+        # 传入 v 前缀版本，使目录、receipt 和官方结果保持项目合同。
+        return function_package_release(
+            Path(namespace_args.project).resolve(),
+            namespace_args.version,
+            namespace_args.skill_dir,
+            test_evidence_raw=namespace_args.test_evidence,
+            bool_require_test_evidence=True,
+        )
+
+    # 无论官方流程成功或失败，都恢复治理模块的全局函数绑定。
+    finally:
+
+        # 适配只应覆盖当前 package-release 调用。
+        dict_release_globals["collect_release_gate_context"] = function_collect_context  # 恢复官方上下文工厂
+
+# release-gate 的参数解析只保留兼容层需要的公共字段。
+def _parse_release_gate_args(list_argv: list[str]) -> argparse.Namespace:
+    """解析 release-gate 兼容分支所需的命令行参数。
+
+    参数:
+        list_argv: 包含 `release-gate` 子命令的原始参数列表。
+
+    返回:
+        与标准文档治理入口字段一致的参数命名空间。
+    """
+
+    # 兼容解析器只消费路径、版本和门禁阶段，其他语义仍由标准实现负责。
+    parser = argparse.ArgumentParser(add_help=False)  # release-gate 兼容参数解析器
+
+    # 子命令已经由调用方判断，这里保留位置结构以复用标准 CLI 形式。
+    parser.add_argument("project", nargs="?", default=".", type=Path)  # 发布治理项目根目录
+
+    # 版本参数同时接受裸版本和带 v 前缀的标准写法。
+    parser.add_argument("--version", required=True)  # 当前 release 的版本文本
+
+    # 技能路径决定发布包名称和源码治理边界。
+    parser.add_argument("--skill-dir", dest="skill_dir_raw", required=True)  # 当前技能源码目录
+
+    # 阶段与安装意图必须和标准 release-gate CLI 保持一致。
+    parser.add_argument("--phase", choices=("pre", "post"), default="pre")  # release 门禁阶段
+
+    # 安装意图影响标准门禁是否附加本地安装决策请求。
+    parser.add_argument(
+        "--install-intent",
+        choices=("unspecified", "requested", "skipped"),
+        default="unspecified",
+    )  # 安装意图选择
+
+    # 远程测试收据由标准实现读取并执行新鲜度与哈希校验。
+    parser.add_argument("--test-evidence", dest="test_evidence_raw", default="")  # 不透明测试证据文件
+
+    # CLI release-gate 必须把测试收据作为强制输入传给标准实现。
+    parser.set_defaults(bool_require_test_evidence=True)  # release-gate 强制证据开关
+
+    # 跳过子命令文本后让 argparse 复现标准参数错误语义。
+    return parser.parse_args(list_argv[1:])
+
+# 适配标准 release-gate 的版本表示与仓库 v 前缀目录合同。
+def _collect_versioned_release_gate_context(
+    function_collect_context: Any,
+    path_project: Path,
+    str_version: str,
+    str_skill_dir_raw: str,
+    str_phase: str,
+    str_install_intent: str,
+) -> dict[str, Any]:
+    """构造带 v 前缀发布目录的标准门禁上下文。
+
+    参数:
+        function_collect_context: agents-md-generator 标准上下文收集函数。
+        path_project: 当前项目根目录。
+        str_version: CLI 传入的裸版本或带 v 前缀版本。
+        str_skill_dir_raw: 当前技能源码目录参数。
+        str_phase: `pre` 或 `post` 门禁阶段。
+        str_install_intent: 安装意图枚举文本。
+
+    返回:
+        已将版本和发布路径统一到 `vX.Y.Z` 合同的门禁上下文。
+
+    异常:
+        ValueError: 官方版本策略拒绝非法版本文本时抛出。
+    """
+
+    # 只移除一个可选前缀，避免把非法的重复前缀静默转换成合法版本。
+    str_version_text = str_version.strip()  # CLI 版本去除两端空白
+
+    # 将目录标签中的可选 v 前缀转换成标准策略使用的裸版本。
+    str_version_number = str_version_text[1:] if str_version_text.startswith(("v", "V")) else str_version_text  # 供标准策略校验的裸版本主体
+
+    # 先让标准实现完成源码、Git、分支和文档事实收集。
+    dict_context = function_collect_context(  # 标准门禁收集的基础上下文
+        path_project,  # 门禁项目根目录
+        str_version_number,  # 标准策略使用的裸版本
+        str_skill_dir_raw,  # 技能源码目录参数
+        str_phase,  # 当前门禁阶段
+        str_install_intent,  # 当前安装意图
+    )  # 接收官方实现提供的源码、Git 和分支事实
+
+    # 发布目录、压缩包和 receipt 必须共同使用带 v 前缀的版本身份。
+    str_version_tag = f"v{str_version_number}"  # 发布目录采用的规范版本标签
+
+    # 从标准上下文复用技能名称，避免重新解析源码路径。
+    str_skill_name = dict_context["skill_name"]  # 当前技能的发布包名称
+
+    # 目录命名必须与 prepare_release.py 生成的历史产物完全一致。
+    path_release_dir = path_project / "dist" / f"{str_skill_name}-{str_version_tag}"  # 实际版本化发布目录
+
+    # 压缩包沿用目录身份，确保安装和镜像读取同一发布版本。
+    path_release_zip = path_project / "dist" / f"{str_skill_name}-{str_version_tag}.zip"  # 实际版本化发布压缩包
+
+    # 门禁内部统一使用带 v 的版本以匹配 receipt 身份字段。
+    dict_context["version"] = str_version_tag  # 门禁内部统一使用带 v 的版本
+
+    # 源码版本字段采用相同表示，避免标准比较器把两种写法视为漂移。
+    dict_context["source_version"] = str_version_tag  # 源码版本的规范比较表示
+
+    # post 阶段只验证实际存在且可安装的 v 前缀发布目录。
+    dict_context["expected_release"] = path_release_dir  # post gate 实际验证的发布目录
+
+    # post 阶段同时验证与目录同名的发布压缩包。
+    dict_context["expected_zip"] = path_release_zip  # post gate 实际验证的发布压缩包
+
+    # 收据入口必须位于同一版本目录，不能回退到裸版本路径。
+    dict_context["receipt_path"] = path_release_dir / "RELEASE_RECEIPT.json"  # 发布收据路径
+
+    # 返回只改变版本表示和产物路径的标准上下文，其他门禁事实保持原样。
+    return dict_context
+
+# 为非法版本输入构造与标准门禁相容的机器结果。
+def _build_release_gate_failure_result(
+    namespace_args: argparse.Namespace,
+    str_error: str,
+    str_policy_version: str,
+) -> dict[str, Any]:
+    """为版本策略异常返回 fail-closed 的 release-gate 结果。
+
+    参数:
+        namespace_args: 兼容解析器生成的 release-gate 参数。
+        str_error: 标准版本策略产生的错误文本。
+        str_policy_version: 已加载治理实现声明的策略版本。
+
+    返回:
+        保持 release-gate 机器协议字段的失败结果。
+    """
+
+    # 错误输入无法进入完整源码扫描，因此只公开输入阶段事实。
+    path_project = Path(namespace_args.project).resolve()  # 输入校验使用的项目根目录
+
+    # checks 保留阶段与安装意图，方便调用方区分失败入口。
+    dict_checks = {
+        "phase": namespace_args.phase,  # 记录失败发生在 release-gate 的具体阶段
+        "install_intent": namespace_args.install_intent,  # 保留调用方声明的安装动作意图
+    }  # 输入阶段的最小检查事实
+
+    # 失败结果明确关闭安装能力和内容策略通过标志。
+    return {
+        "project": str(path_project),  # 当前发布项目根目录
+        "ok": False,  # 版本输入失败时不得继续发布
+        "errors": [str_error],  # 保留标准版本策略诊断
+        "checks": dict_checks,  # 公开输入阶段的稳定检查字段
+        "installable": False,  # 非法版本永远不可安装
+        "receipt_path": "",  # 输入失败时不存在可信收据路径
+        "provenance_mode": "repository-dist",  # 与标准 release-gate 保持来源协议
+        "validation_level": "strong",  # 失败结果仍属于强门禁协议
+        "policy_version": str_policy_version,  # 回显已加载的治理策略版本
+        "forbidden_source_paths": [],  # 尚未进入源码内容扫描
+        "forbidden_release_paths": [],  # 尚未进入发布树内容扫描
+        "release_content_policy_ok": False,  # 未完成内容策略检查不能标绿
+        "install_confirmation_required": False,  # 失败结果不请求安装决策
+        "decision_request": {},  # 失败结果不携带后续动作
+    }
+
+# 通过内存适配复用标准 release-gate，避免修改只读的已安装治理 skill。
+def _run_versioned_release_gate_payload(path_script: Path, list_argv: list[str]) -> dict[str, Any]:
+    """运行兼容 v 前缀 dist 目录合同的标准 release-gate。
+
+    参数:
+        path_script: 已安装 agents-md-generator 的 manage_docs.py 路径。
+        list_argv: 当前 CLI 的 release-gate 原始参数列表。
+
+    返回:
+        标准 release-gate 的机器可读结果。
+
+    异常:
+        RuntimeError: 标准治理入口无法加载时抛出固定前缀错误。
+    """
+
+    # 兼容分支先解析调用方参数，再保持标准实现的参数语义。
+    namespace_args = _parse_release_gate_args(list_argv)  # release-gate 兼容参数
+
+    # 从已安装治理 skill 动态加载标准 docs CLI，不修改其磁盘文件。
+    module_spec = importlib.util.spec_from_file_location("agents_md_delegate_manage_docs", path_script)  # 按已安装文件路径绑定官方 docs 实现
+
+    # 缺少 loader 表示当前 agents-md-generator 安装布局已损坏。
+    if module_spec is None or module_spec.loader is None:
+
+        # 让调用方获得可定位的 Python 入口错误，而不是空 JSON。
+        raise RuntimeError(
+            "> ERR: [Python] agents-md-generator manage_docs loader is unavailable"
+        )
+
+    # 模块对象只存活于当前兼容门禁进程，不会写回已安装目录。
+    module_delegate = importlib.util.module_from_spec(module_spec)  # 标准 docs CLI 模块
+
+    # 加载标准 docs 治理分派器，使后续调用复用官方实现。
+    module_spec.loader.exec_module(module_delegate)  # 加载标准 docs 治理分派器
+
+    # release_gate 函数的全局命名空间承载标准上下文收集器。
+    function_release_gate = module_delegate.docs_function("release_gate")  # 标准 release gate 实现
+
+    # 兼容适配需要临时重绑定标准实现的上下文收集器。
+    dict_release_globals = function_release_gate.__globals__  # 标准 release gate 全局符号表
+
+    # 保存官方上下文工厂，退出时恢复以避免跨调用污染。
+    function_collect_context = dict_release_globals["collect_release_gate_context"]  # 原始上下文收集器
+
+    # 仅在当前调用期间替换路径兼容适配，退出前恢复原始函数对象。
+    function_versioned_context = functools.partial(_collect_versioned_release_gate_context, function_collect_context)  # 绑定官方上下文工厂，生成带 v 的发布路径
+
+    # 将适配器注入标准函数的全局查找表，仅影响当前进程。
+    dict_release_globals["collect_release_gate_context"] = function_versioned_context  # 当前调用使用的上下文工厂
+
+    # 标准门禁仍负责测试证据、源码、内容、receipt、parity 和历史快照检查。
+    try:
+
+        # 以标准函数签名执行完整 post/pre 门禁。
+        dict_result = function_release_gate(**vars(namespace_args))  # 标准 release gate 的结构化结果
+
+    # 非法版本可能在标准历史版本比较阶段抛出 ValueError，需要转成机器结果。
+    except ValueError as exc_version:
+
+        # 保留标准版本策略文本，阻止 traceback 泄漏到 CLI 输出。
+        dict_result = _build_release_gate_failure_result(  # 将版本异常转换为 fail-closed 机器结果
+            namespace_args,  # 复用原始 release-gate 参数事实
+            str(exc_version),  # 保留官方版本策略的错误文本
+            str(dict_release_globals.get("POLICY_VERSION", "")),  # 回显当前治理策略版本
+        )  # 版本输入失败的结构化结果
+
+    # 标准实现完成后恢复原始上下文收集器。
+    finally:
+
+        # 避免动态模块在同一进程内残留兼容状态。
+        dict_release_globals["collect_release_gate_context"] = function_collect_context  # 恢复标准收集器
+
+    # 返回机器结果，由 CLI 或 package-release 调用方决定输出方式。
+    return dict_result
+
+# release-gate CLI 入口把版本适配结果序列化为既有单 JSON 协议。
+def _run_versioned_release_gate(path_script: Path, list_argv: list[str]) -> int:
+    """运行版本适配后的 release-gate，并返回 CLI 退出码。
+
+    参数:
+        path_script: 已安装 agents-md-generator 的 manage_docs.py 路径。
+        list_argv: 当前 release-gate 调用的原始参数列表。
+
+    返回:
+        release-gate 成功时返回 0，否则返回 1。
+    """
+
+    # CLI 与 package-release 共用同一份版本适配门禁载荷。
+    dict_result = _run_versioned_release_gate_payload(path_script, list_argv)  # 版本适配后的 release-gate 结果
+
+    # release-gate 的既有 stdout 合同是单个机器可读 JSON 对象。
+    sys.stdout.write(json.dumps(dict_result, indent=2, ensure_ascii=False) + "\n")
+
+    # 只有标准门禁完整通过时才向外报告成功。
+    return 0 if dict_result.get("ok") else 1
 
 # 先执行一次 package-release，并判断是否属于可修复的 stage-only 失败。
 def _initial_package_release_state(
@@ -722,11 +1060,28 @@ def _initial_package_release_state(
         包含首次执行进程、JSON 载荷和修复判定的状态字典。
     """
 
-    # 先运行原始 package-release，只有特定 staging 失败才进入修复路径。
-    completed_process_first = _run(path_script, list_argv)  # 初次 package-release 结果
+    # 后续修复分支只消费命名空间字段，避免再次拆解原始参数。
+    namespace_args = _parse_package_args(list_argv)  # 保存 stage-only 修复所需的调用参数
 
-    # 尝试读取委托脚本输出的 JSON 状态。
-    dict_payload = _load_json(completed_process_first.stdout or "")  # 初次 package-release JSON 载荷
+    # 在当前进程运行官方 package-release，避免子进程丢失 v 前缀适配。
+    dict_payload = _run_versioned_package_release(path_script, namespace_args)  # 官方 package-release JSON 载荷
+
+    # 用统一 CompletedProcess 形态保留既有修复分支的退出码语义。
+    list_delegate_args = [sys.executable, str(path_script), *list_argv]  # 兼容结果记录使用的官方参数列表
+
+    # 根据官方 payload 结果构造包装层内部的进程状态。
+    int_delegate_returncode = 0 if dict_payload.get("ok") else 1  # 官方 package-release 逻辑退出码
+
+    # 将结构化 payload 序列化为既有 stdout 解析合同。
+    str_delegate_stdout = json.dumps(dict_payload, indent=2, ensure_ascii=False) + "\n"  # 官方 package-release JSON 输出
+
+    # 兼容修复分支继续使用 CompletedProcess 统一传递结果。
+    completed_process_first = subprocess.CompletedProcess(  # 兼容修复分支的统一进程结果
+        list_delegate_args,  # 记录官方 package-release 的等价命令行
+        int_delegate_returncode,  # 保留官方 payload 的成功或失败状态
+        stdout=str_delegate_stdout,  # 保留官方 package-release 的结构化输出
+        stderr="",  # 当前进程调用没有独立的委托 stderr
+    )  # 完成包装层内部统一进程结果
 
     # errors 字段用于识别是否仅因 dist staging 失败而需要包装层修复。
     list_errors = dict_payload.get("errors", []) if isinstance(dict_payload, dict) else []  # 委托脚本错误清单
@@ -1005,6 +1360,7 @@ def _package_release_with_repo_fixes(path_script: Path, list_argv: list[str]) ->
         namespace_context.project,  # post gate 所在项目根目录
         namespace_parsed.version,  # 需要重新校验的 release 版本号
         namespace_parsed.skill_dir,  # 继续传回委托脚本的原始 skill-dir 参数
+        namespace_parsed.test_evidence,  # 复用 package-release 已验证的远程测试收据
     )
 
     # 二元组第一项是 release-gate post 的退出码。
@@ -1048,6 +1404,12 @@ if __name__ == "__main__":
 
     # 定位 agents-md-generator 的 manage_docs.py 委托目标。
     path_delegate_script = agents_md_generator_script("manage_docs.py")  # 委托脚本路径
+
+    # release-gate 需要把 CLI 版本与 v 前缀 dist 合同统一后再委托标准实现。
+    if list_args[:1] == ["release-gate"] and "--help" not in list_args:
+
+        # 兼容分支仍由 agents-md-generator 标准门禁执行全部实际检查。
+        raise SystemExit(_run_versioned_release_gate(path_delegate_script, list_args))
 
     # package-release 需要包装层修复 dist parity。
     if list_args[:1] == ["package-release"]:

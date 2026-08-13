@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Security fixes are tracked for the newest published skill version. The current supported release is `0.5.0`.
+Security fixes are tracked for the newest published skill version. The current supported release is `0.5.1`.
 
 Older release directories are immutable history. If an older release is still deployed, upgrade from its matching `dist/readable-hls-generator-vX.Y.Z/` directory to the newest validated release before reporting a security issue that may already be fixed.
 

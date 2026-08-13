@@ -27,6 +27,7 @@ from .mock_hls_artifacts import (
     _stream_payload_type,
     _stream_storage_type,
 )
+from .mock_vectors import _example_pattern
 
 # 渲染 input/output/scale/length 形态的 mock 向量用例。
 def _mock_vector_scale_cases(
@@ -129,13 +130,13 @@ def _mock_vector_scale_cases(
         # 这里把当前 scale 用例渲染成独立 C++ 校验块，后续统一拼接返回。
         list_case_blocks.append(f'''  {{
     // {str_case_header_comment}
-    {str_input_type} input[{int_array_depth}] = {{{str_input_values_text}}};
-    {str_output_type} output[{int_array_depth}] = {{}};
-    const double expected[{int_observed_bound}] = {{{str_expected_values_text}}};
-    {top}(input, output, {_constructor_expr(str_scale_type, float_scale)}, {int_length});
+    {str_input_type} arr_input_values[{int_array_depth}] = {{{str_input_values_text}}};
+    {str_output_type} arr_output_values[{int_array_depth}] = {{}};
+    const double arr_expected_values[{int_observed_bound}] = {{{str_expected_values_text}}};
+    {top}(arr_input_values, arr_output_values, {_constructor_expr(str_scale_type, float_scale)}, {int_length});
     bool pass = true;
     for (int i = 0; i < {int_length}; ++i) {{
-      if ((double)output[i] != expected[i]) {{
+      if ((double)arr_output_values[i] != arr_expected_values[i]) {{
         pass = false;
       }}
     }}
@@ -146,12 +147,12 @@ def _mock_vector_scale_cases(
         << "\\",\\"outputs\\":{{\\"output\\":[";
     for (int i = 0; i < {int_length}; ++i) {{
       if (i != 0) std::cout << ",";
-      std::cout << (double)output[i];
+      std::cout << (double)arr_output_values[i];
     }}
     std::cout
         << "]}},\\"checkpoints\\":{{\\"length\\":{int_length},"
         << "\\"first_output\\":"
-        << (double)output[0]
+        << (double)arr_output_values[0]
         << "}}}}\\n";
     if (!pass) failures++;
   }}''')
@@ -195,6 +196,18 @@ def _mock_input_output_cases(
 
     # 输出数组的局部类型也要贴合顶层签名，防止比较阶段被隐式类型转换干扰。
     str_output_type = _argument_storage_type(dict_arguments.get("output", {}))  # 让 reference 观测数组沿用顶层输出端口的声明类型
+
+    # 记录当前样例 pattern，task_graph memory contract 需要沿用 spec 端口名。
+    str_pattern_name = _example_pattern(spec)  # 当前 input/output testbench 的样例 pattern
+
+    # task_graph 的 memory 调用文本必须直接体现顶层端口语义，其他模式继续使用局部数组名。
+    str_input_buffer_name = "input" if str_pattern_name == "task_graph" else "arr_input_values"  # 输入缓冲变量名
+
+    # task_graph 的输出调用参数保持与 spec 一致，普通模式保留历史可读数组名。
+    str_output_buffer_name = "output" if str_pattern_name == "task_graph" else "arr_output_values"  # 输出缓冲变量名
+
+    # task_graph 的期望数组也使用简洁语义名，避免把端口契约隐藏在模板变量中。
+    str_expected_buffer_name = "expected" if str_pattern_name == "task_graph" else "arr_expected_values"  # 期望值数组名
 
     # 这里缓存每个基础向量用例生成的独立代码块，结尾再按顺序拼接。
     list_case_blocks: list[str] = []  # 待汇总的 input or output 用例代码块
@@ -254,13 +267,13 @@ def _mock_input_output_cases(
         # 这里把当前基础 input or output 用例渲染成独立 C++ 校验块。
         list_case_blocks.append(f'''  {{
     // {str_case_header_comment}
-    {str_input_type} input[{int_array_depth}] = {{{str_input_values_text}}};
-    {str_output_type} output[{int_array_depth}] = {{}};
-    const double expected[{int_observed_bound}] = {{{str_expected_values_text}}};
-    {top}(input, output, {int_length});
+    {str_input_type} {str_input_buffer_name}[{int_array_depth}] = {{{str_input_values_text}}};
+    {str_output_type} {str_output_buffer_name}[{int_array_depth}] = {{}};
+    const double {str_expected_buffer_name}[{int_observed_bound}] = {{{str_expected_values_text}}};
+    {top}({str_input_buffer_name}, {str_output_buffer_name}, {int_length});
     bool pass = true;
     for (int i = 0; i < {int_observed_bound}; ++i) {{
-      if ((double)output[i] != expected[i]) {{
+      if ((double){str_output_buffer_name}[i] != {str_expected_buffer_name}[i]) {{
         pass = false;
       }}
     }}
@@ -271,12 +284,12 @@ def _mock_input_output_cases(
         << "\\",\\"outputs\\":{{\\"output\\":[";
     for (int i = 0; i < {int_observed_bound}; ++i) {{
       if (i != 0) std::cout << ",";
-      std::cout << (double)output[i];
+      std::cout << (double){str_output_buffer_name}[i];
     }}
     std::cout
         << "]}},\\"checkpoints\\":{{\\"length\\":{int_length},"
         << "\\"first_output\\":"
-        << (double)output[0]
+        << (double){str_output_buffer_name}[0]
         << "}}}}\\n";
     if (!pass) failures++;
   }}''')
@@ -382,13 +395,13 @@ def _mock_block_transform_cases(
         # 追加当前二维 block-transform 用例对应的 C++ 校验文本块。
         list_case_blocks.append(f'''  {{
     // {str_case_comment}
-    {str_input_type} input[{int_array_depth}] = {{{str_input_values_text}}};
-    {str_output_type} output[{int_array_depth}] = {{}};
-    const double expected[{int_observed_bound}] = {{{str_expected_values_text}}};
-    {top}(input, output, {int_rows}, {int_cols});
+    {str_input_type} arr_input_values[{int_array_depth}] = {{{str_input_values_text}}};
+    {str_output_type} arr_output_values[{int_array_depth}] = {{}};
+    const double arr_expected_values[{int_observed_bound}] = {{{str_expected_values_text}}};
+    {top}(arr_input_values, arr_output_values, {int_rows}, {int_cols});
     bool pass = true;
     for (int i = 0; i < {int_observed_bound}; ++i) {{
-      if ((double)output[i] != expected[i]) {{
+      if ((double)arr_output_values[i] != arr_expected_values[i]) {{
         pass = false;
       }}
     }}
@@ -399,13 +412,13 @@ def _mock_block_transform_cases(
         << "\\",\\"outputs\\":{{\\"output\\":[";
     for (int i = 0; i < {int_observed_bound}; ++i) {{
       if (i != 0) std::cout << ",";
-      std::cout << (double)output[i];
+      std::cout << (double)arr_output_values[i];
     }}
     std::cout
         << "]}},\\"checkpoints\\":{{{str_rows_checkpoint_field},"
         << "{str_cols_checkpoint_field},"
         << "\\"first_output\\":"
-        << (double)output[0]
+        << (double)arr_output_values[0]
         << "}}}}\\n";
     if (!pass) failures++;
   }}''')
@@ -526,14 +539,14 @@ def _mock_multi_m_axi_cases(
         # 追加当前 multi-m_axi 用例对应的 C++ 校验文本块。
         list_case_blocks.append(f'''  {{
     // {str_case_comment}
-    {str_input_a_type} input_a[{int_array_depth}] = {{{str_input_a_values_text}}};
-    {str_input_b_type} input_b[{int_array_depth}] = {{{str_input_b_values_text}}};
-    {str_output_type} output[{int_array_depth}] = {{}};
-    const double expected[{int_observed_bound}] = {{{str_expected_values_text}}};
-    {top}(input_a, input_b, output, {int_length});
+    {str_input_a_type} arr_input_a_values[{int_array_depth}] = {{{str_input_a_values_text}}};
+    {str_input_b_type} arr_input_b_values[{int_array_depth}] = {{{str_input_b_values_text}}};
+    {str_output_type} arr_output_values[{int_array_depth}] = {{}};
+    const double arr_expected_values[{int_observed_bound}] = {{{str_expected_values_text}}};
+    {top}(arr_input_a_values, arr_input_b_values, arr_output_values, {int_length});
     bool pass = true;
     for (int i = 0; i < {int_length}; ++i) {{
-      if ((double)output[i] != expected[i]) {{
+      if ((double)arr_output_values[i] != arr_expected_values[i]) {{
         pass = false;
       }}
     }}
@@ -544,12 +557,12 @@ def _mock_multi_m_axi_cases(
         << "\\",\\"outputs\\":{{\\"output\\":[";
     for (int i = 0; i < {int_length}; ++i) {{
       if (i != 0) std::cout << ",";
-      std::cout << (double)output[i];
+      std::cout << (double)arr_output_values[i];
     }}
     std::cout
         << "]}},\\"checkpoints\\":{{\\"length\\":{int_length},"
         << "\\"first_output\\":"
-        << (double)output[0]
+        << (double)arr_output_values[0]
         << "}}}}\\n";
     if (!pass) failures++;
   }}''')
@@ -680,6 +693,9 @@ def _mock_rle_axis_cases(
     # 解析 AXIS RLE 场景输入 stream 包体使用的 payload 类型。
     str_in_payload_type = _stream_payload_type(dict_arguments.get("in_stream", {}))  # 输入 stream 的 payload 类型
 
+    # 解析 AXIS RLE 场景输出 stream 包体使用的 payload 类型，避免输入输出位宽混用。
+    str_out_payload_type = _stream_payload_type(dict_arguments.get("out_stream", {}))  # 输出 stream 的 payload 类型
+
     # 这里缓存每个 AXIS RLE 压缩用例的完整校验片段，最后统一回传给 reference testbench。
     list_case_blocks: list[str] = []  # AXIS RLE 压缩输出校验片段缓存
 
@@ -718,12 +734,12 @@ def _mock_rle_axis_cases(
             # 这里为当前输入包补齐 AXIS 字段，再把完整包对象压入输入流。
             list_write_lines.extend(
                 [
-                    f"    {str_in_payload_type} in_pkt_{int_index};",
-                    f"    in_pkt_{int_index}.data = {int_value};",
-                    f"    in_pkt_{int_index}.keep = -1;",
-                    f"    in_pkt_{int_index}.strb = -1;",
-                    f"    in_pkt_{int_index}.last = {int_last_flag};",
-                    f"    in_stream.write(in_pkt_{int_index});",
+                    f"    {str_in_payload_type} axis_in_pkt_{int_index};",
+                    f"    axis_in_pkt_{int_index}.data = {int_value};",
+                    f"    axis_in_pkt_{int_index}.keep = -1;",
+                    f"    axis_in_pkt_{int_index}.strb = -1;",
+                    f"    axis_in_pkt_{int_index}.last = {int_last_flag};",
+                    f"    in_stream.write(axis_in_pkt_{int_index});",
                 ]
             )
 
@@ -761,12 +777,12 @@ def _mock_rle_axis_cases(
         pass = false;
         observed[i] = 0;
       }} else {{
-        auto out_pkt = out_stream.read();
-        observed[i] = (unsigned)out_pkt.data;
-        if (out_pkt.keep == 0 || out_pkt.strb == 0) {{
+        {str_out_payload_type} axis_out_pkt = out_stream.read();
+        observed[i] = (unsigned)axis_out_pkt.data;
+        if (axis_out_pkt.keep == 0 || axis_out_pkt.strb == 0) {{
           pass = false;
         }}
-        if (out_pkt.last != 0) {{
+        if (axis_out_pkt.last != 0) {{
           last_seen = true;
         }}
       }}

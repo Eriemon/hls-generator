@@ -1208,9 +1208,13 @@ def _semantic_suffix_issues(str_rel_path: str, int_line: int, str_name: str, str
         )
 
     # AXIS packet 名称应显式暴露 axis、word、packet 或 token 语义。
-    if _looks_like_axis_type(str_lowered_code) and not _contains_any(
-        str_lowered_name,
-        ("axis", "word", "packet", "token", "pkt"),
+    if (
+        "hls::stream" not in str_lowered_code
+        and _looks_like_axis_type(str_lowered_code)
+        and not _contains_any(
+            str_lowered_name,
+            ("axis", "word", "packet", "token", "pkt"),
+        )
     ):
 
         # 记录 AXIS 类型名称缺失协议语义的问题。

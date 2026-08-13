@@ -20,6 +20,9 @@ from typing import Any
 # 导入 workflow 侧的端口候选名生成器，供 typed-prefix 端口与旧语义名做统一匹配。
 from scripts.python.generation.mock_hls_governance import governed_argument_candidate_names
 
+# m_axi 合同解析器提供与生成端相同的有效 depth 规则，避免校验层自行复制回退逻辑。
+from scripts.python.generation.mock_hls_contract_text import depth_text_for_argument
+
 # 导入 HLS 注释治理规则，用于校验生成代码的注释边界是否满足仓库契约。
 from scripts.python.hls_quality_gate.comment_policy import validate_hls_comment_policy
 
@@ -1988,6 +1991,15 @@ def _argument_pragma_issues(
                 )
             )
 
+        # m_axi 的 depth 同时决定 RTL co-simulation 访问窗口和 testbench 局部数组容量，必须精确匹配有效合同。
+        list_issues.extend(
+            _m_axi_depth_issues(
+                argument,
+                list_matching_pragmas,
+                spec,
+            )
+        )
+
     # 没声明显式接口模式且完全没有 pragma 时，保留 warning 提醒补全。
     elif not list_matching_pragmas:
 
@@ -2031,6 +2043,69 @@ def _argument_pragma_issues(
         )
 
     # 返回当前参数的 pragma 检查结果。
+    return list_issues
+
+# 检查单个 m_axi 端口的 pragma depth 是否和生成合同一致。
+def _m_axi_depth_issues(
+    argument: dict[str, Any],
+    list_matching_pragmas: list[dict[str, str]],
+    spec: dict[str, Any],
+) -> list[ValidationIssue]:
+    """检查 m_axi pragma 与端口深度合同的一致性。
+
+    参数:
+        argument: 当前接口参数的规范字典。
+        list_matching_pragmas: 按端口名匹配到的 pragma 记录列表。
+        spec: 当前 HLS 规范字典。
+
+    返回:
+        当前端口发现的 depth 合同问题列表。
+    """
+
+    # 初始化当前端口的深度问题集合。
+    list_issues: list[ValidationIssue] = []  # 当前 m_axi 端口的 depth 诊断集合
+
+    # 非 m_axi 端口没有访问窗口深度合同，不进入本规则。
+    if _canonical_hls_mode(argument.get("interface")) != "m_axi":
+
+        # 非 m_axi 参数的接口合法性由其它 pragma 规则负责。
+        return list_issues
+
+    # 读取生成端共享的有效 depth，覆盖端口、性能、profile 和默认回退规则。
+    str_expected_depth = depth_text_for_argument(spec, argument)  # 当前 m_axi 端口应使用的合同深度文本
+
+    # 非数字合同无法安全映射到 HLS pragma 的 depth 整数字面量。
+    if not str_expected_depth.isdigit():
+
+        # 当前合同不具备可比较的数值，交由更上层 spec 规则报告。
+        return list_issues
+
+    # 只收集真正属于 m_axi 模式的命中 pragma，避免其它接口条目污染诊断。
+    list_observed_depths = [
+        str(dict_item.get("depth") or "")  # 当前 m_axi pragma 的实际 depth 文本
+        for dict_item in list_matching_pragmas  # 遍历当前端口匹配到的 pragma 记录
+        if _canonical_hls_mode(dict_item.get("mode")) == "m_axi"  # 只保留 m_axi 接口条目
+    ]  # 当前端口源码中实际写出的 m_axi depth 列表
+
+    # 合同深度已经出现时，说明 pragma 与 testbench 共享的访问窗口保持一致。
+    if str_expected_depth in list_observed_depths:
+
+        # 当前端口无需追加 depth 诊断。
+        return list_issues
+
+    # 把缺失和不一致统一报告为端口级深度合同错误，并保留实际观测值。
+    str_observed_depths = ", ".join(sorted(set(list_observed_depths))) or "missing"  # 实际观察到的 depth 文本
+
+    # 把当前端口的 depth 合同差异追加到静态验证报告。
+    list_issues.append(
+        ValidationIssue(
+            "error",
+            f"HLS m_axi argument {argument['name']!r} must use depth "
+            f"{str_expected_depth!r}, found {str_observed_depths}.",
+        )
+    )
+
+    # 返回当前 m_axi 端口的深度合同问题。
     return list_issues
 
 # 检查源码中是否出现不适合当前 Vitis HLS 流程的 C++ 结构。
@@ -2735,8 +2810,8 @@ def _parse_hls_interface_pragmas(source_text: str) -> list[dict[str, str]]:
             # 跳过非 INTERFACE pragma 行，避免无意义解析。
             continue
 
-        # 先确定当前 pragma 的接口模式，缺省时回退到语句头部模式。
-        str_mode_value = _pragma_value(str_line, "mode") or _pragma_interface_mode(str_line)  # 当前 pragma 经回退后的接口模式
+        # 先确定当前 pragma 的 mode 字段，供后续端口接口族对照。
+        str_mode_value = _pragma_value(str_line, "mode") or _pragma_interface_mode(str_line)  # 当前行缺少 mode 键时改用 INTERFACE 头部的协议名
 
         # 为当前 pragma 生成接口合同记录，后续直接追加到 pragma 列表。
         dict_pragma = {
@@ -2744,6 +2819,7 @@ def _parse_hls_interface_pragmas(source_text: str) -> list[dict[str, str]]:
             "mode": str_mode_value,  # 解析后的接口模式，供模式比对
             "port": _pragma_value(str_line, "port"),  # 端口名，供参数接口约束比对
             "bundle": _pragma_value(str_line, "bundle"),  # bundle 名称，供总线分组核对
+            "depth": _pragma_value(str_line, "depth"),  # m_axi 访问深度，供 pragma 与 testbench 合同比对
         }
 
         # 把结构化 pragma 条目追加到结果列表。

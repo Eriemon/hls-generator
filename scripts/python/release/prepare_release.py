@@ -13,6 +13,7 @@ import argparse
 import datetime as dt
 import hashlib
 import importlib
+import inspect
 import json
 
 # 运行环境、文本规则和文件系统操作放在同一组，便于核对发布副作用。
@@ -796,23 +797,47 @@ def _load_release_governance_modules() -> tuple[Any, Any]:
         ReleaseError: 当前环境没有可用的 agents-md-generator 发布模块。
     """
 
+    # 发布清洗模块存在新旧文件名差异，需要在同一安装根内按顺序尝试。
+    list_release_policy_names: list[str] = [  # 兼容的发布策略模块名
+        "release_policy",  # 新版标准模块名
+        "_manage_docs_release_policy",  # server_6 已安装布局中的兼容模块名
+    ]
+
     # 先尝试调用方已经配置好的 Python 模块路径，避免修改运行环境。
     try:
 
-        # 生产调用通常已经把两个发布模块放在 PYTHONPATH 中。
+        # 生产调用通常已经把内容策略模块放在 PYTHONPATH 中。
         module_content_policy: Any = importlib.import_module("release_content_policy")  # 内容策略模块
 
-        # 清洗模块负责发布副本改写和历史文件摘要。
-        module_release_policy: Any = importlib.import_module("release_policy")  # 清洗与历史快照模块
+        # 发布策略模块按新名称到兼容名称逐一尝试，保持安装版本闭合。
+        for str_release_policy_name in list_release_policy_names:
 
-        # 两个模块来自同一运行环境时才允许继续打包。
-        return module_content_policy, module_release_policy
+            # 当前候选名称用于诊断和模块加载，不改变发布策略内容。
+            sys.modules.pop(str_release_policy_name, None)
+
+            # 当前候选模块需要经过独立导入验证。
+            try:
+
+                # 清洗模块负责发布副本改写和历史文件摘要。
+                module_release_policy: Any = importlib.import_module(str_release_policy_name)  # 清洗与历史快照模块
+
+                # 两个模块来自同一运行环境时才允许继续打包。
+                return module_content_policy, module_release_policy
+
+            # 当前候选不存在时继续尝试受治理的兼容名称。
+            except ImportError:
+
+                # 清理失败候选，避免下一个路径复用不完整的模块缓存。
+                sys.modules.pop(str_release_policy_name, None)
+
+        # 所有调用方路径候选都失败后，不能把孤立内容策略模块带入后续路径。
+        sys.modules.pop("release_content_policy", None)
 
     # 未配置模块路径时继续探测标准 Codex 安装位置。
     except ImportError:
 
-        # 当前异常只表示导入路径未准备好，后续候选路径仍可恢复。
-        pass
+        # 当前异常只表示调用方路径未准备好，后续候选路径仍可恢复。
+        sys.modules.pop("release_content_policy", None)
 
     # CODEX_HOME 允许受管运行器显式指定技能安装根。
     list_codex_roots: list[Path] = []  # 待探测的 Codex 根目录
@@ -872,13 +897,34 @@ def _load_release_governance_modules() -> tuple[Any, Any]:
         try:
 
             # 两个模块都成功加载后才返回，避免规则版本混用。
+            sys.modules.pop("release_content_policy", None)
+
+            # 内容策略模块必须从当前候选目录重新加载。
             module_content_policy: Any = importlib.import_module("release_content_policy")  # 已安装的内容扫描入口
 
-            # 当前候选目录提供清洗与历史快照实现。
-            module_release_policy: Any = importlib.import_module("release_policy")  # 已安装的清洗快照入口
+            # 发布策略模块按新名称到兼容名称逐一尝试。
+            for str_release_policy_name in list_release_policy_names:
 
-            # 两个模块都来自当前候选安装目录。
-            return module_content_policy, module_release_policy
+                # 当前候选名称必须来自同一个 agents-md-generator 根目录。
+                sys.modules.pop(str_release_policy_name, None)
+
+                # 当前策略名称必须在当前目录下完成独立导入。
+                try:
+
+                    # 当前候选提供清洗与历史快照实现。
+                    module_release_policy: Any = importlib.import_module(str_release_policy_name)  # 已安装的清洗快照入口
+
+                    # 两个模块都来自当前候选安装目录。
+                    return module_content_policy, module_release_policy
+
+                # 当前候选可能只有一个子目录，继续等待兼容名称。
+                except ImportError:
+
+                    # 清理失败候选，保证下一个名称重新解析。
+                    sys.modules.pop(str_release_policy_name, None)
+
+            # 当前安装根缺少成对发布策略时，清理孤立的内容策略模块。
+            sys.modules.pop("release_content_policy", None)
 
         # 当前候选可能只有一个子目录，继续等待另一候选补齐。
         except ImportError:
@@ -886,10 +932,6 @@ def _load_release_governance_modules() -> tuple[Any, Any]:
             # 清理内容策略模块缓存，防止下一候选沿用错误版本。
             sys.modules.pop("release_content_policy", None)
 
-            # 清理发布策略模块缓存，保证下一候选成对加载。
-            sys.modules.pop("release_policy", None)
-
-    # 缺少同源模块时不能生成安装器无法复核的收据。
     # 没有治理模块时不能生成安装器无法复核的旧版收据。
     raise ReleaseError(
         "> ERR: [Python] agents-md-generator release policy modules are required; "
@@ -982,6 +1024,44 @@ def _sanitize_release_copy(release_dir: Path) -> dict[str, Any]:
     # 返回含兼容别名的治理结构，安装端仍以 enabled/receipt_required 为准。
     return dict_sanitization
 
+# 兼容不同 agents-md-generator 版本的内容分析函数签名。
+def _analyze_release_content_root(
+    module_content_policy: Any,
+    path_root: Path,
+    *,
+    allow_source_only_repo_local: bool = False,
+) -> dict[str, Any]:
+    """调用同源内容分析器并兼容旧版严格合同参数。
+
+    Args:
+        module_content_policy: agents-md-generator 内容策略模块。
+        path_root: 待分析的源码或发布目录。
+        allow_source_only_repo_local: 是否保留源码开发态目录兼容参数。
+
+    Returns:
+        内容策略模块生成的发布内容分析结果。
+    """
+
+    # 从治理模块读取真实签名，避免用宽泛异常掩盖实现内部错误。
+    func_analyze: Callable[..., dict[str, Any]] = module_content_policy.analyze_release_content_root  # 内容分析函数
+
+    # 统一传入所有跨版本都支持的源码目录兼容参数。
+    dict_arguments: dict[str, Any] = {
+        "allow_source_only_repo_local": allow_source_only_repo_local,  # 跨版本源码目录参数
+    }
+
+    # 新版治理模块显式开启公开合同门禁，旧版使用其默认严格策略。
+    signature_analyze = inspect.signature(func_analyze)  # 内容分析函数签名
+
+    # 只有声明了参数的模块才接收新版严格合同开关。
+    if "strict_public_contract" in signature_analyze.parameters:
+
+        # 发布与源码分析都必须执行公开文件合同检查。
+        dict_arguments["strict_public_contract"] = True  # 新版公开合同门禁
+
+    # 返回内容分析结果。
+    return dict(func_analyze(path_root, **dict_arguments))
+
 # 生成发布树内容策略收据。
 def _build_release_content_policy(release_dir: Path) -> dict[str, Any]:
     """分析源码与发布副本并生成安装端可回放的内容策略收据。
@@ -1003,16 +1083,16 @@ def _build_release_content_policy(release_dir: Path) -> dict[str, Any]:
     module_content_policy: Any = tuple_governance_modules[0]  # 发布内容扫描器
 
     # 发布树分析必须覆盖 checksum 等最终写入的文件。
-    dict_release_analysis: dict[str, Any] = module_content_policy.analyze_release_content_root(  # 发布树分析
-        release_dir,  # 待复核的版本目录
-        strict_public_contract=True,  # 启用公开文件强校验
+    dict_release_analysis: dict[str, Any] = _analyze_release_content_root(  # 发布树分析
+        module_content_policy,  # 发布树内容策略模块
+        release_dir,  # 待复核的发布树
     )
 
     # 源码分析只提取需要写入收据的禁止路径证据。
-    dict_source_analysis: dict[str, Any] = module_content_policy.analyze_release_content_root(  # 源码树分析
-        SKILL_ROOT,  # 需要写入收据的源码根
+    dict_source_analysis: dict[str, Any] = _analyze_release_content_root(  # 源码树分析
+        module_content_policy,  # 源码树内容策略模块
+        SKILL_ROOT,  # 待复核的源码树
         allow_source_only_repo_local=True,  # 保留源码开发态扫描
-        strict_public_contract=True,  # 同步执行源码公开合同
     )
 
     # 两侧任何阻断事实都不能被收据字段掩盖。

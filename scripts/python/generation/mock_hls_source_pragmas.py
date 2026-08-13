@@ -77,6 +77,39 @@ def interface_pragma_comment_text(str_pragma_code: str) -> str:
     # bundle 归属只会在最终说明句出现一次，这里单独取第三个槽位保持总线分组可见。
     str_bundle_name = tuple_field_values[2]  # 合同句需要点明的总线分组名
 
+    # A 路 pointer 的 control 寄存器要落回左操作数地址窗口语义。
+    if str_mode_name == "s_axilite" and str_bundle_name == "control" and str_port_name == "ptr_input_a":
+
+        # A 路寄存器把左操作数地址偏移交给读通道。
+        return (
+            f"{str_port_name} 的 s_axilite control 寄存器承接 A 路输入地址偏移，"
+            f"让 m_axi 读通道把左操作数送入 A 路计算窗口，bundle={str_bundle_name}。"
+        )
+
+    # B 路 pointer 的 control 寄存器要落回右操作数配对窗口语义。
+    if str_mode_name == "s_axilite" and str_bundle_name == "control" and str_port_name == "ptr_input_b":
+
+        # B 路寄存器把右操作数地址偏移交给配对读通道。
+        return (
+            f"{str_port_name} 的 s_axilite control 寄存器承接 B 路输入地址偏移，"
+            f"让 m_axi 读通道把右操作数送入 B 路配对窗口，bundle={str_bundle_name}。"
+        )
+
+    # 其余输入 pointer 继续保留通用的外部输入地址控制语义。
+    if str_mode_name == "s_axilite" and str_bundle_name == "control" and str_port_name.startswith("ptr_input"):
+
+        # 通用输入寄存器接收 host 写入的偏移并定位外部输入缓冲区。
+        return f"{str_port_name} 的 s_axilite control 寄存器接收 host 写入的输入地址偏移，配合 m_axi 读通道定位 bundle={str_bundle_name} 的缓冲区。"
+
+    # 输出地址寄存器同样属于 host 控制面，但它负责写回缓冲区而不是读取输入样本。
+    if str_mode_name == "s_axilite" and str_bundle_name == "control" and str_port_name.startswith("ptr_output"):
+
+        # 输出地址寄存器把 host 的偏移传递给 m_axi 写通道，固定结果写回的外部存储位置。
+        return (
+            f"{str_port_name} 的 s_axilite control 寄存器接收 host 写入的输出地址偏移，"
+            f"配合 m_axi 写通道定位 bundle={str_bundle_name} 的结果缓冲区。"
+        )
+
     # 输入指针端口要强调读取窗口与原始样本来源。
     if str_port_name == "ptr_input_a":
 
@@ -291,6 +324,24 @@ def pipeline_stream_input_comment_text(str_stage_code: str, str_ii_value: str) -
             "按扁平索引逐拍把当前二维块样本送入 stream_read_stream。"
         )
 
+    # FIR 读入 helper 要明确原始样本正进入计算阶段的输入 FIFO。
+    if "stream_mid_stream.write(ptr_input_values[" in str_stage_code:
+
+        # 交回 FIR 读入阶段逐拍推送样本的吞吐说明。
+        return (
+            f"PIPELINE pragma 让 FIR 读入循环保持 II={str_ii_value}，"
+            "按拍把 ptr_input_values 的样本送入 FIR 输入 FIFO。"
+        )
+
+    # FIR 计算 helper 要明确输入 FIFO 到结果 FIFO 的逐拍数据路径。
+    if "stream_result_stream.write(" in str_stage_code and "stream_mid_stream.read()" in str_stage_code:
+
+        # 交回 FIR 计算阶段逐拍完成递增并产出结果 token 的吞吐说明。
+        return (
+            f"PIPELINE pragma 让 FIR 计算循环保持 II={str_ii_value}，"
+            "按拍消费 FIR 输入 FIFO 并把递增结果送入 FIR 结果 FIFO。"
+        )
+
     # axis 读入 helper 要明确这里只做 token 转发，不在此阶段计算。
     if "stream_mid_stream.write(stream_in_stream.read())" in str_stage_code:
 
@@ -334,6 +385,15 @@ def pipeline_stream_input_comment_text(str_stage_code: str, str_ii_value: str) -
         return (
             f"PIPELINE pragma 让 col_pass 保持 II={str_ii_value}，"
             "按拍把列向处理完成的样本送入 stream_col_stream。"
+        )
+
+    # FIR 写回 helper 要明确结果 FIFO token 正逐拍落到输出窗口。
+    if "ptr_output_values[" in str_stage_code and "stream_result_stream.read()" in str_stage_code:
+
+        # 交回 FIR 写回阶段逐拍落盘结果的吞吐说明。
+        return (
+            f"PIPELINE pragma 让 FIR 写回循环保持 II={str_ii_value}，"
+            "按拍把 FIR 结果 FIFO 的样本落到 ptr_output_values。"
         )
 
     # 输入窗口到 load FIFO 的搬运阶段要说明它按拍把原始样本推入下游 FIFO。
@@ -545,6 +605,14 @@ def stream_pragma_comment_text(str_pragma_code: str) -> str:
         (
             "variable=stream_result_stream",
             "为 result FIFO 指定显式 depth，让中间计算阶段和输出写回阶段保持拍级解耦。",
+        ),
+        (
+            "variable=stream_fir_sample_stream",
+            "为 stream_fir_sample_stream 指定显式 depth，让 FIR 读入阶段和计算阶段保持拍级解耦。",
+        ),
+        (
+            "variable=stream_fir_result_stream",
+            "为 stream_fir_result_stream 指定显式 depth，让 FIR 计算阶段和写回阶段保持拍级解耦。",
         ),
         (
             "variable=stream_task_stream",

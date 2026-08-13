@@ -42,6 +42,9 @@ def check_pragma_rules(root: Path, path: Path, config: HlsProfileConfig) -> list
     # 函数参数类型索引用于判断 pragma port 绑定对象。
     dict_function_params = _parameter_type_index(list_lines)  # 端口名到参数声明文本的映射
 
+    # 记录所有 m_axi 端口，供后续识别合法的 pointer offset control pragma。
+    set_m_axi_ports = _m_axi_port_names(list_lines)  # 当前文件已声明 m_axi 的端口集合
+
     # pragma 诊断按源码顺序累计。
     list_issues: list[HlsGateIssue] = []  # 当前文件 pragma 诊断列表
 
@@ -63,13 +66,11 @@ def check_pragma_rules(root: Path, path: Path, config: HlsProfileConfig) -> list
             # PIPELINE、UNROLL 等其它 pragma 不绑定函数端口，因此这里不做接口类型核对。
             continue
 
-        # 检查当前 pragma 与参数类型之间的冲突。
+        # 汇总这条接口声明触发的违规结果，保持报告顺序与源码顺序一致。
         list_issues.extend(
             _interface_conflict_issues(
-                str_rel_path,
-                int_line_number,
-                str_code,
-                dict_function_params,
+                str_rel_path, int_line_number,
+                str_code, dict_function_params, set_m_axi_ports,
             ),
         )
 
@@ -140,6 +141,7 @@ def _interface_conflict_issues(
     int_line: int,
     str_code: str,
     dict_params: dict[str, str],
+    set_m_axi_ports: set[str],
 ) -> list[HlsGateIssue]:
     """检查单条 INTERFACE pragma 是否和绑定端口类型冲突。
 
@@ -148,6 +150,7 @@ def _interface_conflict_issues(
         int_line: pragma 所在的一基源码行号。
         str_code: 去掉注释后的 pragma 源码片段。
         dict_params: 参数名到参数声明文本的映射。
+        set_m_axi_ports: 同一文件中已经声明 m_axi 的端口集合。
 
     返回:
         当前 pragma 触发的接口一致性诊断列表。
@@ -205,9 +208,13 @@ def _interface_conflict_issues(
         )
 
     # 标量控制接口不应绑定指针或 stream 端口。
-    if str_mode in {"s_axilite", "ap_none", "ap_vld"} and _looks_like_pointer_or_stream(
+    if (
+        str_mode in {"s_axilite", "ap_none", "ap_vld"}
+        and _looks_like_pointer_or_stream(
         str_param_type,
         str_lowered_type,
+        )
+        and not _is_m_axi_offset_control(str_mode, str_code, str_port, set_m_axi_ports)
     ):
 
         # 标量接口绑定复杂端口时提示人工确认。
@@ -224,6 +231,67 @@ def _interface_conflict_issues(
 
     # 返回当前 pragma 的全部接口冲突诊断。
     return list_issues
+
+# _m_axi_port_names 收集文件内已有 m_axi pragma 的端口名。
+def _m_axi_port_names(list_lines: list[str]) -> set[str]:
+    """收集当前文件中声明为 m_axi 的端口名。
+
+    参数:
+        list_lines: HLS 源码物理行列表。
+
+    返回:
+        m_axi pragma 的端口名集合，用于识别对应的 offset control pragma。
+    """
+
+    # 只收集真正的 INTERFACE m_axi pragma，避免普通文本或其它协议污染配对关系。
+    set_port_names: set[str] = set()  # 当前文件的 m_axi 端口集合
+
+    # 逐行复用轻量 pragma 解析器，保持与主规则入口一致。
+    for str_raw_line in list_lines:
+
+        # 去掉注释后只保留可执行 pragma 片段。
+        str_code = code_part(str_raw_line).strip()  # 当前源码行的净代码片段
+
+        # 只处理 HLS INTERFACE m_axi pragma。
+        if is_hls_pragma(str_code) and _pragma_interface_mode(str_code) == "m_axi":
+
+            # 记录用于 m_axi/control 配对的端口字段。
+            str_port_name = _pragma_value(str_code, "port")  # m_axi/control 配对使用的端口名
+
+            # 缺失端口名的异常 pragma 不进入配对集合。
+            if str_port_name:
+
+                # 记录可与 control offset pragma 配对的 m_axi 端口。
+                set_port_names.add(str_port_name)
+
+    # 返回稳定的 m_axi 端口集合。
+    return set_port_names
+
+# _is_m_axi_offset_control 判断 s_axilite 是否是合法的 m_axi 地址控制口。
+def _is_m_axi_offset_control(
+    str_mode: str,
+    str_code: str,
+    str_port: str,
+    set_m_axi_ports: set[str],
+) -> bool:
+    """判断当前 pragma 是否为 Vitis kernel 的 m_axi offset control。
+
+    参数:
+        str_mode: 当前 INTERFACE pragma 的接口模式。
+        str_code: 当前去注释后的 pragma 文本。
+        str_port: 当前 pragma 绑定的端口名。
+        set_m_axi_ports: 同一文件中已声明 m_axi 的端口集合。
+
+    返回:
+        当前 pragma 是 m_axi pointer 的 control bundle 时返回 True。
+    """
+
+    # 只有 control bundle 上与同名 m_axi 成对出现的 s_axilite 才属于合法 offset 控制口。
+    return (
+        str_mode == "s_axilite"
+        and _pragma_value(str_code, "bundle") == "control"
+        and str_port in set_m_axi_ports
+    )
 
 # _interface_issue 构造接口冲突诊断对象。
 def _interface_issue(

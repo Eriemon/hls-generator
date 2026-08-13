@@ -1,0 +1,37 @@
+{
+  "target": "<REDACTED_LOCAL_PATH>",
+  "profile": "refactor",
+  "style": "current-project",
+  "generated_at": "2026-08-13T06:13:02",
+  "summary": {
+    "blocker": 3,
+    "warning": 0,
+    "note": 0
+  },
+  "issues_by_rule": {
+    "PG033": 3
+  },
+  "issues": [
+    {
+      "code": "PG033",
+      "level": "BLOCKER",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 280,
+      "message": "Variable assignment should include a right-side Chinese comment."
+    },
+    {
+      "code": "PG033",
+      "level": "BLOCKER",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 331,
+      "message": "Variable assignment should include a right-side Chinese comment."
+    },
+    {
+      "code": "PG033",
+      "level": "BLOCKER",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 349,
+      "message": "Variable assignment should include a right-side Chinese comment."
+    }
+  ]
+}

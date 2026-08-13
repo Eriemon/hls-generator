@@ -64,6 +64,12 @@ def assignment_inline_output_buffer_comment_text(str_right_text: str) -> str:
         # 把当前 lane 上 A/B 两路局部样本求和落盘的尾注交回调用方。
         return "这里写回的是当前 lane 上 A/B 两路局部样本的和。"
 
+    # 旧式 vector_scale 参数名也要明确表达乘法，而不能落入递增兜底文案。
+    if "uint_scale_factor" in str_right_text and "ptr_input" in str_right_text:
+
+        # 返回输入样本乘运行时因子后写回输出窗口的尾注。
+        return "把输入样本乘上运行时缩放因子后写入输出窗口。"
+
     # 输入窗口直写输出窗口时，只需要强调当前样本已经完成递增并即将落回外部窗口。
     if "ptr_input" in str_right_text or "arr_input" in str_right_text:
 

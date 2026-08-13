@@ -867,6 +867,9 @@ def _release_sensitivity_is_exempt(rel_path: str) -> bool:
     # 先统一路径分隔符并移除前导 ./，得到稳定的比较键。
     str_normalized = rel_path.replace("\\", "/").lstrip("./")  # 规范化后的相对路径
 
+    # zip 成员通常带有版本化包根目录，先移除它再执行白名单比较。
+    str_normalized = re.sub(r"^readable-hls-generator-v\d+\.\d+\.\d+/", "", str_normalized)  # 去掉版本化归档根目录
+
     # 解析技能根相对于仓库根的路径标记，兼容不同扫描根的相对路径形式。
     str_skill_marker = f"/{SKILL_ROOT.relative_to(repo_root()).as_posix().rstrip('/')}/"  # 技能根相对路径标记
 
@@ -1502,9 +1505,3 @@ def _resolve_json_output(path_text: str) -> Path:
 
     # 返回相对于仓库根归一化后的绝对输出路径。
     return (repo_root() / path_output_path).resolve()
-
-# 脚本入口把 main 返回值转换成进程退出码，供 CLI 和自动化直接消费。
-if __name__ == "__main__":
-
-    # 按主流程返回码结束当前 CLI 进程。
-    raise SystemExit(main())

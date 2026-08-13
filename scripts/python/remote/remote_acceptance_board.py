@@ -10,6 +10,7 @@ from __future__ import annotations
 
 # 标准库依赖覆盖 CLI 参数、路径处理、压缩包生成和远端 shell 转义。
 import argparse
+from copy import deepcopy
 import shlex
 import tarfile
 from pathlib import Path, PurePosixPath
@@ -638,11 +639,18 @@ def _prepare_local_board_package(
     :return: 本地资产目录、执行包路径和 board host 元数据。
     """
 
+    # 读取原始 spec，host 模板继续使用用户确认的接口和向量合同。
+    dict_spec = _load_example_spec(args.example_spec)  # board mode 当前验收样例的原始 spec
+
+    # Vitis kernel 的 m_axi 顶层边界需要与 uint32_t host buffer 保持 ABI 一致。
+    dict_board_spec = _board_host_compatible_spec(dict_spec)  # 仅 board kernel artifact 使用的 host ABI 适配副本
+
     # 复用普通 HLS 资产生成流程，确保 board host 与 kernel 源来自同一 run。
     path_artifact_dir = _generate_local_hls_artifacts(  # 本地 HLS kernel 资产目录
         dict_readiness["run_dir"],  # 当前 board run 的本地输出根目录
         comment_language=args.comment_language,  # 注释语言配置
         example_spec=args.example_spec,  # 驱动资产生成的样例选择
+        spec_override=dict_board_spec,  # 使用 board host ABI 适配后的 kernel spec 副本
     )
 
     # 打包 board host、runner 和 HLS 资产，供远端 active run 解包。
@@ -658,6 +666,65 @@ def _prepare_local_board_package(
         package_path=tuple_package[0],
         board_metadata=tuple_package[1],
     )
+
+# 为 board host 生成与 uint32_t BO 兼容的 m_axi 顶层类型。
+def _board_host_compatible_spec(spec: dict[str, Any]) -> dict[str, Any]:
+    """构造 board kernel 专用的 host ABI 适配 spec。
+
+    参数:
+        spec: 由 board host 和验收元数据共同使用的原始样例 spec。
+
+    返回:
+        不修改原始 spec、且把 32-bit m_axi aggregate 类型映射为标准 C++
+        32-bit 标量类型的独立 spec 副本。
+
+    说明:
+        Vitis 2022.2 的 kernel flow 拒绝把 `ap_uint<32>*` 作为带 m_axi
+        pragma 的 opaque struct 顶层端口；board host 当前按 `uint32_t` BO
+        合同分配内存，因此仅 board artifact 使用 `unsigned int` 边界。
+    """
+
+    # 深拷贝保证普通 HLS/Vitis artifact 仍保留原始 ap_* 接口合同。
+    dict_board_spec = deepcopy(spec)  # board mode 专用的可变 spec 副本
+
+    # 只读取 interfaces.arguments，避免把文档或 behavior 文本误当成类型声明。
+    dict_interfaces = dict_board_spec.get("interfaces")  # board kernel 的顶层接口段
+
+    # 检查接口段是否保持可索引的字典结构。
+    if not isinstance(dict_interfaces, dict):
+
+        # 缺少接口段时让既有 spec 校验继续负责报告具体问题。
+        return dict_board_spec
+
+    # 只转换 m_axi 参数；s_axilite 的 ap_uint 控制标量不触发当前 opaque 端口错误。
+    list_arguments = dict_interfaces.get("arguments")  # board kernel 的参数列表
+
+    # 检查参数段是否保持可遍历的列表结构。
+    if not isinstance(list_arguments, list):
+
+        # 非列表输入保持原样，交由 workflow 的 spec 校验阻断。
+        return dict_board_spec
+
+    # 遍历所有顶层参数，保持参数名、顺序、方向和 bundle 完全不变。
+    for dict_argument in list_arguments:
+
+        # 非字典条目或非 m_axi 条目不参与 board host ABI 适配。
+        if not isinstance(dict_argument, dict) or dict_argument.get("interface") != "m_axi":
+
+            # 跳过不能影响当前 board memory ABI 的条目。
+            continue
+
+        # 只把 32-bit ap_uint aggregate 映射为 host 使用的标准 unsigned int。
+        str_argument_type = str(dict_argument.get("type") or "")  # 当前 m_axi 顶层类型文本
+
+        # 检查当前类型文本是否需要 board host ABI 适配。
+        if "ap_uint<32>" in str_argument_type:
+
+            # 保留 const、指针符号和空白结构，只替换 opaque element type。
+            dict_argument["type"] = str_argument_type.replace("ap_uint<32>", "unsigned int")  # 写入标准标量 m_axi 类型
+
+    # 返回 board 专用副本，原始 spec 仍由 host metadata 和普通生成路径使用。
+    return dict_board_spec
 
 # 把本地包准备、远端布局、上传和后台 job 轮询串成 board 执行上下文。
 def _prepare_board_job_execution(
@@ -1590,7 +1657,7 @@ def _board_platform_recommended_commands(
 
     # request-upload 命令保留原相对远端路径。
     str_upload_command = (
-        "python %CODEX_HOME%/skills/erie-remote-ssh/scripts/remote_ssh.py request-upload "
+        "python %CODEX_HOME%/skills/erie-remote-ssh/scripts/python/runtime/remote_ssh.py request-upload "
         f"--settings <erie-settings.json> --server {server} "
         "--local <local-platform-archive> "
         f"--remote readable-hls-generator/platforms/alveo/{str_platform_name}.tar.gz "
@@ -1606,7 +1673,7 @@ def _board_platform_recommended_commands(
 
     # request-command 包装 bash -lc 解压命令。
     str_extract_command = (
-        "python %CODEX_HOME%/skills/erie-remote-ssh/scripts/remote_ssh.py request-command "
+        "python %CODEX_HOME%/skills/erie-remote-ssh/scripts/python/runtime/remote_ssh.py request-command "
         f"--settings <erie-settings.json> --server {server} "
         "--reason \"extract U55C platform payload\" "
         f"-- bash -lc \"{str_extract_inner}\""
@@ -2252,7 +2319,12 @@ if [ -z "$SRC_FILE" ]; then
   echo "{BOARD_STATUS_MARKER} missing_kernel_source"
   exit 48
 fi
+cat > hls_board_pre.tcl <<'EOF'
+# ap_uint m_axi 端口不启用 Vitis kernel flow 的自动 widening。
+config_interface -m_axi_max_widen_bitwidth 0
+EOF
 "$HLS_VPP_TOOL" -c -t hw --platform "$HLS_PLATFORM_NAME" \\
+  --hls.pre_tcl hls_board_pre.tcl \\
   -k "$HLS_TOP_FUNCTION" "$SRC_FILE" -o kernel.xo
 "$HLS_VPP_TOOL" -l -t hw --platform "$HLS_PLATFORM_NAME" kernel.xo -o kernel.xclbin
 g++ -std=c++17 -O2 ../board/host.cpp \\

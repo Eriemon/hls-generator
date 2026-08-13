@@ -104,6 +104,67 @@ static void store_matmul(
 }}'''
 
 # 渲染二维块 DATAFLOW 场景的 helper 文本，把 2D block 骨架拆到独立函数中。
+def _mock_fir_dataflow_helpers(comment_language: str) -> str:
+    """渲染 staged FIR DATAFLOW 场景的 read、compute、write helper。
+
+    参数:
+        comment_language: 生成 C++ 注释时使用的注释语言标识。
+
+    返回:
+        适用于 staged FIR 场景的 read、compute、write helper 文本。
+    """
+
+    # 返回 FIR mock 的三阶段骨架，使顶层 DATAFLOW 有可重叠的函数边界。
+    return f'''static void read_fir_dataflow(
+  const ap_uint<32>* input,
+  hls::stream<ap_uint<32> >& mid_stream,
+  int length
+) {{
+{_cpp_line_comment(
+    comment_language,
+    "Read stage transfers each confirmed input sample into the FIR stream.",
+    "读取阶段把每个确认后的输入样本转入 FIR 中间流。",
+)}
+  for (int i = 0; i < length; ++i) {{
+    #pragma HLS PIPELINE II=1
+    mid_stream.write(input[i]);
+  }}
+}}
+
+static void compute_fir_dataflow(
+  hls::stream<ap_uint<32> >& mid_stream,
+  hls::stream<ap_uint<32> >& result_stream,
+  int length
+) {{
+{_cpp_line_comment(
+    comment_language,
+    "Compute stage preserves the mock FIR sample mapping while DATAFLOW overlaps stages.",
+    "计算阶段保持 mock FIR 样本映射，并让 DATAFLOW 重叠各阶段。",
+)}
+  for (int i = 0; i < length; ++i) {{
+    #pragma HLS PIPELINE II=1
+    ap_uint<32> fir_sample = mid_stream.read();
+    result_stream.write(fir_sample + 1);
+  }}
+}}
+
+static void write_fir_dataflow(
+  hls::stream<ap_uint<32> >& result_stream,
+  ap_uint<32>* output,
+  int length
+) {{
+{_cpp_line_comment(
+    comment_language,
+    "Write stage returns one result sample for every input sample.",
+    "写出阶段为每个输入样本返回一个结果样本。",
+)}
+  for (int i = 0; i < length; ++i) {{
+    #pragma HLS PIPELINE II=1
+    output[i] = result_stream.read();
+  }}
+}}'''
+
+# 渲染二维块 DATAFLOW 场景的 helper 函数集合。
 def _mock_block_dataflow_helpers(comment_language: str) -> str:
     """渲染二维块 DATAFLOW 场景的 helper 函数集合。
 

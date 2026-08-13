@@ -2652,19 +2652,22 @@ def _write_remote_toolchain_request(
 
     # 提供 erie-remote-ssh 侧用于选服和检查环境的命令建议。
     list_selection_commands = [  # 远端服务器发现与环境检查命令列表
-        "python <erie-skill-dir>\\scripts\\remote_ssh.py discover --settings <erie-settings.json>",  # 发现可用远端服务器
-        "python <erie-skill-dir>\\scripts\\remote_ssh.py choices --settings <erie-settings.json>",  # 查看候选服务器与路由选项
-        "python <erie-skill-dir>\\scripts\\remote_ssh.py check --settings <erie-settings.json> --server <erie-server>",  # 检查目标服务器连通性
+        "python <erie-skill-dir>\\scripts\\python\\runtime\\remote_ssh.py discover --settings <erie-settings.json>",  # 发现可用远端服务器
+        "python <erie-skill-dir>\\scripts\\python\\runtime\\remote_ssh.py choices --settings <erie-settings.json>",  # 查看候选服务器与路由选项
         (
-            "python <erie-skill-dir>\\scripts\\remote_ssh.py workspace-check "
+            "python <erie-skill-dir>\\scripts\\python\\runtime\\remote_ssh.py check "
+            "--settings <erie-settings.json> --server <erie-server>"
+        ),  # 检查目标服务器连通性
+        (
+            "python <erie-skill-dir>\\scripts\\python\\runtime\\remote_ssh.py workspace-check "
             "--settings <erie-settings.json> --server <erie-server>"
         ),  # 检查远端工作区是否已经可用
         (
-            "python <erie-skill-dir>\\scripts\\remote_ssh.py scan-software "
+            "python <erie-skill-dir>\\scripts\\python\\runtime\\remote_ssh.py scan-software "
             "--settings <erie-settings.json> --server <erie-server>"
         ),  # 拉取远端软件清单用于后续选版本
         (
-            "python <erie-skill-dir>\\scripts\\remote_ssh.py software "
+            "python <erie-skill-dir>\\scripts\\python\\runtime\\remote_ssh.py software "
             "--settings <erie-settings.json> --server <erie-server> --name vitis"
         ),  # 核对远端是否装有可用 Vitis
     ]

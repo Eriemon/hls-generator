@@ -18,17 +18,14 @@ from . import mock_hls_contract_text as contract_text
 # 复用注释渲染器，避免在本模块内重复生成行级注释逻辑。
 from .mock_hls_inline_comments import ensure_governed_line_comments
 
-# 协议层只保留当前编排入口真正需要的 top function 名称解析。
-from .mock_hls_protocols import top_function_name
+# 协议层提供 top function 名称解析和 testbench 标识符安全重写。
+from .mock_hls_protocols import rename_source_identifiers, top_function_name
 
 # source 注释重写模块只保留对外入口；签名范围扫描已经下沉到 flow 子模块。
 from .mock_hls_source_rewrite import rewrite_source_line_comments
 
 # flow 子模块负责函数签名范围扫描，供 source contract 插桩复用。
 from .mock_hls_source_flow import function_signature_ranges
-
-# testbench 绑定模块负责 case/vector hash 与局部调用参数生成。
-from .mock_hls_testbench_bindings import raw_case_ids, raw_vector_hash, testbench_argument_bindings
 
 # 生成 HG007/HG008/HG015 合同完整的 mock HLS 头文件。
 def build_governed_header(
@@ -119,45 +116,51 @@ def build_governed_testbench(
 
     返回:
         可直接写入 testbench `.cpp` 的治理后文本，dtype=str，unit=text。
-    """
 
-    # 当前治理后的 testbench 固定输出中文 contract，保留参数只为外部调用接口稳定。
-    del comment_language
+    异常:
+        ValueError: raw testbench 缺少可执行的 `int main()` 入口时抛出。
+    """
 
     # 先读取当前 spec 对应的 top function 名称。
     str_top_function_name = top_function_name(spec)  # 供合同路由判定使用的 kernel 入口名
 
-    # 先写入文件级 contract、include 和 `main` 入口骨架。
-    list_lines = testbench_prelude_lines(spec, str_top_function_name)  # 治理后 testbench 的前导骨架行列表
+    # testbench 局部数组必须按声明类型推导 `arr_` 前缀，不能套用 top 端口的 `ptr_` 映射。
+    del dict_argument_names
 
-    # 原始向量哈希存在时，把它显式带入治理后的 testbench。
-    list_lines.extend(vector_hash_contract_lines(raw_vector_hash(raw_text)))
+    # 让局部声明重写独立决定数组名称，同时保留真实向量主体和调用参数关系。
+    str_renamed_text, _ = rename_source_identifiers(raw_text, {})  # 保留行为主体后的 typed-prefix testbench 文本
 
-    # 原始 case 标记存在时，继续保留每个 case 的单独注释行。
-    list_lines.extend(case_marker_comment_lines(raw_case_ids(raw_text)))
+    # 统一原始 testbench 的行级治理入口，保留行为主体和代码顺序。
+    str_annotated_text = ensure_governed_line_comments(str_renamed_text, comment_language)  # 保存最终行级注释结果
 
-    # 生成 testbench 局部参数声明和调用参数列表。
-    tuple_argument_bindings = testbench_argument_bindings(spec, dict_argument_names)  # testbench 局部声明和调用参数的二元组
+    # 文件级 contract 只负责说明角色，raw 文本继续提供 include、向量和断言实现。
+    list_lines = list(contract_text.file_header_lines(spec, "testbench"))  # 治理后 testbench 的文件级合同行列表
 
-    # 先取出局部声明区，供 `main` 在调用前准备指针、数组或标量载荷。
-    list_declaration_lines = tuple_argument_bindings[0]  # 当前 testbench 的局部声明区行列表
+    # 在 raw testbench 的 main 前插入统一 main 合同，避免重建时丢失真实事务主体。
+    bool_main_contract_inserted = False  # 当前 raw testbench 是否已经插入 main 合同
 
-    # 再取出调用参数序列，保持 top function 实参顺序和声明顺序一致。
-    list_call_arguments = tuple_argument_bindings[1]  # 当前 top function 调用参数名列表
+    # 按 raw 源码顺序扫描 include、case、向量驱动和断言主体。
+    for str_line in str_annotated_text.splitlines():
 
-    # 局部声明区存在时，先写入声明区，再补一层空行与调用区分隔。
-    if list_declaration_lines:
+        # main 合同必须紧邻入口前，且整个 testbench 只能插入一次。
+        if not bool_main_contract_inserted and str_line.strip().startswith("int main("):
 
-        # 把当前 testbench 局部声明区整体写入 `main`。
-        list_lines.extend(list_declaration_lines)
+            # 写入已有 HG008/HG028 main 合同，保持行为主体与治理边界分离。
+            list_lines.extend(["", *contract_text.testbench_main_contract_lines(str_top_function_name)])
 
-        # 声明区和调用区之间补一层空行，保持 testbench 主体可读。
-        list_lines.append("")
+            # 标记 main 合同已经插入，后续只继续保留 raw 行为主体。
+            bool_main_contract_inserted = True  # 已完成 main 合同插入
 
-    # 追加 top function 调用和 PASS/FAIL transcript 尾段。
-    list_lines.extend(testbench_tail_lines(str_top_function_name, list_call_arguments))
+        # 保留 raw testbench 的 include、case、向量写入和结果断言代码。
+        list_lines.append(str_line)
 
-    # 把 testbench 各段落合并成最终文本，并保留末尾换行约定。
+    # 缺少 main 表示上游生成器没有提供可执行 testbench，必须 fail-closed。
+    if not bool_main_contract_inserted:
+
+        # 不用固定占位 smoke 掩盖损坏的 raw 行为主体。
+        raise ValueError("> ERR: [Python] Generated mock HLS testbench is missing int main().")
+
+    # 合并治理合同和保留下来的真实行为主体，并保留末尾换行约定。
     return "\n".join(list_lines).rstrip() + "\n"
 
 # 生成 testbench 的文件头、include 和 `main` 入口骨架。

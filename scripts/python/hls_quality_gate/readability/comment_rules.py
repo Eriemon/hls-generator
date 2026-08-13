@@ -87,6 +87,21 @@ class StatementContext:
     # statement_kind 标记 if、for、return 等特殊语句类别。
     statement_kind: str | None  # 特殊语句类别
 
+# MachineResultState 收拢结构化 HLS-GEN-RESULT 链的有限状态。
+@dataclass
+class MachineResultState:
+    """记录 machine transcript 是否仍在当前输出链中。
+
+    Returns:
+        可变状态对象，用于严格限定结构化结果链的豁免范围。
+    """
+
+    # active 标记当前输出链是否尚未遇到提交换行。
+    active: bool = False  # 结构化结果链活动标记
+
+    # start_line 保留链首行，未闭合时用于生成精确诊断。
+    start_line: int = 0  # 结构化结果链起始行号
+
 # PragmaIntentSpec 描述某类 pragma 必须具备的注释关键词。
 @dataclass(frozen=True)
 class PragmaIntentSpec:
@@ -652,11 +667,40 @@ def _hls_print_prefix_issues(
     # 问题列表按源码顺序累计。
     list_issues: list[HlsGateIssue] = []  # HLS print 边界问题
 
+    # machine transcript 状态统一封装，避免状态变量与输出规则粘连。
+    machine_result_state_obj_machine_result: MachineResultState = MachineResultState()  # 当前结构化 HLS-GEN-RESULT 输出链状态
+
     # 逐行检查常见面向人的打印语句。
     for int_line_number, str_raw_line in enumerate(lines, start=1):
 
         # 去掉尾注释后的代码部分用于识别打印语句。
         str_code = code_part(str_raw_line)  # 当前行的有效代码
+
+        # 明确识别结构化 machine transcript，避免把 JSON 字段拼接误判成人类日志。
+        if machine_result_state_obj_machine_result.active:
+
+            # 结构化链直到提交换行的字符串为止；未闭合时在循环结束后 fail-closed。
+            if _ends_structured_result_chain(str_code):
+
+                # 结果链已经完整闭合，后续 stdout 回到普通人类 transcript 检查。
+                # 完整换行已经提交当前 machine transcript，关闭豁免状态。
+                machine_result_state_obj_machine_result.active = False  # 结构化结果链已闭合
+
+            # machine transcript 字段不承担人类日志协议，当前行不再进入普通前缀判定。
+            continue
+
+        # 多行 iostream 链的首行可能只有裸 std::cout，需检查后继字段标签。
+        if _starts_structured_result_chain(lines, int_line_number - 1, str_code):
+
+            # 记录起始行，供未闭合结构生成阻断诊断。
+            # 结果标签已经确认，开启当前 machine transcript 的有限状态。
+            machine_result_state_obj_machine_result.active = True  # 结构化结果链已开启
+
+            # 保存链首行，未闭合时把诊断定位到真实输出边界。
+            machine_result_state_obj_machine_result.start_line = int_line_number  # 结构化结果链起始行
+
+            # 已识别结构化结果首行，继续扫描其后续字段。
+            continue
 
         # 当前行不包含面向人的打印语句时直接跳过。
         if not _looks_like_hls_human_print(str_code):
@@ -684,8 +728,76 @@ def _hls_print_prefix_issues(
             )
         )
 
+    # 结构化结果链缺少结束换行时不能静默放过后续输出。
+    if machine_result_state_obj_machine_result.active:
+
+        # 未闭合 machine transcript 仍属于输出协议损坏。
+        list_issues.append(
+            make_issue(
+                "HG028",
+                "error",
+                rel_path,
+                machine_result_state_obj_machine_result.start_line,
+                "结构化 HLS-GEN-RESULT 输出链未闭合；必须完成 machine transcript 后再结束 testbench 语句。",
+                detail="unterminated HLS-GEN-RESULT chain",
+                node_kind="hls_print_output",
+                code_excerpt="HLS-GEN-RESULT",
+            )
+        )
+
     # 返回全部打印前缀问题。
     return list_issues
+
+# 判断当前行是否开启结构化 HLS-GEN-RESULT 输出链。
+def _starts_structured_result_chain(lines: list[str], int_line_index: int, code: str) -> bool:
+    """识别结构化结果链首行。
+
+    :param lines: 当前 HLS 文件物理行列表。
+    :param int_line_index: 当前行零基下标。
+    :param code: 当前行去注释后的代码。
+    :return: 当前行开启结构化 machine transcript 时返回 True。
+    """
+
+    # 单行结果输出直接同时包含 stdout 和稳定结果标签。
+    if "std::cout" in code and "HLS-GEN-RESULT" in code:
+
+        # 单行结构化结果进入同一闭合状态机。
+        return True
+
+    # 多行链首行只允许是裸 stdout，避免扩大 machine 例外范围。
+    if code.strip() != "std::cout":
+
+        # 其他人类输出行仍按普通 HG028 规则检查。
+        return False
+
+    # 向下查找首条有效代码，跳过空行和纯注释行。
+    for str_next_line in lines[int_line_index + 1 :]:
+
+        # 去除注释后的代码才决定是否为结构化字段。
+        str_next_code = code_part(str_next_line).strip()  # 当前后继代码片段
+
+        # 空白或纯注释行不能决定 machine transcript 的边界，继续寻找真正的结果字段。
+        if not str_next_code:
+
+            # 当前行只是空白或注释，继续寻找结果标签。
+            continue
+
+        # 只有下一条字段包含稳定 HLS-GEN-RESULT 标签时才豁免整条链。
+        return "HLS-GEN-RESULT" in str_next_code and str_next_code.startswith("<<")
+
+    # 文件尾没有后继字段时保持普通 stdout 检查。
+    return False
+
+# 判断结构化结果链是否已经提交完整换行。
+def _ends_structured_result_chain(code: str) -> bool:
+    """识别 machine transcript 的闭合字段。
+
+    :param code: 当前行去注释后的代码。
+    :return: 当前行包含结构化结果结束换行时返回 True。
+    """
+
+    # 结果链使用字符串字面量中的反斜杠 n 提交完整 JSON 行。
+    return "\\n" in code and code.rstrip().endswith(";")
 
 # _repeated_comment_text_issues 复用 Python current-project 的相似度去重链。
 def _repeated_comment_text_issues(

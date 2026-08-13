@@ -95,14 +95,15 @@ def is_helper_function_call(str_code: str) -> bool:
         命中 dataflow helper 调用时返回 True，否则返回 False，dtype=bool，unit=flag。
     """
 
-    # 识别当前 mock source 固定使用的 matmul/task_graph/block/dataflow helper 调用。
+    # 识别当前 mock source 固定使用的 matmul/task_graph/block/FIR/dataflow helper 调用。
     return bool(
         re.match(
             (
                 r"(?:load_matmul_a|load_matmul_b|compute_matmul_tile|store_matmul|"
                 r"load_task_graph_[A-Za-z0-9_]+|store_task_graph_[A-Za-z0-9_]+|"
                 r"seed_task_graph_[A-Za-z0-9_]+_counts|read_task_graph_[A-Za-z0-9_]+|"
-                r"write_task_graph_[A-Za-z0-9_]+|read_block|row_pass|transpose_or_reorder|"
+                r"write_task_graph_[A-Za-z0-9_]+|read_fir_dataflow|compute_fir_dataflow|"
+                r"write_fir_dataflow|read_block|row_pass|transpose_or_reorder|"
                 r"col_pass|write_block|read_dataflow_axis_increment|"
                 r"compute_dataflow_axis_increment|write_dataflow_axis_increment)\s*\("
             ),
@@ -127,6 +128,9 @@ def helper_function_call_comment_text(str_code: str) -> str:
         ("load_matmul_b(", "再启动 B 路加载 helper，把 input_b 样本流式送进右操作数 FIFO。"),
         ("compute_matmul_tile(", "随后启动 tile 计算 helper，从 A/B FIFO 取 token 做逐 lane 求和，并把结果送进输出 FIFO。"),
         ("store_matmul(", "最后启动写回 helper，把输出 FIFO 中的求和结果按原索引顺序写回 ptr_output_values。"),
+        ("read_fir_dataflow(", "先启动 FIR 读入 helper，把 ptr_input_values 样本逐项送入 FIR 输入 FIFO。"),
+        ("compute_fir_dataflow(", "随后启动 FIR 计算 helper，从输入 FIFO 取样并把递增结果送入 FIR 结果 FIFO。"),
+        ("write_fir_dataflow(", "最后启动 FIR 写回 helper，把结果 FIFO 中的递增样本按原索引写回 ptr_output_values。"),
     ):
 
         # 只有调用前缀命中当前 helper 名称时，才返回对应的阶段编排说明。

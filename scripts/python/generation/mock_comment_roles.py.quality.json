@@ -1,0 +1,217 @@
+{
+  "target": "<REDACTED_LOCAL_PATH>",
+  "profile": "refactor",
+  "style": "current-project",
+  "generated_at": "2026-08-13T06:13:02",
+  "summary": {
+    "blocker": 26,
+    "warning": 1,
+    "note": 1
+  },
+  "issues_by_rule": {
+    "PG011": 1,
+    "PG032": 2,
+    "PG033": 14,
+    "PG035": 8,
+    "PG036": 2,
+    "PG041": 1
+  },
+  "issues": [
+    {
+      "code": "PG033",
+      "level": "BLOCKER",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 25,
+      "message": "Variable assignment should include a right-side Chinese comment."
+    },
+    {
+      "code": "PG036",
+      "level": "BLOCKER",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 174,
+      "message": "Comment repeats or closely reuses another comment; write a context-specific explanation instead."
+    },
+    {
+      "code": "PG036",
+      "level": "BLOCKER",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 183,
+      "message": "Comment repeats or closely reuses another comment; write a context-specific explanation instead."
+    },
+    {
+      "code": "PG033",
+      "level": "BLOCKER",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 302,
+      "message": "Variable assignment should include a right-side Chinese comment."
+    },
+    {
+      "code": "PG041",
+      "level": "NOTE",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 302,
+      "message": "变量 `obj_axis_field` 的类型无法静态确定。"
+    },
+    {
+      "code": "PG032",
+      "level": "BLOCKER",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 306,
+      "message": "Special statement `if` should have a blank line and a standalone Chinese purpose comment above it."
+    },
+    {
+      "code": "PG033",
+      "level": "BLOCKER",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 309,
+      "message": "Variable assignment should include a right-side Chinese comment."
+    },
+    {
+      "code": "PG033",
+      "level": "BLOCKER",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 310,
+      "message": "Variable assignment should include a right-side Chinese comment."
+    },
+    {
+      "code": "PG035",
+      "level": "BLOCKER",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 310,
+      "message": "Variable assignment should have one blank line and a Chinese purpose comment above it."
+    },
+    {
+      "code": "PG033",
+      "level": "BLOCKER",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 311,
+      "message": "Variable assignment should include a right-side Chinese comment."
+    },
+    {
+      "code": "PG035",
+      "level": "BLOCKER",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 311,
+      "message": "Variable assignment should have one blank line and a Chinese purpose comment above it."
+    },
+    {
+      "code": "PG032",
+      "level": "BLOCKER",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 312,
+      "message": "Special statement `if` should have a blank line and a standalone Chinese purpose comment above it."
+    },
+    {
+      "code": "PG033",
+      "level": "BLOCKER",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 313,
+      "message": "Variable assignment should include a right-side Chinese comment."
+    },
+    {
+      "code": "PG035",
+      "level": "BLOCKER",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 313,
+      "message": "Variable assignment should have one blank line and a Chinese purpose comment above it."
+    },
+    {
+      "code": "PG035",
+      "level": "BLOCKER",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 314,
+      "message": "Variable assignment should have one blank line and a Chinese purpose comment above it."
+    },
+    {
+      "code": "PG033",
+      "level": "BLOCKER",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 315,
+      "message": "Variable assignment should include a right-side Chinese comment."
+    },
+    {
+      "code": "PG033",
+      "level": "BLOCKER",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 325,
+      "message": "Variable assignment should include a right-side Chinese comment."
+    },
+    {
+      "code": "PG011",
+      "level": "WARNING",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 560,
+      "message": "Function `testbench_line_role_for` has 24 branches/loops; consider splitting."
+    },
+    {
+      "code": "PG033",
+      "level": "BLOCKER",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 586,
+      "message": "Variable assignment should include a right-side Chinese comment."
+    },
+    {
+      "code": "PG035",
+      "level": "BLOCKER",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 587,
+      "message": "Variable assignment should have one blank line and a Chinese purpose comment above it."
+    },
+    {
+      "code": "PG033",
+      "level": "BLOCKER",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 588,
+      "message": "Variable assignment should include a right-side Chinese comment."
+    },
+    {
+      "code": "PG035",
+      "level": "BLOCKER",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 588,
+      "message": "Variable assignment should have one blank line and a Chinese purpose comment above it."
+    },
+    {
+      "code": "PG033",
+      "level": "BLOCKER",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 589,
+      "message": "Variable assignment should include a right-side Chinese comment."
+    },
+    {
+      "code": "PG035",
+      "level": "BLOCKER",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 589,
+      "message": "Variable assignment should have one blank line and a Chinese purpose comment above it."
+    },
+    {
+      "code": "PG033",
+      "level": "BLOCKER",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 996,
+      "message": "Variable assignment should include a right-side Chinese comment."
+    },
+    {
+      "code": "PG033",
+      "level": "BLOCKER",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 999,
+      "message": "Variable assignment should include a right-side Chinese comment."
+    },
+    {
+      "code": "PG033",
+      "level": "BLOCKER",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 1000,
+      "message": "Variable assignment should include a right-side Chinese comment."
+    },
+    {
+      "code": "PG035",
+      "level": "BLOCKER",
+      "filepath": "<REDACTED_LOCAL_PATH>",
+      "line": 1000,
+      "message": "Variable assignment should have one blank line and a Chinese purpose comment above it."
+    }
+  ]
+}

@@ -968,9 +968,9 @@ def _resolve_erie_remote_skill_dir(config: dict[str, Any]) -> Path:
         path_configured_skill_dir,  # 已解析的远程技能目录
     )
 
-    # 兼容标准 remote_ssh.py 布局，并要求至少存在一个 settings 文件候选。
+    # 兼容新版与旧版 remote_ssh.py 布局，并要求至少存在一个 settings 文件候选。
     if (
-        (path_configured_skill_dir / "scripts" / "remote_ssh.py").exists()
+        _find_erie_remote_script(path_configured_skill_dir) is not None
         and any(path_candidate.exists() for path_candidate in list_settings_candidates)
     ):
 
@@ -1034,6 +1034,34 @@ def _discover_erie_remote_skill_dir() -> Path | None:
             return Path(dict_dependency_item["installed"][0]["path"]).resolve()
 
     # 未发现任何可用安装记录时返回 None，让调用方决定回退策略。
+    return None
+
+# 使用新版 runtime 与旧版 scripts 布局查找 erie-remote-ssh CLI 入口。
+def _find_erie_remote_script(erie_skill_dir: Path) -> Path | None:
+    """查找 erie-remote-ssh 当前版与旧版兼容的 CLI 入口。
+
+    参数:
+        erie_skill_dir: 已解析的 erie-remote-ssh 技能根目录。
+    返回:
+        已存在的 remote_ssh.py 路径；两个受支持布局都不存在时返回 ``None``。
+    """
+
+    # 新版 runtime 布局优先，旧版根 scripts 布局继续兼容历史安装。
+    tuple_script_candidates = (  # 新旧 remote_ssh.py 入口候选路径
+        erie_skill_dir / "scripts" / "python" / "runtime" / "remote_ssh.py",  # 当前 runtime 入口
+        erie_skill_dir / "scripts" / "remote_ssh.py",  # 旧版兼容入口
+    )
+
+    # 只接受实际存在的入口，避免把依赖目录误判为可执行 helper。
+    for path_candidate in tuple_script_candidates:
+
+        # 第一个存在的入口就是本次运行必须复用的唯一 helper。
+        if path_candidate.is_file():
+
+            # 返回已确认存在的远程命令入口。
+            return path_candidate
+
+    # 两种受支持布局都缺失时交由调用方生成阻塞诊断。
     return None
 
 # 在配置技能目录、assets/defaults 和 legacy config/defaults 间选择 settings 文件。

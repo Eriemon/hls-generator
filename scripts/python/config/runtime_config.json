@@ -116,7 +116,7 @@
       "adapter": "erie-remote-ssh",
       "blocking": true,
       "required_files": [
-        "scripts/remote_ssh.py",
+        "scripts/remote_ssh.py|scripts/python/runtime/remote_ssh.py",
         "assets/defaults.json|config/defaults.json"
       ]
     },

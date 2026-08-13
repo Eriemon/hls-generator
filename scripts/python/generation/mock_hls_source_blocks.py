@@ -275,14 +275,37 @@ def _mock_hls_single_memory_body(
         命中单输入 memory 接口时返回对应主体文本；否则返回 `None`。
     """
 
-    # 当前参数组合不是单输入 memory 接口时，直接退出本 helper。
-    if not {"input", "output", "length"}.issubset(set_argument_names):
+    # 当前参数组合不是标准或旧式单输入 memory 接口时，直接退出本 helper。
+    if not (
+        {"input", "output", "length"}.issubset(set_argument_names)
+        or {
+            "ptr_input_values",
+            "ptr_output_values",
+            "uint_scale_factor",
+            "int_vector_length",
+        }.issubset(set_argument_names)
+    ):
 
         # 返回空值，让其他 helper 继续判断更合适的接口模板。
         return None
 
     # 先取出板卡验收来源标识，供后续两个 board 专用分支复用。
     str_board_source_spec = _board_source_spec(spec)  # board_acceptance 中声明的 source_spec 标识
+
+    # 兼容旧式 vector_scale spec 的语义化参数名，避免 board kernel 生成空函数体。
+    if {
+        "ptr_input_values",
+        "ptr_output_values",
+        "uint_scale_factor",
+        "int_vector_length",
+    }.issubset(set_argument_names):
+
+        # 按原始参数名渲染逐元素缩放主体，保持 header/source ABI 完全一致。
+        return (
+            "  for (int i = 0; i < int_vector_length; ++i) {\n"
+            "    ptr_output_values[i] = ptr_input_values[i] * uint_scale_factor;\n"
+            "  }"
+        )
 
     # 板卡验收的 FIR/CORDIC 场景需要显式 stream 管线骨架。
     if str_board_source_spec and str_pattern in {"fir", "cordic"}:
@@ -363,6 +386,18 @@ def _mock_hls_single_memory_body(
 
         # 返回单输入 memory 版 task_graph 主体。
         return _mock_hls_memory_task_graph_body(str_kernel_name)
+
+    # staged FIR 的顶层 DATAFLOW 需要显式连接三个阶段，并为每个阶段保留 II=1。
+    if str_pattern == "fir" and _requires_dataflow_pragma(spec):
+
+        # 返回 FIR read、compute、write helper 之间的 stream 连接骨架。
+        return """  hls::stream<ap_uint<32> > fir_sample_stream;
+  hls::stream<ap_uint<32> > fir_result_stream;
+  #pragma HLS STREAM variable=fir_sample_stream depth=16
+  #pragma HLS STREAM variable=fir_result_stream depth=16
+  read_fir_dataflow(input, fir_sample_stream, length);
+  compute_fir_dataflow(fir_sample_stream, fir_result_stream, length);
+  write_fir_dataflow(fir_result_stream, output, length);"""
 
     # 带 scale 参数时，继续交给缩放专用 helper 选择更细模板。
     if "scale" in set_argument_names:

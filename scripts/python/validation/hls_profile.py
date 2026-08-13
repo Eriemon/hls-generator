@@ -399,16 +399,76 @@ def _required_pragma_present(source_text: str, pragma_token: str, spec: dict[str
         # 原始 pragma 片段已经命中时，无需再展开兼容变体。
         return True
 
+    # 再允许同一 pragma 行插入额外硬件选项，例如 offset=slave 或 depth=1024。
+    if _pragma_line_fragment_present(source_text, pragma_token):
+
+        # 所有必需 token 已按原顺序出现在同一行，判定片段存在。
+        return True
+
     # 逐个兼容变体重试子串命中，覆盖 variable=/port= 被 workflow 改写后的 pragma 绑定名。
     for str_candidate_token in _pragma_token_variants(pragma_token, spec):
 
         # 任一兼容写法命中后即可判定 required pragma 已出现。
-        if str_candidate_token in source_text:
+        if str_candidate_token in source_text or _pragma_line_fragment_present(source_text, str_candidate_token):
 
             # 当前兼容变体已经命中源码文本，返回成功结果。
             return True
 
     # 所有兼容变体都未命中时，说明该 required pragma 确实没有落到源码里。
+    return False
+
+# 允许同一 HLS pragma 行包含额外选项，但不允许跨行拼接合同。
+def _pragma_line_fragment_present(source_text: str, pragma_token: str) -> bool:
+    """判断 required pragma token 是否按顺序出现在同一条 HLS pragma 行。
+
+    参数:
+        source_text: 聚合后的源码文本。
+        pragma_token: profile 中声明的必需 pragma 片段。
+
+    返回:
+        允许额外空白分隔 token 时的片段命中结果。
+    """
+
+    # 空合同不应绕过 profile 检查。
+    list_required_tokens = pragma_token.split()  # profile 声明的 token 序列
+
+    # 没有有效 token 时直接返回未命中。
+    if not list_required_tokens:
+
+        # 空字符串不代表合法 pragma。
+        return False
+
+    # 逐行检查，确保一个合同不会由多条 pragma 拼接得到。
+    for str_source_line in source_text.splitlines():
+
+        # 只接受真正以 HLS pragma 开始的源码行。
+        if not str_source_line.lstrip().startswith("#pragma HLS"):
+
+            # 普通源码行不参与 pragma 合同匹配。
+            continue
+
+        # 当前源码行按空白切分，允许额外选项插入而保持 token 顺序。
+        list_source_tokens = str_source_line.split()  # 实际源码行的拆分结果
+
+        # 合同匹配从当前行的首个 token 开始。
+        int_required_index = 0  # 尚未命中的 required token 下标
+
+        # 在同一行中按顺序寻找每个必需 token。
+        for str_source_token in list_source_tokens:
+
+            # 只有当前 token 与下一个合同 token 相等时才推进匹配状态。
+            if str_source_token == list_required_tokens[int_required_index]:
+
+                # 记录已经命中的合同 token 数量。
+                int_required_index += 1  # 推进到下一个 required token
+
+                # 所有合同 token 均命中后返回成功。
+                if int_required_index == len(list_required_tokens):
+
+                    # required token 序列已在当前行完整命中。
+                    return True
+
+    # 未找到完整的同一行 token 序列。
     return False
 
 # 为带 variable=/port= 绑定名的 pragma 构造 typed-prefix 兼容候选。

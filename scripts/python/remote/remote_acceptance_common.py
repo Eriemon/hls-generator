@@ -65,6 +65,8 @@ from scripts.python.remote.board_platform_payload import (
 )
 
 # runtime 配置函数读取 skill 治理配置和 Vitis 超时阈值。
+from scripts.python.config.hls_config import _find_erie_remote_script
+
 from scripts.python.config.hls_config import (
     remote_validation_config,
     repo_root,
@@ -171,13 +173,17 @@ class ErieHelper:
         )
 
         # remote_ssh.py 是所有远端命令的唯一执行入口。
-        self.script = self.erie_skill_dir / "scripts" / "remote_ssh.py"  # erie remote_ssh 脚本路径
+        self.script = _find_erie_remote_script(self.erie_skill_dir)  # erie remote_ssh 脚本路径
 
         # 缺少 helper 时必须阻塞，避免调用错误环境。
-        if not self.script.exists():
+        if self.script is None:
 
             # helper 缺失时立刻停止，避免后续所有 erie 调用都落空。
-            raise RemoteAcceptanceError(f"> ERR: [Python] erie-remote-ssh helper was not found: {self.script}")
+            raise RemoteAcceptanceError(
+                "> ERR: [Python] erie-remote-ssh helper was not found in the supported layouts: "
+                f"{self.erie_skill_dir / 'scripts' / 'python' / 'runtime' / 'remote_ssh.py'}, "
+                f"{self.erie_skill_dir / 'scripts' / 'remote_ssh.py'}"
+            )
 
         # 缺少 settings 时要求用户先配置远端服务器。
         if not self.settings.exists():
@@ -233,25 +239,52 @@ class ErieHelper:
 
         返回:
             str: erie-remote-ssh 合并 stdout/stderr 后的文本。
+
+        异常:
+            RemoteAcceptanceError: 非 high-risk 远端失败无法通过 fallback 恢复时抛出。
         """
 
         # exec 支持临时 settings，用于把只读探测绑定到指定 overlay。
         path_active_settings = settings or self.settings  # 本次 exec 使用的 settings 路径
 
-        # exec 子命令不创建 request 文件，只执行只读探测或同步任务。
-        return self._run(
-            [
-                "exec",
-                "--settings",
-                str(path_active_settings),
-                "--server",
+        # exec 子命令优先执行低风险只读探测，不提前制造 request 记录。
+        try:
+
+            # 低风险命令直接复用 erie 的同步执行入口。
+            return self._run(
+                [
+                    "exec",
+                    "--settings",
+                    str(path_active_settings),
+                    "--server",
+                    server,
+                    "--timeout",
+                    str(self.timeout),
+                    "--",
+                    *command,
+                ]
+            )
+
+        # 新版 erie 对绝对路径探测强制要求 reviewed request-command。
+        except RemoteAcceptanceError as error:
+
+            # 只有明确的 high-risk exec 拒绝才允许走受审查 fallback。
+            if "High-risk command cannot run through exec" not in str(error):
+
+                # SSH、配置或远端命令本身失败时保留原始阻断，不扩大重试范围。
+                raise
+
+            # 复用同一命令参数，交由 request-command 记录和执行完整审计链。
+            str_command_text = " ".join(shlex.quote(str(item)) for item in command)  # 按 shell quoting 拼接 reviewed request 的远端探测脚本
+
+            # 返回 reviewed request 的真实远程输出，保持 exec 对调用方的返回契约。
+            return self.request_command_and_capture(
+                path_active_settings,
                 server,
-                "--timeout",
-                str(self.timeout),
-                "--",
-                *command,
-            ]
-        )
+                str_command_text,
+                reason="run high-risk read-only remote probe through reviewed request",
+                request_timeout_s=self.timeout,
+            )
 
     # 读取远端软件清单，为 profile 选择和就绪性判断提供原始信息。
     def scan_software(self, server: str, *, settings: Path | None = None) -> str:
@@ -329,14 +362,103 @@ class ErieHelper:
         # 调用方需要记录 request 路径作为验收证据。
         return str_request_path
 
+    # 在 exec 被策略拒绝时创建 reviewed command request 并保留远程输出。
+    def request_command_and_capture(
+        self, settings: Path, server: str, command: str, reason: str, *,
+        request_timeout_s: int | None = None,
+    ) -> str:
+        """创建并执行 command request，同时返回远程命令输出。
+
+        参数:
+            settings: erie settings 文件路径。
+            server: 远端服务器名称。
+            command: 需要受审查执行的远程 shell 命令。
+            reason: 写入 request 的人工可读原因。
+            request_timeout_s: 可选 request 控制超时。
+
+        返回:
+            str: reviewed command 的合并 stdout/stderr 文本。
+        """
+
+        # 统一 request 控制超时，确保创建与执行阶段使用同一治理窗口。
+        int_request_timeout_s = self._request_timeout(request_timeout_s)  # 当前 request 控制超时
+
+        # request-command 没有独立 timeout 参数，先更新 settings overlay 的默认超时。
+        path_request_settings = self._ensure_request_settings_timeout(settings, timeout_s=int_request_timeout_s)  # high-risk 探测 request-command 复用的 settings overlay
+
+        # 生成 reviewed request 文件，保留原始 shell 命令和执行原因。
+        str_request_stdout = self._create_request_stdout(path_request_settings, server, "command", command, reason)  # reviewed request 创建阶段的原始输出
+
+        # 解析 request 文件路径，随后由统一 run-request 入口执行。
+        str_request_path = _parse_request_path(str_request_stdout)  # 记录本轮已执行 request，供后续诊断追溯
+
+        # 只读探测不会自动重试，避免重复执行任意高风险远端命令。
+        return self._run_request_execute(
+            path_request_settings,
+            str_request_path,
+            request_timeout_s=int_request_timeout_s,
+            retries=0,
+        )
+
+    # 在 high-risk detached 被拒绝时创建 reviewed command request 并返回 job 元数据。
+    def request_command_detached_and_run(
+        self, settings: Path, server: str, command: str, reason: str, *,
+        task_purpose: str | None = None,
+    ) -> dict[str, Any]:
+        """创建并执行 detached command request，同时返回远程 job 元数据。
+
+        参数:
+            settings: erie settings 文件路径。
+            server: 远端服务器名称。
+            command: 需要受审查执行的远端 shell 命令。
+            reason: 写入 request 的人工可读原因。
+            task_purpose: detached job 的保留与清理用途。
+
+        返回:
+            dict[str, Any]: 包含 job_id、remote_job_dir、manifest 和 output。
+        """
+
+        # reviewed detached request 复用统一的 SSH 控制超时。
+        int_request_timeout_s = self._request_timeout(self.timeout)  # detached request 控制超时
+
+        # request-command 没有独立 timeout 参数，先更新 settings overlay。
+        path_request_settings = self._ensure_request_settings_timeout(settings, timeout_s=int_request_timeout_s)  # 本轮 reviewed detached request 使用的 settings overlay
+
+        # 记录 request-command 创建阶段的 stdout，供后续解析执行凭证。
+        str_request_stdout = self._create_request_stdout(  # 从工厂获取 request 创建输出，后续据此取凭证
+            path_request_settings,  # 绑定本轮远端控制面的 settings 配置
+            server,  # detached job 的目标远端服务器
+            "command",  # request-command 操作类型
+            command,  # 需要提交到远端 shell 的长任务命令
+            reason,  # 写入 request 审计字段的任务原因
+            detached=True,  # 要求 erie 创建 detached job
+            task_purpose=task_purpose,  # 透传调用方的 job 保留语义
+        )
+
+        # 提取本轮 request 的本地路径，作为 run-request 的唯一输入。
+        str_request_path = _parse_request_path(str_request_stdout)  # 作为 run-request 的本地文件参数
+
+        # 执行 reviewed request，取得后续解析 job_id、remote_job_dir 和 manifest 所需的远端回执。
+        str_detached_output = self._run_request_execute(  # 远端回执字段是 job_id、remote_job_dir 和 manifest 的解析输入。
+            path_request_settings,  # 为 run-request 绑定本轮 settings overlay 配置
+            str_request_path,  # 本轮 detached request 文件路径
+            request_timeout_s=int_request_timeout_s,  # request 执行控制超时
+            retries=0,  # 高风险长任务不自动重复提交
+        )
+
+        # 解析 job 元数据，保持 exec_detached 的历史返回字段。
+        return {
+            "job_id": _field_from_output(str_detached_output, "job_id"),
+            "remote_job_dir": _field_from_output(str_detached_output, "remote_job_dir"),
+            "manifest": _field_from_output(str_detached_output, "manifest"),
+            "output": str_detached_output,
+        }
+
     # request 参数拼装拆到单独 helper，避免主流程被 CLI 细节淹没。
     def _create_request_stdout(
-        self,
-        settings: Path,
-        server: str,
-        operation: str,
-        payload: list[str] | str,
-        reason: str,
+        self, settings: Path, server: str, operation: str, payload: list[str] | str, reason: str, *,
+        detached: bool = False,
+        task_purpose: str | None = None,
     ) -> str:
         """创建指定类型的 request，并返回原始 stdout。
 
@@ -346,6 +468,8 @@ class ErieHelper:
             operation: 请求类型，支持 mkdir、delete 和 command。
             payload: request 负载；mkdir/delete 使用路径列表，command 使用命令文本或命令片段列表。
             reason: 写入 request 审计字段的人工可读原因。
+            detached: command request 是否创建 detached job。
+            task_purpose: detached job 的保留与清理用途。
 
         返回:
             str: erie request 子命令返回的原始 stdout。
@@ -384,20 +508,34 @@ class ErieHelper:
             # command request 需要把列表 payload 拼成单条 shell 命令。
             str_request_command = payload if isinstance(payload, str) else " ".join(payload)  # 当前 command request 要提交给远端 shell 的命令文本
 
-            # command 分支把命令正文交给 erie request-command，并把原始 stdout 交回主流程解析。
-            return self._run(
-                [
-                    "request-command",
-                    "--settings",
-                    str(settings),
-                    "--server",
-                    server,
-                    "--reason",
-                    reason,
-                    "--",
-                    str_request_command,
-                ]
-            )
+            # command 分支先准备 request-command 的稳定参数骨架。
+            list_request_command = [  # request-command 基础参数列表
+                "request-command",  # 受审查的远程命令 request 子命令
+                "--settings",  # 下一项指定 request 使用的 settings overlay
+                str(settings),  # 本轮 request 使用的 settings 路径
+                "--server",  # 下一项指定目标远端服务器
+                server,  # request 的远端服务器
+                "--reason",  # 下一项写入 request 审计原因
+                reason,  # request 的人工可读原因
+            ]
+
+            # high-risk detached job 必须显式落入 erie 的 reviewed request 语义。
+            if detached:
+
+                # request-command 的 detached 开关让后续 run-request 返回 job 元数据。
+                list_request_command.append("--detached")
+
+                # 有明确用途时继续把 task purpose 写入治理记录。
+                if task_purpose:
+
+                    # 透传调用方声明的 job 保留与清理语义。
+                    list_request_command.extend(["--task-purpose", task_purpose])
+
+            # 命令正文放在终止选项后，保持 shell 文本完整传递。
+            list_request_command.extend(["--", str_request_command])
+
+            # 把 request-command 原始 stdout 交回主流程解析 request 路径。
+            return self._run(list_request_command)
 
         # 未知 request 类型必须立刻暴露给调用者。
         raise RemoteAcceptanceError(f"> ERR: [Python] unsupported request operation: {operation}")
@@ -540,6 +678,9 @@ class ErieHelper:
 
         返回:
             dict[str, Any]: 包含 job_id、remote_job_dir、manifest 和 output 的元数据。
+
+        异常:
+            RemoteAcceptanceError: detached 提交被拒绝或远端任务无法创建时抛出。
         """
 
         # detached job 允许切换到指定 overlay，确保日志和运行目录落在对应 run 下。
@@ -576,7 +717,28 @@ class ErieHelper:
         )
 
         # exec-detached 会回传 job_id、远端目录和 manifest 等可追溯字段。
-        str_detached_output = self._run(list_command)  # 保存 detached job 提交后的元数据输出
+        try:
+
+            # 低风险 detached 任务继续复用 erie 的同步提交入口。
+            str_detached_output = self._run(list_command)  # 保存 detached job 提交后的元数据输出
+
+        # 新版 erie 对含绝对路径的 detached 任务强制要求 reviewed request-command。
+        except RemoteAcceptanceError as error:
+
+            # 只有明确的 high-risk 拒绝才允许切换到受审查 detached request。
+            if "High-risk command cannot run through exec-detached" not in str(error):
+
+                # SSH、配置或远端任务本身失败时保留原始阻断，不扩大重试范围。
+                raise
+
+            # reviewed request 会直接返回同一组 job 元数据，保持调用方契约不变。
+            return self.request_command_detached_and_run(
+                path_active_settings,
+                server,
+                command,
+                reason,
+                task_purpose=task_purpose,
+            )
 
         # job id 是后续轮询状态的主键。
         str_job_id = _field_from_output(str_detached_output, "job_id")  # detached job 唯一标识
@@ -648,10 +810,10 @@ class ErieHelper:
             # erie status 字段是最终状态判定来源。
             str_status = _field_from_output(str_last_output, "status")  # 当前轮询得到的 job 状态
 
-            # 终态直接返回给调用方写入报告。
-            if str_status in {"succeeded", "failed", "cancelled", "not_found"}:
+            # unknown 表示远端完成标记缺失，必须交给上层按失败路径报告，不能继续无限轮询。
+            if str_status in {"succeeded", "failed", "cancelled", "not_found", "unknown"}:
 
-                # 成功、失败、取消和 not_found 都属于终态，直接交给上层处理。
+                # 成功、失败、取消、丢失和未知状态都交给上层处理，避免隐藏远端状态损坏。
                 return {"status": str_status, "output": str_last_output, "returncode": int_returncode}
 
             # 非零退出码中只有短暂 SSH 失败允许继续轮询。
@@ -3057,9 +3219,3 @@ def _format_result(result: dict[str, Any]) -> str:
 
     # 按行拼接最终摘要文本，供 CLI 直接打印。
     return "\n".join(list_lines)
-
-# 脚本以独立 CLI 方式运行时，统一从 `main()` 进入完整治理流程。
-if __name__ == "__main__":
-
-    # 以 CLI 退出码形式返回主流程结果，保持脚本入口行为标准化。
-    raise SystemExit(main())

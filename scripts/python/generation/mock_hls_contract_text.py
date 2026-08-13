@@ -12,6 +12,9 @@ from scripts.python.generation.patterns import required_pattern_headers
 # 协议层统一提供顶层参数列表和 top function 名称。
 from .mock_hls_protocols import argument_dicts, top_function_name
 
+# m_axi 缺省深度必须由 pragma、端口合同和 testbench 共同复用，避免 co-simulation 缓冲区分叉。
+DEFAULT_M_AXI_DEPTH = 1024  # 未声明 depth 的 m_axi 端口统一使用的 co-simulation 窗口长度
+
 # 生成 mock HLS 文件头 contract，覆盖 header/source/testbench 三种角色。
 def file_header_lines(spec: dict[str, Any], file_kind_name: str) -> list[str]:
     """生成 HG007 要求的文件头 contract 行列表。
@@ -412,6 +415,76 @@ def unit_text_for_argument(argument: dict[str, Any]) -> str:
     # 归一化类型文本，去掉 const、指针和引用标记，只保留核心载荷类型。
     return str(argument.get("type") or "int").replace("const ", "").replace("*", "").replace("&", "").strip()
 
+# 解析 m_axi 顶层端口的有效 depth，供 pragma、合同和 testbench 共用。
+def m_axi_depth_for_argument(spec: dict[str, Any], argument: dict[str, Any]) -> int:
+    """解析 m_axi 端口的统一访问深度。
+
+    参数:
+        spec: 当前 HLS 规范字典，shape=(n fields)，dtype=dict[str, Any]，unit=JSON object。
+        argument: 当前顶层参数字典，shape=(n fields)，dtype=dict[str, Any]，unit=JSON object。
+
+    返回:
+        当前 m_axi 端口应同时用于 pragma、合同和局部 testbench 数组的正整数深度。
+    """
+
+    # 参数级 depth 是最接近真实端口的约束，应优先覆盖全局回退配置。
+    obj_argument_depth = argument.get("depth")  # 当前端口显式声明的访问深度
+
+    # 接受 JSON 数值和数字文本两种稳定表示，避免序列化过程制造深度分叉。
+    if isinstance(obj_argument_depth, int) and obj_argument_depth > 0:
+
+        # 返回端口级正整数深度。
+        return int(obj_argument_depth)
+
+    # 数字字符串同样属于可直接落盘的显式端口合同。
+    if isinstance(obj_argument_depth, str) and obj_argument_depth.isdigit() and int(obj_argument_depth) > 0:
+
+        # 把数字文本规范化成整数，供所有 HLS 输出路径复用。
+        return int(obj_argument_depth)
+
+    # 性能字段可以给出没有逐端口标注时的访问窗口上界。
+    dict_performance = spec.get("performance") if isinstance(spec.get("performance"), dict) else {}  # spec 性能配置段
+
+    # 按现有 mock provider 约定保留性能字段优先级。
+    for str_key in ("max_length", "vector_length", "depth"):
+
+        # 把数值和数字文本统一成字符串，后续只接受正整数形式的访问窗口。
+        str_performance_depth: str = str(dict_performance.get(str_key) or "")  # 当前性能键对应的候选 m_axi 深度文本
+
+        # 合法正整数性能值可以成为所有 m_axi 相关产物的共同深度。
+        if str_performance_depth.isdigit() and int(str_performance_depth) > 0:
+
+            # 把性能配置文本规范化成整数，供 pragma、合同和 testbench 共同使用。
+            return int(str_performance_depth)
+
+    # 全局 interface_profile.depth 是逐端口合同缺失时的第二层显式约束。
+    obj_interface_profile = spec.get("interface_profile")  # 全局 interface_profile 配置对象
+
+    # profile 对象存在时继续检查其中的全局 depth 约束。
+    if isinstance(obj_interface_profile, dict):
+
+        # 只接受正整数 profile 深度，拒绝空值和非数值配置。
+        obj_profile_depth = obj_interface_profile.get("depth")  # profile 级候选 m_axi 深度
+
+        # 正整数 profile 值可以作为缺少端口级声明时的访问窗口。
+        if isinstance(obj_profile_depth, int) and obj_profile_depth > 0:
+
+            # 返回 profile 级访问窗口深度。
+            return int(obj_profile_depth)
+
+        # profile 深度的数字文本形式同样需要规范化。
+        if (
+            isinstance(obj_profile_depth, str)
+            and obj_profile_depth.isdigit()
+            and int(obj_profile_depth) > 0
+        ):
+
+            # 把 profile 文本转换为统一整数。
+            return int(obj_profile_depth)
+
+    # 没有显式合同时保留 co-simulation 使用的保守默认窗口。
+    return DEFAULT_M_AXI_DEPTH
+
 # 为 m_axi 顶层端口生成 depth 描述；非 m_axi 场景显式写出“无”。
 def depth_text_for_argument(spec: dict[str, Any], argument: dict[str, Any]) -> str:
     """为顶层端口 contract 生成 depth 描述。
@@ -430,32 +503,8 @@ def depth_text_for_argument(spec: dict[str, Any], argument: dict[str, Any]) -> s
         # 非存储映射接口不需要深度事实，直接返回“无”。
         return "无"
 
-    # 参数级 depth 明确存在时优先沿用它，避免合同层和 pragma 层出现分叉。
-    obj_argument_depth = argument.get("depth")  # 当前参数字典里的显式 depth 字段
-
-    # int 形式的正 depth 可以直接转成合同文本。
-    if isinstance(obj_argument_depth, int) and obj_argument_depth > 0:
-
-        # 返回参数级显式 depth，保持 testbench 局部数组和 pragma 深度一致。
-        return str(obj_argument_depth)
-
-    # 数字字符串形式的正 depth 同样按显式合同处理。
-    if isinstance(obj_argument_depth, str) and obj_argument_depth.isdigit() and int(obj_argument_depth) > 0:
-
-        # 返回参数级数字字符串 depth，兼容 JSON 载荷把整数序列化成文本的场景。
-        return obj_argument_depth
-
-    # 读取 interface_profile，判断是否有显式 depth。
-    obj_interface_profile = spec.get("interface_profile")  # spec 中的 interface_profile 字段
-
-    # 命中字典 profile 且存在有效 depth 时优先沿用 spec 合同。
-    if isinstance(obj_interface_profile, dict) and obj_interface_profile.get("depth") not in (None, ""):
-
-        # spec 已经声明显式 depth 时，直接沿用这份合同数值。
-        return str(obj_interface_profile["depth"])
-
-    # 缺少显式 depth 时回退到 workflow 既有的稳定默认值。
-    return "256"
+    # 统一复用 m_axi 深度解析器，保证合同文字与 pragma、testbench 数组共享同一数值。
+    return str(m_axi_depth_for_argument(spec, argument))
 
 # 生成 testbench `main` 的四段 contract，满足 HG008 要求。
 def testbench_main_contract_lines(str_top_function_name: str) -> list[str]:

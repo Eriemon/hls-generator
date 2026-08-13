@@ -123,6 +123,10 @@ credentials into this skill. Server ids and names must come from the
   list, check, workspace-check, exec, and request execution. The current
   preferred layout is `${erie_skill_dir}/assets/defaults.json`; legacy
   `${erie_skill_dir}/config/defaults.json` remains supported for compatibility.
+- The erie CLI entrypoint accepts the current
+  `${erie_skill_dir}/scripts/python/runtime/remote_ssh.py` layout and the legacy
+  `${erie_skill_dir}/scripts/remote_ssh.py` layout; the current runtime layout is
+  preferred when both are installed.
 - `local_run_root` is the generated local report root for remote validation
   plans, overlays, requests, and reports.
 - `directory_contract.project_root_dirname` is the governed remote project root
@@ -186,6 +190,15 @@ governed remote platform root and not under `/tools/Xilinx` by default. The
 preferred shape is an uploaded extracted directory such as
 `readable-hls-generator/platforms/alveo/xilinx_u55c_gen3x16_xdma_3_202210_1/`
 containing the matching `.xpfm`.
+
+Board artifact ABI is kept separate from the user specification. When a board
+package targets the Vitis 2022.2 kernel flow, a 32-bit `ap_uint` element on an
+`m_axi` boundary is rendered as `unsigned int` only in that temporary board
+artifact; the original spec, generated host metadata, and non-board artifacts
+retain their declared types. Board artifacts also expose each `m_axi` pointer's
+control register and all scalar/return `s_axilite` controls through the single
+`control` bundle, use `offset=slave`, and derive the `m_axi` `depth` from the
+shared argument contract.
 
 ## Inspection
 

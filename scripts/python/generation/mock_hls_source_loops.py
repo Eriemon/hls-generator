@@ -17,6 +17,18 @@ def direct_stage_loop_stream_rules() -> tuple[tuple[tuple[str, ...], str], ...]:
     # 先收拢最稳定的 stream/AXIS 直通路径，避免 dataflow 主链说明被局部 buffer 规则误吞。
     return (
         (("stream_a_stream.write(", "ptr_input_a["), "遍历 input_a 的有效索引，把 A 路左操作数样本逐项推入 stream_a_stream。"),
+        (
+            ("stream_mid_stream.write(", "ptr_input_values["),
+            "遍历 FIR 输入窗口的有效索引，把原始样本逐项推入 stream_mid_stream，交给计算阶段消费。",
+        ),
+        (
+            ("stream_result_stream.write(", "stream_mid_stream.read()"),
+            "遍历 FIR 输入 FIFO 的有效 token，逐项完成样本递增并把结果送入 stream_result_stream。",
+        ),
+        (
+            ("ptr_output_values[", "stream_result_stream.read()"),
+            "遍历 FIR 输出窗口的有效索引，把 stream_result_stream 中的递增样本逐项写回。",
+        ),
         (("stream_in_stream.write(axis_in_pkt)",), "遍历输入窗口的有效索引，把主存样本封装成 axis_byte_t token 后逐项推入 stream_in_stream。"),
         (("stream_b_stream.write(", "ptr_input_b["), "遍历 input_b 的有效索引，把 B 路右操作数样本逐项推入 stream_b_stream。"),
         (
@@ -273,6 +285,12 @@ def loop_comment_text_for_stream_flow(str_stage_code: str) -> str:
 
         # 返回输入搬运循环说明。
         return "遍历输入窗口的有效索引，把外部样本逐项推入 load FIFO。"
+
+    # FIR 输入 FIFO 到结果 FIFO 的循环承担中间计算职责。
+    if "stream_result_stream.write(" in str_stage_code and "stream_mid_stream.read()" in str_stage_code:
+
+        # 返回 FIR 计算循环说明，明确输入 FIFO 到结果 FIFO 的阶段边界。
+        return "遍历 FIR 输入 FIFO 的有效 token，完成递增计算并把结果送入 FIR result FIFO。"
 
     # load FIFO 到 result FIFO 的循环承担中间计算职责。
     if "stream_load_stream.read()" in str_stage_code or "stream_result_stream.write(" in str_stage_code:

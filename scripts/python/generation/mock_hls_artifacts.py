@@ -10,6 +10,7 @@ from typing import Any
 
 # 导入注释渲染器和模式工具，供 mock 代码生成阶段复用仓库契约。
 from .mock_comment_rendering import _comment
+from .mock_hls_contract_text import m_axi_depth_for_argument
 from .mock_vectors import _example_pattern
 from scripts.python.generation.patterns import required_pattern_headers
 from scripts.python.generation.vectors import VECTOR_HASH_TAG
@@ -300,6 +301,12 @@ def _mock_hls_helpers_text(spec: dict[str, Any], comment_language: str) -> str:
         # 返回 matmul DATAFLOW helper 函数集合。
         return helper_blocks._mock_matmul_dataflow_helpers(comment_language)
 
+    # staged FIR 也需要显式的 read、compute、write helper 才能承载顶层 DATAFLOW。
+    if str_pattern_name == "fir" and _requires_dataflow_pragma(spec):
+
+        # 返回 FIR DATAFLOW 的三阶段 helper 函数集合。
+        return helper_blocks._mock_fir_dataflow_helpers(comment_language)
+
     # 当模式不需要流式 helper 骨架时，直接返回空串。
     if str_pattern_name not in {"dataflow", "task_graph"}:
 
@@ -409,10 +416,10 @@ int main() {{
   int failures = 0;
 {str_body}
   if (failures != 0) {{
-    std::cout << "FAIL\\n";
+    std::cout << "> ERR: [HLS] FAIL workflow_static_smoke\\n";
     return 1;
   }}
-  std::cout << "PASS\\n";
+  std::cout << "> INFO: [HLS] PASS workflow_static_smoke\\n";
   return 0;
 }}
 '''
@@ -553,11 +560,30 @@ def _hls_pragmas(spec: dict[str, Any]) -> str:
     # 准备 pragma 行列表，稍后按接口和模式顺序逐项拼装。
     list_pragma_lines: list[str] = []  # 顶层函数的 pragma 行集合
 
+    # 先固定当前 top function 是否存在 m_axi，供 AXI-Lite 控制 bundle 归一化。
+    list_arguments = _argument_dicts(spec)  # 当前顶层函数的接口参数列表
+
+    # 统计当前 top function 是否包含 memory-mapped 主口。
+    bool_has_m_axi = any(dict_argument.get("interface") == "m_axi" for dict_argument in list_arguments)  # 当前 top function 是否含 m_axi
+
     # 识别当前 spec 对应的模式名称。
     str_pattern_name = _example_pattern(spec)  # 顶层函数 pragma 的模式名称
 
+    # 读取 spec 是否显式要求 DATAFLOW，避免只按 pattern 名称猜测作用域。
+    bool_requires_dataflow_pragma = _requires_dataflow_pragma(spec)  # 当前 spec 是否声明了顶层 DATAFLOW
+
+    # 识别需要把 DATAFLOW 留在 top、把 PIPELINE 留给 actor 的模式。
+    bool_is_dataflow_pattern = (  # DATAFLOW 模式的顶层作用域标记
+        str_pattern_name in {  # 先检查已知的 DATAFLOW pattern 名称
+        "dataflow",  # 普通 DATAFLOW 模式名称
+        "task_graph",  # 任务图模式名称
+        "streamofblocks",  # stream-of-blocks 模式名称
+        }
+        or bool_requires_dataflow_pragma  # spec 显式声明 DATAFLOW 时同样按顶层模式处理
+    )
+
     # 先为每个参数渲染接口 pragma。
-    for dict_argument in _argument_dicts(spec):
+    for dict_argument in list_arguments:
 
         # 缺少参数名的条目无法渲染 pragma，直接跳过。
         if not dict_argument.get("name"):
@@ -594,17 +620,38 @@ def _hls_pragmas(spec: dict[str, Any]) -> str:
             # 渲染默认的 s_axilite 接口 pragma。
             str_pragma_line = f"#pragma HLS INTERFACE s_axilite port={dict_argument['name']}"  # 默认 s_axilite 接口 pragma 行
 
+            # Vitis kernel 要求含 m_axi 的 top function 统一使用 control bundle。
+            if bool_has_m_axi:
+
+                # 给普通标量控制口显式补上与 m_axi 地址口相同的 bundle。
+                str_pragma_line = f"{str_pragma_line} bundle=control"  # 统一 AXI-Lite 控制 bundle
+
         # 把当前参数的接口 pragma 写入列表。
         list_pragma_lines = [*list_pragma_lines, str_pragma_line]  # 已收集的接口 pragma 行
 
+        # Vitis kernel flow 需要把 m_axi pointer 的 offset 注册到统一 control bundle。
+        if str_interface_name == "m_axi":
+
+            # pointer control 端口与 m_axi 地址端口成对出现，避免 v++ 把 ap_uint pointer 当成 opaque struct。
+            str_pointer_control_pragma = f"#pragma HLS INTERFACE s_axilite port={dict_argument['name']} bundle=control"  # m_axi pointer 对应的 control pragma 文本
+
+            # 把 m_axi pointer 的 control pragma 追加到接口 pragma 列表。
+            list_pragma_lines = [*list_pragma_lines, str_pointer_control_pragma]  # 已追加 m_axi pointer 的 control pragma
+
     # 渲染控制接口 pragma，默认走 s_axilite。
     str_control_pragma = "#pragma HLS INTERFACE " f"{spec.get('interfaces', {}).get('control', 's_axilite')} port=return"  # 顶层函数控制接口 pragma 行
+
+    # 含 m_axi 的 Vitis kernel 还必须把 return 控制口放进同一个 control bundle。
+    if bool_has_m_axi and str_control_pragma.endswith("port=return"):
+
+        # 防止 return 隐式落到 control_r，写入 Vitis kernel 唯一控制组。
+        str_control_pragma = f"{str_control_pragma} bundle=control"  # 防止 return 产生第二个 AXI-Lite 控制组
 
     # 把控制接口 pragma 追加到列表末尾。
     list_pragma_lines = [*list_pragma_lines, str_control_pragma]  # 已追加控制接口的 pragma 行集合
 
     # DATAFLOW 类模式需要显式追加 DATAFLOW pragma。
-    if str_pattern_name in {"dataflow", "task_graph", "streamofblocks"}:
+    if bool_is_dataflow_pattern:
 
         # 把 DATAFLOW pragma 写入列表。
         list_pragma_lines = [*list_pragma_lines, "#pragma HLS DATAFLOW"]  # 已补齐 DATAFLOW 的 pragma 行集合
@@ -612,8 +659,7 @@ def _hls_pragmas(spec: dict[str, Any]) -> str:
     # 非 DATAFLOW 模式且要求 pipeline 时，补默认 PIPELINE pragma。
     if (
         spec.get("pipeline_required", True)
-        and str_pattern_name not in {"dataflow", "task_graph", "streamofblocks"}
-        and not _requires_dataflow_pragma(spec)
+        and not bool_is_dataflow_pattern
     ):
 
         # 把默认 PIPELINE pragma 追加到列表末尾。
@@ -624,13 +670,19 @@ def _hls_pragmas(spec: dict[str, Any]) -> str:
         _pragma_identity(str_pragma_line) for str_pragma_line in list_pragma_lines  # 为每条 pragma 生成去重身份键
     )
 
-    # 合并 spec 额外要求的 pragma，同时跳过重复和局部变量 pragma。
+    # 合并 spec 额外要求的 pragma，同时跳过重复和非顶层作用域 pragma。
     for str_required_pragma in _required_pragmas(spec):
 
-        # 顶层 pragma 列表不在这里合并局部变量 pragma。
-        if "variable=" in str_required_pragma:
+        # 顶层 DATAFLOW 与 actor 局部 PIPELINE 不能同时挂在 top function 上。
+        bool_is_local_pipeline = (  # 当前 pragma 是否属于 dataflow actor 局部流水线
+            bool_is_dataflow_pattern  # 当前模式是否把 DATAFLOW 放在 top function
+            and str_required_pragma.lstrip().startswith("#pragma HLS PIPELINE")  # 仅识别 spec 中的 actor 流水线声明
+        )
 
-            # 跳过局部变量 pragma，由具体 body 模板自行负责。
+        # 局部 variable pragma 与 dataflow actor 的 PIPELINE 由 body/helper 模板负责。
+        if "variable=" in str_required_pragma or bool_is_local_pipeline:
+
+            # 跳过非顶层 pragma，避免把 actor 约束错误提升到 top function。
             continue
 
         # 解析当前追加 pragma 的去重身份键。
@@ -707,28 +759,8 @@ def _m_axi_depth(spec: dict[str, Any], argument: dict[str, Any]) -> int:
         m_axi pragma 中应使用的 depth 整数值。
     """
 
-    # 参数自身显式声明了合法 depth 时，优先沿用该值。
-    if isinstance(argument.get("depth"), int) and int(argument["depth"]) > 0:
-
-        # 返回参数级别显式声明的 depth。
-        return int(argument["depth"])
-
-    # 读取性能配置段，供默认 depth 回退逻辑复用。
-    dict_performance = spec.get("performance") if isinstance(spec.get("performance"), dict) else {}  # spec 中的性能配置段
-
-    # 按常见性能字段顺序查找可用的 depth 值。
-    for str_key in ("max_length", "vector_length", "depth"):
-
-        # 遇到合法正整数配置时，直接作为 m_axi depth 返回。
-        if isinstance(dict_performance.get(str_key), int) and int(
-            dict_performance[str_key]
-        ) > 0:
-
-            # 返回性能配置中给出的 depth。
-            return int(dict_performance[str_key])
-
-    # 当前 spec 未提供更细 depth 时，回退到保守默认值。
-    return 1024
+    # 统一复用合同层深度解析器，保证 pragma 与 testbench 局部数组使用同一上界。
+    return m_axi_depth_for_argument(spec, argument)
 
 # 提取 board acceptance 使用的源规范标识。
 def _board_source_spec(spec: dict[str, Any]) -> str:

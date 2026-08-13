@@ -11,6 +11,13 @@ from scripts.python.hls_quality_gate.readability.cpp_lexer import code_part
 # 赋值聚合入口继续提供函数签名回溯 helper。
 from .mock_hls_source_assignments import enclosing_signature_function_name
 
+# FIR 子模块承接 staged DATAFLOW helper 的专属签名和参数角色规则。
+from .mock_hls_fir_signatures import (
+    is_fir_dataflow_helper_function_name,
+    signature_fir_dataflow_comment_text,
+    signature_fir_dataflow_inline_comment_text,
+)
+
 # 判断当前 helper 名称是否属于 task_graph 家族，便于签名和调用规则复用同一套分类。
 def is_task_graph_helper_function_name(str_function_name: str) -> bool:
     """判断 helper 名称是否属于 task_graph 家族。
@@ -359,6 +366,7 @@ def function_signature_comment_text(
         }
         and not is_task_graph_helper_function_name(str_function_name)
         and not is_generic_flow_helper_function_name(str_function_name)
+        and not is_fir_dataflow_helper_function_name(str_function_name)
     ):
 
         # 当前代码不属于需要改写的 helper 多行签名。
@@ -366,6 +374,7 @@ def function_signature_comment_text(
 
     # 依次尝试函数头、参数、长度边界和函数体入口说明，命中首个结果后立即返回。
     for str_comment_text in (
+        signature_fir_dataflow_comment_text(str_function_name, str_next_code),
         signature_header_comment_text(str_function_name, str_next_code),
         signature_parameter_comment_text(str_function_name, str_next_code),
         signature_length_comment_text(str_function_name, str_next_code),
@@ -1053,6 +1062,7 @@ def function_signature_inline_comment_text(
 
     # 依次尝试 FIFO/通道尾注和长度边界尾注，命中首个结果后立即返回。
     for str_comment_text in (
+        signature_fir_dataflow_inline_comment_text(str_function_name, str_code),
         signature_inline_channel_comment_text(str_function_name, str_code),
         signature_inline_length_comment_text(str_function_name, str_code),
     ):

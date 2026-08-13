@@ -95,6 +95,14 @@ def stream_declaration_comment_text(str_code: str) -> str:
             "stream_result_stream 在这里暂存递增后的样本，作为计算阶段到写回阶段的 FIFO 边界。",
         ),
         (
+            "stream_fir_sample_stream",
+            "stream_fir_sample_stream 在这里暂存 FIR 读入阶段的原始样本，作为读入和计算之间的 FIFO 边界。",
+        ),
+        (
+            "stream_fir_result_stream",
+            "stream_fir_result_stream 在这里暂存 FIR 计算阶段的递增结果，作为计算和写回之间的 FIFO 边界。",
+        ),
+        (
             "stream_task_stream",
             "stream_task_stream 在这里暂存从输入窗口读出的待处理样本，作为 task_graph 读入阶段到计算阶段的 FIFO 边界。",
         ),
@@ -157,6 +165,8 @@ def stream_declaration_inline_comment_text(str_code: str) -> str:
         ("stream_out_stream", "tile 求和结果先在这个 FIFO 里等待写回阶段消费。"),
         ("stream_load_stream", "load 阶段把待处理样本暂存在这个 FIFO。"),
         ("stream_result_stream", "result 阶段把待写回样本暂存在这个 FIFO。"),
+        ("stream_fir_sample_stream", "FIR 读入阶段把原始样本暂存在这个输入 FIFO。"),
+        ("stream_fir_result_stream", "FIR 计算阶段把递增结果暂存在这个结果 FIFO。"),
         ("stream_task_stream", "这条 task stream 先缓冲读入阶段刚搬来的待处理样本。"),
         ("stream_task_result_stream", "这条 result stream 先缓冲已经递增完成的输出样本。"),
         ("stream_task_count_stream", "这条 count stream 单独传递本轮事务长度 token。"),
@@ -187,6 +197,14 @@ def stream_write_comment_text(str_code: str) -> str:
 
     # 先匹配已经能稳定映射到具体阶段入口的写调用。
     for tuple_stage_needles, str_comment_text in (
+        (
+            ("stream_mid_stream.write(", "ptr_input_values["),
+            "把 ptr_input_values 当前索引的 FIR 原始样本送入 stream_mid_stream，交给计算阶段继续处理。",
+        ),
+        (
+            ("stream_result_stream.write(", "stream_mid_stream.read()", "uint_fir_sample + 1"),
+            "把 FIR 当前样本递增后的结果送入 stream_result_stream，等待写回阶段按事务顺序消费。",
+        ),
         (
             ("stream_read_stream.write(", "ptr_input_values["),
             "把当前二维块的输入样本送入 stream_read_stream，交给 row_pass 作为后续行向处理的输入边界。",

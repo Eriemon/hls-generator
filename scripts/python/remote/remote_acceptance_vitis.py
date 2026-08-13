@@ -2482,6 +2482,7 @@ def _generate_local_hls_artifacts(
     *,
     comment_language: str,
     example_spec: str = "hls_vector_scale_mock_spec.json",
+    spec_override: dict[str, Any] | None = None,
 ) -> Path:
     """
     生成本地 HLS 验收资产。
@@ -2489,6 +2490,7 @@ def _generate_local_hls_artifacts(
     :param run_dir: 本次 run 目录。
     :param comment_language: 生成代码注释语言。
     :param example_spec: 示例 spec 文件名。
+    :param spec_override: 可选的已校验 spec 副本；用于 board mode 的 host ABI 适配。
     :return: 生成出的 HLS artifacts 目录。
     :raises RemoteAcceptanceError: 示例 spec 非法或本地 mock workflow 失败时抛出。
     """
@@ -2503,7 +2505,17 @@ def _generate_local_hls_artifacts(
         raise RemoteAcceptanceError(f"> ERR: [Python] Unknown HLS acceptance example spec: {example_spec}")
 
     # 示例 spec 内容会驱动 mock provider 生成 kernel、testbench 和 hls_config。
-    dict_spec: dict[str, Any] = json.loads(path_spec.read_text(encoding="utf-8"))  # mock provider 生成本地 HLS 工件的输入 spec
+    # 选择 board mode 已校验的副本时，不重复读取并覆盖其 ABI 适配。
+    if spec_override is not None:
+
+        # 复用调用方提供的 board host ABI 适配 spec。
+        dict_spec: dict[str, Any] = spec_override  # 已校验的 board artifact 输入 spec
+
+    # spec_override 缺失时读取 examples_dir 中的原始 spec。
+    else:
+
+        # 普通 Vitis mode 读取 examples_dir 中的原始 spec。
+        dict_spec = json.loads(path_spec.read_text(encoding="utf-8"))  # 原始 mock provider 输入 spec
 
     # workflow 需要在仓库根上下文中解析相对路径。
     with use_workspace_root(repo_root()):

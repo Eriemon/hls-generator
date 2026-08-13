@@ -12,6 +12,15 @@ from .mock_assignment_patterns import assigned_symbol_name
 # 输出窗口写回的 inline 尾注另拆成子模块，避免角色规则文件继续膨胀到尺寸上限之外。
 from .mock_inline_outputs import assignment_inline_output_comment_text
 
+# FIR DATAFLOW 的输出 FIFO 和输入 FIFO 尾注另拆成子模块，避免角色规则文件超过尺寸门禁。
+from .mock_hls_fir_assignments import (
+    fir_assignment_comment_text,
+    fir_assignment_inline_comment_text,
+)
+
+# 通用 stream 来源尾注另拆成子模块，保留本模块作为兼容聚合入口。
+from .mock_assignment_streams import assignment_inline_stream_source_comment_text
+
 # 把常见 lane/slot 索引翻译成更具体的中文角色词，避免只靠数字区分重复注释。
 def indexed_slot_role_text(str_left_text: str, str_symbol_name: str) -> str:
     """把数组槽位或带后缀的局部名翻译成角色词。
@@ -642,6 +651,12 @@ def assignment_output_buffer_comment_text(str_symbol_name: str, str_right_text: 
             "让外部边界直接观察当前子块的逐 lane 合并结果。"
         )
 
+    # 乘法分支
+    if "uint_scale_factor" in str_right_text and "ptr_input" in str_right_text:
+
+        # 乘法
+        return f"{str_symbol_name} 输入乘因子写回输出"
+
     # 输入窗口到输出窗口的直通写回要保留最小 mock 数据路径。
     if "ptr_input" in str_right_text or "arr_input" in str_right_text:
 
@@ -665,6 +680,15 @@ def assignment_output_stream_comment_text(str_symbol_name: str, str_right_text: 
     返回:
         命中 AXIS/FIFO/task/block 输出写回场景时返回中文说明，否则返回空字符串，dtype=str，unit=comment text。
     """
+
+    # FIR 专用输出规则先于通用 stream 规则执行，确保 staged DATAFLOW 结果不退回泛化句式。
+    str_fir_comment_text = fir_assignment_comment_text(str_symbol_name, str_right_text)  # FIR 输出 FIFO 说明候选
+
+    # 命中 FIR 结果 FIFO 写回时直接返回专属说明。
+    if str_fir_comment_text:
+
+        # 把 FIR 输出窗口的具体数据流边界交回调用方。
+        return str_fir_comment_text
 
     # AXIS packet 拆包写回时要指出这里只取 data 域。
     if "axis_out_pkt.data" in str_right_text:
@@ -1058,6 +1082,15 @@ def assignment_comment_text(str_assignment_code: str) -> str:
         )
 
     # 先尝试 pattern 级专属赋值说明，避免已知失败簇继续退回泛化模板。
+    str_fir_comment_text = fir_assignment_comment_text(str_symbol_name, str_right_text)  # FIR 局部操作数说明候选
+
+    # 命中 FIR 本地操作数或结果写回时，直接返回阶段专属说明。
+    if str_fir_comment_text:
+
+        # 把 FIR 赋值语义交回 source 注释重写入口。
+        return str_fir_comment_text
+
+    # 继续尝试 pattern 级专属赋值说明，避免已知失败簇退回泛化模板。
     str_specialized_comment_text = specialized_assignment_comment_text(  # 当前赋值命中的 pattern 级长说明
         str_symbol_name,  # 当前这次长说明要绑定的主标识符
         str_left_text,  # 当前这次长说明要查看的左值净文本
@@ -1183,59 +1216,6 @@ def assignment_inline_axis_field_comment_text(
             return str_comment_text
 
     # 其他 AXIS 字段写入不在这里强制追加短尾注。
-    return ""
-
-# 按 stream 样本来源生成尾注说明，避免主尾注函数重复判断多条输入通道。
-def assignment_inline_stream_source_comment_text(str_right_text: str) -> str:
-    """按 stream 样本来源生成尾注说明。
-
-    参数:
-        str_right_text: 当前赋值右值表达式的净文本，dtype=str，unit=expression text。
-
-    返回:
-        命中 stream 来源尾注规则时返回中文说明，否则返回空字符串，dtype=str，unit=comment text。
-    """
-
-    # axis 输入流直读时，用尾注强调当前局部寄存器拿到的是外部输入样本。
-    if "stream_in_stream.read()" in str_right_text:
-
-        # 当前右值来自 axis 输入流时，直接返回输入样本尾注。
-        return "从输入 axis 流读取当前样本。"
-
-    # load FIFO 读取时，用尾注说明当前样本正进入递增路径。
-    if "stream_load_stream.read()" in str_right_text:
-
-        # 当前右值来自 load FIFO 时，直接返回待递增样本尾注。
-        return "从 load FIFO 读取待递增样本。"
-
-    # count stream 读取时，要强调这个值只承担事务长度边界角色。
-    if any(
-        str_count_read in str_right_text
-        for str_count_read in (
-            "stream_count_stream.read()",
-            "stream_task_count_stream.read()",
-            "read_count_stream.read()",
-            "compute_count_stream.read()",
-            "write_count_stream.read()",
-        )
-    ):
-
-        # 当前右值来自 count stream 时，直接返回事务长度尾注。
-        return "先从 count stream 取回这次事务长度。"
-
-    # task stream 读取时，要强调当前拿到的是待递增样本。
-    if "stream_task_stream.read()" in str_right_text:
-
-        # 当前右值来自 task stream 时，直接返回样本领取尾注。
-        return "从 task stream 领取当前待递增样本。"
-
-    # task result stream 读取时，要强调当前样本已经完成递增。
-    if "stream_task_result_stream.read()" in str_right_text:
-
-        # 当前右值来自 task result stream 时，直接返回结果回放尾注。
-        return "从 task result stream 取回已经递增完成的样本。"
-
-    # 其他 stream 来源不在这里强制追加尾注。
     return ""
 
 # 为简单赋值或带初始化的局部声明生成语义化尾注，避免和上方摘要注释重复。

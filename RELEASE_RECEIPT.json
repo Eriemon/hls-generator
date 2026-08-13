@@ -1,16 +1,14 @@
 {
   "skill_name": "readable-hls-generator",
-  "version": "v0.5.0",
+  "version": "v0.5.1",
   "source_path": "skills/readable-hls-generator",
-  "tag": "v0.5.0",
-  "package": "readable-hls-generator",
-  "generated_at": "2026-08-11T14:32:49Z",
+  "generated_at": "2026-08-14T04:10:33",
   "current_branch": "master",
   "local_branches": [
     "master",
     "release"
   ],
-  "worktree_clean": false,
+  "worktree_clean": true,
   "phase_results": {
     "pre": true,
     "post": true
@@ -18,6 +16,389 @@
   "packaging_mode": "repository-dist",
   "validation_level": "strong",
   "provenance_mode": "repository-dist",
+  "sanitization": {
+    "enabled": true,
+    "scope": "broad",
+    "mode": "auto-redact-dist-copy",
+    "files": [
+      {
+        "path": "references/remote-board-platform-upload.md",
+        "rules": [
+          "local_path"
+        ],
+        "placeholders": [
+          "<REDACTED_LOCAL_PATH>"
+        ],
+        "sha256": "b9d51c5c74a83711e7628488cdf8ac739f983c0147a683d49725f7c407b11ba0"
+      },
+      {
+        "path": "scripts/python/generation/mock_comment_rendering.py.quality.json",
+        "rules": [
+          "local_path"
+        ],
+        "placeholders": [
+          "<REDACTED_LOCAL_PATH>"
+        ],
+        "sha256": "3034cff90c617f17ba580a91a9394aa177ec3bbb4b3920c7a05cac22ad5768d3"
+      },
+      {
+        "path": "scripts/python/generation/mock_comment_roles.py.quality.json",
+        "rules": [
+          "local_path"
+        ],
+        "placeholders": [
+          "<REDACTED_LOCAL_PATH>"
+        ],
+        "sha256": "5bb38ff15f5089b91be8473e1956b1993b4338c44f5c0ce1f7fd9f38e71762bf"
+      },
+      {
+        "path": "scripts/python/generation/mock_hls_vector_cases.py.quality.json",
+        "rules": [
+          "local_path"
+        ],
+        "placeholders": [
+          "<REDACTED_LOCAL_PATH>"
+        ],
+        "sha256": "8ab6a328091b722ee2e8864cebffd4fb0bbcc833dbd988df9a52441e6cf5b6bb"
+      },
+      {
+        "path": "SECURITY.md",
+        "rules": [
+          "email"
+        ],
+        "placeholders": [
+          "<REDACTED_EMAIL>"
+        ],
+        "sha256": "2d913ca480cdb152c128ae35b644e671329bac2b5cfe05088ab2a29b27695d0f"
+      }
+    ],
+    "receipt_required": true
+  },
+  "release_content_policy": {
+    "policy_version": "2026-05-26-v2",
+    "top_level_file_mode": "allow-nonforbidden-files",
+    "allowed_top_level_files": [
+      "README.md",
+      "SKILL.md",
+      "VERSION"
+    ],
+    "allowed_top_level_dirs": [
+      "agents",
+      "assets",
+      "config",
+      "evals",
+      "integration",
+      "references",
+      "runtime",
+      "scripts"
+    ],
+    "forbidden_exact_names": [
+      ".mypy_cache",
+      ".pytest_cache",
+      ".ruff_cache",
+      "__pycache__",
+      "_smoke_runs",
+      "reports",
+      "runs",
+      "test",
+      "tests"
+    ],
+    "forbidden_prefixes": [
+      "smoke"
+    ],
+    "forbidden_suffixes": [
+      ".pyc",
+      ".pyo"
+    ],
+    "included_file_count": 271,
+    "included_top_level_entries": [
+      ".gitignore",
+      "CITATION.cff",
+      "CONTRIBUTING.md",
+      "LICENSE",
+      "README-CN.md",
+      "README.md",
+      "SECURITY.md",
+      "SKILL.md",
+      "VERSION",
+      "agents",
+      "assets",
+      "evals",
+      "pyproject.toml",
+      "references",
+      "scripts"
+    ],
+    "unexpected_top_level_entries": [],
+    "forbidden_source_paths": [],
+    "forbidden_release_paths": [],
+    "public_skill_required": true,
+    "required_public_files": [
+      "SKILL.md",
+      "VERSION",
+      "LICENSE",
+      "README.md",
+      "README-CN.md",
+      "SECURITY.md",
+      "pyproject.toml",
+      "CONTRIBUTING.md",
+      "CITATION.cff"
+    ],
+    "missing_required_files": [],
+    "public_skill_errors": [],
+    "public_skill_ok": true,
+    "readme_asset_paths": [
+      "assets/readme/design-profile-cn.png",
+      "assets/readme/design-profile.png",
+      "assets/readme/hero-cn.png",
+      "assets/readme/hero.png",
+      "assets/readme/project-facts-cn.png",
+      "assets/readme/project-facts.png",
+      "assets/readme/rule-rendering-cn.png",
+      "assets/readme/rule-rendering.png"
+    ],
+    "readme_product": {
+      "ok": true,
+      "errors": [],
+      "warnings": [],
+      "preview_ready": true,
+      "publish_ready": true,
+      "repository_url": "https://github.com/Eriemon/hls-generator",
+      "files": {
+        "README.md": {
+          "ok": true,
+          "errors": [],
+          "images": {
+            "assets/readme/hero.png": {
+              "role": "hero",
+              "heading": "",
+              "remote": false
+            },
+            "https://img.shields.io/badge/license-Apache--2.0-1f6feb": {
+              "role": "badge-remote",
+              "heading": "",
+              "remote": true
+            },
+            "https://img.shields.io/badge/python-3.10%2B-2f81f7": {
+              "role": "badge-remote",
+              "heading": "",
+              "remote": true
+            },
+            "https://img.shields.io/badge/version-v0.5.1-7c3aed": {
+              "role": "badge-remote",
+              "heading": "",
+              "remote": true
+            },
+            "https://img.shields.io/badge/agent--skill-16a34a": {
+              "role": "badge-remote",
+              "heading": "",
+              "remote": true
+            },
+            "https://img.shields.io/badge/target-Vitis%20HLS-f59e0b": {
+              "role": "badge-remote",
+              "heading": "",
+              "remote": true
+            },
+            "assets/readme/project-facts.png": {
+              "role": "project-facts",
+              "heading": "Contract and interface choices",
+              "remote": false
+            },
+            "assets/readme/design-profile.png": {
+              "role": "design-profile",
+              "heading": "Generation profile",
+              "remote": false
+            },
+            "assets/readme/rule-rendering.png": {
+              "role": "rule-rendering",
+              "heading": "Readable output rules",
+              "remote": false
+            },
+            "assets/readme/project-facts-cn.png": {
+              "role": "project-facts-cn",
+              "heading": "Bilingual contract view",
+              "remote": false
+            }
+          },
+          "headings": [
+            "What it does",
+            "Install",
+            "Before you start",
+            "How to use",
+            "Preview",
+            "Contract and interface choices",
+            "Generation profile",
+            "Readable output rules",
+            "Bilingual contract view",
+            "What you get",
+            "Authors and citation"
+          ],
+          "hero_images": [
+            "assets/readme/hero.png"
+          ],
+          "badge_images": [
+            "https://img.shields.io/badge/license-Apache--2.0-1f6feb",
+            "https://img.shields.io/badge/python-3.10%2B-2f81f7",
+            "https://img.shields.io/badge/version-v0.5.1-7c3aed",
+            "https://img.shields.io/badge/agent--skill-16a34a",
+            "https://img.shields.io/badge/target-Vitis%20HLS-f59e0b"
+          ],
+          "feature_images": [
+            "assets/readme/project-facts.png",
+            "assets/readme/design-profile.png",
+            "assets/readme/rule-rendering.png",
+            "assets/readme/project-facts-cn.png"
+          ],
+          "feature_headings": [
+            "Bilingual contract view",
+            "Contract and interface choices",
+            "Generation profile",
+            "Readable output rules"
+          ],
+          "image_references": [
+            "assets/readme/hero.png",
+            "https://img.shields.io/badge/license-Apache--2.0-1f6feb",
+            "https://img.shields.io/badge/python-3.10%2B-2f81f7",
+            "https://img.shields.io/badge/version-v0.5.1-7c3aed",
+            "https://img.shields.io/badge/agent--skill-16a34a",
+            "https://img.shields.io/badge/target-Vitis%20HLS-f59e0b",
+            "assets/readme/project-facts.png",
+            "assets/readme/design-profile.png",
+            "assets/readme/rule-rendering.png",
+            "assets/readme/project-facts-cn.png"
+          ],
+          "user_contract": {
+            "ok": true,
+            "preview_ready": true,
+            "publish_ready": true,
+            "errors": [],
+            "warnings": [],
+            "preview_errors": [],
+            "publish_errors": [],
+            "repository_url": "https://github.com/Eriemon/hls-generator",
+            "repository_url_source": "readme"
+          }
+        },
+        "README-CN.md": {
+          "ok": true,
+          "errors": [],
+          "images": {
+            "assets/readme/hero-cn.png": {
+              "role": "hero-cn",
+              "heading": "",
+              "remote": false
+            },
+            "https://img.shields.io/badge/license-Apache--2.0-1f6feb": {
+              "role": "badge-remote",
+              "heading": "",
+              "remote": true
+            },
+            "https://img.shields.io/badge/python-3.10%2B-2f81f7": {
+              "role": "badge-remote",
+              "heading": "",
+              "remote": true
+            },
+            "https://img.shields.io/badge/version-v0.5.1-7c3aed": {
+              "role": "badge-remote",
+              "heading": "",
+              "remote": true
+            },
+            "https://img.shields.io/badge/agent--skill-16a34a": {
+              "role": "badge-remote",
+              "heading": "",
+              "remote": true
+            },
+            "https://img.shields.io/badge/target-Vitis%20HLS-f59e0b": {
+              "role": "badge-remote",
+              "heading": "",
+              "remote": true
+            },
+            "assets/readme/project-facts-cn.png": {
+              "role": "project-facts-cn",
+              "heading": "契约与接口选择",
+              "remote": false
+            },
+            "assets/readme/design-profile-cn.png": {
+              "role": "design-profile-cn",
+              "heading": "生成画像",
+              "remote": false
+            },
+            "assets/readme/rule-rendering-cn.png": {
+              "role": "rule-rendering-cn",
+              "heading": "可读输出规则",
+              "remote": false
+            },
+            "assets/readme/project-facts.png": {
+              "role": "project-facts",
+              "heading": "双语契约视图",
+              "remote": false
+            }
+          },
+          "headings": [
+            "它能做什么",
+            "安装",
+            "需要准备什么",
+            "如何使用",
+            "预览",
+            "契约与接口选择",
+            "生成画像",
+            "可读输出规则",
+            "双语契约视图",
+            "最终得到什么",
+            "作者与引用"
+          ],
+          "hero_images": [
+            "assets/readme/hero-cn.png"
+          ],
+          "badge_images": [
+            "https://img.shields.io/badge/license-Apache--2.0-1f6feb",
+            "https://img.shields.io/badge/python-3.10%2B-2f81f7",
+            "https://img.shields.io/badge/version-v0.5.1-7c3aed",
+            "https://img.shields.io/badge/agent--skill-16a34a",
+            "https://img.shields.io/badge/target-Vitis%20HLS-f59e0b"
+          ],
+          "feature_images": [
+            "assets/readme/project-facts-cn.png",
+            "assets/readme/design-profile-cn.png",
+            "assets/readme/rule-rendering-cn.png",
+            "assets/readme/project-facts.png"
+          ],
+          "feature_headings": [
+            "双语契约视图",
+            "可读输出规则",
+            "契约与接口选择",
+            "生成画像"
+          ],
+          "image_references": [
+            "assets/readme/hero-cn.png",
+            "https://img.shields.io/badge/license-Apache--2.0-1f6feb",
+            "https://img.shields.io/badge/python-3.10%2B-2f81f7",
+            "https://img.shields.io/badge/version-v0.5.1-7c3aed",
+            "https://img.shields.io/badge/agent--skill-16a34a",
+            "https://img.shields.io/badge/target-Vitis%20HLS-f59e0b",
+            "assets/readme/project-facts-cn.png",
+            "assets/readme/design-profile-cn.png",
+            "assets/readme/rule-rendering-cn.png",
+            "assets/readme/project-facts.png"
+          ],
+          "user_contract": {
+            "ok": true,
+            "preview_ready": true,
+            "publish_ready": true,
+            "errors": [],
+            "warnings": [],
+            "preview_errors": [],
+            "publish_errors": [],
+            "repository_url": "https://github.com/Eriemon/hls-generator",
+            "repository_url_source": "readme"
+          }
+        }
+      },
+      "required_files": [
+        "README.md",
+        "README-CN.md"
+      ]
+    }
+  },
   "files": [
     {
       "path": ".gitignore",
@@ -416,12 +797,8 @@
       "sha256": "afcceb75627cd4c23c5333df428d89fcbf1140953a260717eff6353ce5c20adb"
     },
     {
-      "path": "checksums.sha256",
-      "sha256": "9bbfd1a232f5e361591b50f37e55f25d1922bf8a182345628d26a2a85efffe4a"
-    },
-    {
       "path": "CITATION.cff",
-      "sha256": "b228124115ee4dfd749046186113692ac61996a1ca2085f64549a6bc62e328a3"
+      "sha256": "3880842cf0c3cb3af9c3859e4b78778e91a26f351359cedb5e72df8ead170423"
     },
     {
       "path": "CONTRIBUTING.md",
@@ -437,19 +814,19 @@
     },
     {
       "path": "pyproject.toml",
-      "sha256": "2671f5e13eb22ea85c96913c8a37e6cbb90d6d95f551bf3437544234f1f9b700"
+      "sha256": "c7cc1a9c79b99a6b248dd8565315a5a33d0182c457fc6062fc51439a9c98b4c0"
     },
     {
       "path": "README-CN.md",
-      "sha256": "420ccb53cd8a9918cd722c9ca9396e18783322aae942687bc342a9e8d92887b9"
+      "sha256": "53f3327d9bcdda8c0d94316d393e94bd9de8285a990d502223d82d8633b153db"
     },
     {
       "path": "README.md",
-      "sha256": "2852b198ce0c647c26c2dfb41ac840edfb5fc603b046907964e265a5d10c150a"
+      "sha256": "3e51c6e770bdc2787c6f95305ea35ab91e8a129dbefc77af761a5387dfbfc467"
     },
     {
       "path": "references/configuration.md",
-      "sha256": "227532afe1c3fe613749ac61ff15616980621f05f753ad341300ea165dc1e75c"
+      "sha256": "0f3229f04e3ed146750a640544e82cd24533ba08e552850f05e1f5faf9f6225a"
     },
     {
       "path": "references/hls-advanced-library-patterns.md",
@@ -549,7 +926,7 @@
     },
     {
       "path": "references/remote-board-platform-upload.md",
-      "sha256": "4e38653a5e822447000553a4c2921729d0ba590482923b3e527eeb07241f3fad"
+      "sha256": "b9d51c5c74a83711e7628488cdf8ac739f983c0147a683d49725f7c407b11ba0"
     },
     {
       "path": "references/style/current_project_chinese_style.md",
@@ -566,10 +943,6 @@
     {
       "path": "references/workflow-contracts.md",
       "sha256": "4c63b79b1afc3c1b29f5d416ef9c5a9a416fd4d918c7463ac7ece7f8540f1c46"
-    },
-    {
-      "path": "RELEASE_MANIFEST.json",
-      "sha256": "1bab6fdada58d9f47d4260291f0b2c8828daa2e53294dc1fabe930b95b374282"
     },
     {
       "path": "scripts/__init__.py",
@@ -593,11 +966,11 @@
     },
     {
       "path": "scripts/python/config/hls_config.py",
-      "sha256": "94bdc98f52c850e43fe6983ff53dfd00580d456234d7dcfb30feca9432015d8a"
+      "sha256": "a86ca385f0654025d0dfbdc188bf1580126ec51c815bf5f26e2f025722b9fe2a"
     },
     {
       "path": "scripts/python/config/runtime_config.json",
-      "sha256": "223ceef55425053c124ea73896858884f47406357ee484d196b4d58cb0d279c6"
+      "sha256": "8eb4e7967fddda9b50dfd19ddda6d7f49fe3151b0a7e0dfb6a26b466915048d2"
     },
     {
       "path": "scripts/python/config/skill_dependencies.py",
@@ -609,7 +982,7 @@
     },
     {
       "path": "scripts/python/config/version.py",
-      "sha256": "1a67a145d908c9ef124dea45d58ccfefc02573db5ff3036a5d2ce93ec52ff3a0"
+      "sha256": "c310536d220429ec777c38d5a2e8bd7a407a3fd911d705ae07a924f68d7a76db"
     },
     {
       "path": "scripts/python/config/workspace.py",
@@ -645,19 +1018,59 @@
     },
     {
       "path": "scripts/python/generation/mock_assignment_roles.py",
-      "sha256": "5f6157b30c36b375b00e211cbb073431340b55e6cb31f8c475322b011c01ac86"
+      "sha256": "60ba01159c730b7d79e26edcee33a424d6a09d7ddc658995cbc510757d4830e2"
+    },
+    {
+      "path": "scripts/python/generation/mock_assignment_streams.py",
+      "sha256": "bbb1370d6449f1dbede3ea0f818504554241fd4fff74c66bc74d49963a5d2332"
     },
     {
       "path": "scripts/python/generation/mock_comment_rendering.py",
-      "sha256": "093790711cf5b15b18da0746e21ad6700f57659345f7de2bb8078d131789e460"
+      "sha256": "e2183b7230b6218ef48f83fa177f65c0cfbf69d0a8a7d332d6f7f650707ac637"
+    },
+    {
+      "path": "scripts/python/generation/mock_comment_rendering.py.current.quality.json",
+      "sha256": "b21294a149e5cac1e978c1d9ea4bf0536f673d387732becc14149e5f970c4d46"
+    },
+    {
+      "path": "scripts/python/generation/mock_comment_rendering.py.quality.json",
+      "sha256": "3034cff90c617f17ba580a91a9394aa177ec3bbb4b3920c7a05cac22ad5768d3"
+    },
+    {
+      "path": "scripts/python/generation/mock_comment_role_helpers.py",
+      "sha256": "4a740529d836f03780e5e586f045f005af79b510f5d6a97cc0e194a55b4c2451"
+    },
+    {
+      "path": "scripts/python/generation/mock_comment_role_helpers.py.current.quality.json",
+      "sha256": "87884b4de9445dea5243242d8c95d24c587d0fe2d708df663fbc4e65ec360cb7"
+    },
+    {
+      "path": "scripts/python/generation/mock_comment_roles.py",
+      "sha256": "1f6e65389fc75caf352101c47a4f37d9d9aa46873d90e4f8cd8616edadf70c49"
+    },
+    {
+      "path": "scripts/python/generation/mock_comment_roles.py.current.quality.json",
+      "sha256": "1f39609983b61d93133292a335e12c562f4c0964d1cf543ea721e650a0e236ce"
+    },
+    {
+      "path": "scripts/python/generation/mock_comment_roles.py.quality.json",
+      "sha256": "5bb38ff15f5089b91be8473e1956b1993b4338c44f5c0ce1f7fd9f38e71762bf"
     },
     {
       "path": "scripts/python/generation/mock_hls_artifacts.py",
-      "sha256": "b7a91df0ab7da71110e964995baaf1eb001a6c1e8cc61c2e81f17855718bd496"
+      "sha256": "2b8fabafba8bc4062d6424b36c4df9364d07eeb865acc867cbc4eff708ecaf7e"
     },
     {
       "path": "scripts/python/generation/mock_hls_contract_text.py",
-      "sha256": "54f0831eee234a49707389e778539fdc7e1282cf1cf1aeb8623875a80367fe6e"
+      "sha256": "d670ff3f17393fffb2347ca6f01866151bd204390b0c5d454ffb1ed4872401c4"
+    },
+    {
+      "path": "scripts/python/generation/mock_hls_fir_assignments.py",
+      "sha256": "ccc356ad523edd2386b614a1d7e03977a24576bfd5431e1432a7a1b8d1482acd"
+    },
+    {
+      "path": "scripts/python/generation/mock_hls_fir_signatures.py",
+      "sha256": "6d7861a8af09937bb5839a10d73800d1290b30e9cc6e064d4983978cdf92bba1"
     },
     {
       "path": "scripts/python/generation/mock_hls_governance.py",
@@ -665,7 +1078,7 @@
     },
     {
       "path": "scripts/python/generation/mock_hls_helper_blocks.py",
-      "sha256": "fd8a16125e94cddf3a53856c591628847e3ee097dc0062351d1bf36e22318ef5"
+      "sha256": "b04cadeb01cf5b46a165a6970cf1c06ff2a49642c9142ea0071b85c6b614e56c"
     },
     {
       "path": "scripts/python/generation/mock_hls_identifier_rewrite.py",
@@ -689,11 +1102,11 @@
     },
     {
       "path": "scripts/python/generation/mock_hls_source_blocks.py",
-      "sha256": "63861dba462327cbb522b2bfbecfb6b35524b52e63136a0048bcbe1d76480bb4"
+      "sha256": "5ec49d46853c9eb4f01f64da7e07f33fb6f13152d59d9021e1cc7e5ee96f2be6"
     },
     {
       "path": "scripts/python/generation/mock_hls_source_comments.py",
-      "sha256": "137fc4ec6002123199afe4592640282a50fb75f1e694bfe69e25f53fcb803980"
+      "sha256": "95de48f64883696f17b18410e65fdf78bd24bb227c9dccfc5957c4613abb56c0"
     },
     {
       "path": "scripts/python/generation/mock_hls_source_flow.py",
@@ -701,15 +1114,15 @@
     },
     {
       "path": "scripts/python/generation/mock_hls_source_helper_calls.py",
-      "sha256": "895796a03bc7d0b0201e879b7bf1e117c5e1f8b4acce332a870d3a67a9cc7d8c"
+      "sha256": "822fa4cc94dc6f5a926cb97a615e3d3e3a146066c93e40f33cd659da43a7cf01"
     },
     {
       "path": "scripts/python/generation/mock_hls_source_loops.py",
-      "sha256": "9cf0bb347080f7d5edfd128c738d96d0d133eff0da1a49fd0ed1ff92281258cf"
+      "sha256": "1a4eca1e279b8c09d967b3fa0ec00e7337e5a1f3db88c71953b6e9de3cee348d"
     },
     {
       "path": "scripts/python/generation/mock_hls_source_pragmas.py",
-      "sha256": "5e5840aa53fe54e87e79e72fe0f9d40e9f58f8fa01537af3e41ccdce25f53f66"
+      "sha256": "4bcedbe182d45491c7da87d332d3ca89bf67dd4eeb488b17fad1130ebead157b"
     },
     {
       "path": "scripts/python/generation/mock_hls_source_rewrite.py",
@@ -717,11 +1130,11 @@
     },
     {
       "path": "scripts/python/generation/mock_hls_source_signatures.py",
-      "sha256": "97988c9b5cf1e96ba72c00e96d5b8740a27c168bc72ec1b7979310960944fb62"
+      "sha256": "538a7e7a44ac925a7abf4c48ce4716384b5c0ef9c34ce9ba0b6429f675b5f3d3"
     },
     {
       "path": "scripts/python/generation/mock_hls_source_streams.py",
-      "sha256": "ff3da469bac67cef4f6330e9ac4e93b799fb923494d59a0cd920123d11bb2b6d"
+      "sha256": "0f0559b5108090e5078905cf737dd4beadbe0aaa25029b3e5d46fb84796bd449"
     },
     {
       "path": "scripts/python/generation/mock_hls_testbench.py",
@@ -737,11 +1150,19 @@
     },
     {
       "path": "scripts/python/generation/mock_hls_vector_cases.py",
-      "sha256": "094074211a8bbbb0647030fb26220e46e403acb66963508c78bfa0ec7266b847"
+      "sha256": "aaa0c6e4c71cc319b9776359b8deb18299ec4a819cc77bddcb3e55d2659d9127"
+    },
+    {
+      "path": "scripts/python/generation/mock_hls_vector_cases.py.current.quality.json",
+      "sha256": "bd9763164bb30716274da8ef8b2903de52f1caf599cb74f3af86193ec9dad25c"
+    },
+    {
+      "path": "scripts/python/generation/mock_hls_vector_cases.py.quality.json",
+      "sha256": "8ab6a328091b722ee2e8864cebffd4fb0bbcc833dbd988df9a52441e6cf5b6bb"
     },
     {
       "path": "scripts/python/generation/mock_inline_outputs.py",
-      "sha256": "8c83ded683647a99cb32e50c99fb0666bed7e5f895eba62d0b7d92abbe60752f"
+      "sha256": "dc064579e748cff2499a8e1c102d20dbe478179eec87bd266fa1b6a464f2c1bb"
     },
     {
       "path": "scripts/python/generation/mock_vectors.py",
@@ -817,7 +1238,7 @@
     },
     {
       "path": "scripts/python/governance/manage_docs.py",
-      "sha256": "e4fadea2aeb648f0a7b777a8ec915fb3486ab6118803b43da0f7475909610f31"
+      "sha256": "206454076abd3c93ac2c7a95344e95aad6f5087061b95cecf3bb560132c3b3f0"
     },
     {
       "path": "scripts/python/governance/render_agents.py",
@@ -849,7 +1270,7 @@
     },
     {
       "path": "scripts/python/hls_quality_gate/readability/comment_rules.py",
-      "sha256": "4880248d93e94f127d300343064c32497fdf273e843fc067860800e49f92a42b"
+      "sha256": "7598681782f936f0937351694eb827bdfc8ee57ab560693f23b75bdd5f9554ea"
     },
     {
       "path": "scripts/python/hls_quality_gate/readability/contract_rules.py",
@@ -865,11 +1286,15 @@
     },
     {
       "path": "scripts/python/hls_quality_gate/readability/naming_rules.py",
-      "sha256": "1aeece57785bdc9d79c5fa34d904cab51b85c399d3316cb850dd8b0500381957"
+      "sha256": "204655d462e687ff874c2b996537ccbb4818ab4fc50039a1076e90fb1d70732c"
+    },
+    {
+      "path": "scripts/python/hls_quality_gate/readability/naming_rules.py.current.quality.json",
+      "sha256": "f2f0da34c49b4d9a7db9930df08dc8e290245621a382b7afc7e86f58a9990f97"
     },
     {
       "path": "scripts/python/hls_quality_gate/readability/pragma_rules.py",
-      "sha256": "8f8e244ed01c1ee182d9f9b8183ea7f3f9bfdd2641b683681b4ca80496467480"
+      "sha256": "795d03c07db30b46ce7f6a9c123e3f1045be951fb713a99ad13004c1aa46a395"
     },
     {
       "path": "scripts/python/hls_quality_gate/readability/profiles.py",
@@ -909,7 +1334,7 @@
     },
     {
       "path": "scripts/python/release/prepare_release.py",
-      "sha256": "2717d40dc02dcdb7f904dafc4eaa309be2680e5d8977ed5bdd38bbaf3f716ead"
+      "sha256": "7745c81ba4246f7d8d9f4d97405bec845aa56721dc5fca17b60fe74d08f1afbb"
     },
     {
       "path": "scripts/python/remote/__init__.py",
@@ -925,11 +1350,11 @@
     },
     {
       "path": "scripts/python/remote/remote_acceptance_board.py",
-      "sha256": "48640aa3397c74d83e900e5c2616242eceefa47b61644f0918c90cbce7c8e1af"
+      "sha256": "468f53408e097d621a4e5493e68b65b73dc0d24395961e33ca36e7df57c9f191"
     },
     {
       "path": "scripts/python/remote/remote_acceptance_common.py",
-      "sha256": "6508bea3dcb4e66ef49e48bf446d12a314741f272ef90f3275fc47020cd8033e"
+      "sha256": "53a4791939d3c48e087172ae25109b3dfadd5617a1101be88a09b482896a7c9a"
     },
     {
       "path": "scripts/python/remote/remote_acceptance_link.py",
@@ -941,7 +1366,7 @@
     },
     {
       "path": "scripts/python/remote/remote_acceptance_vitis.py",
-      "sha256": "6d676f586c9043506814e9d41b8fb3f9b15cab2b15cc6535b3ab5a0652b8688e"
+      "sha256": "d17db5306e037c33af6568ffcb4690e3bf206b850816cb194fe0b021b6289bf6"
     },
     {
       "path": "scripts/python/remote/remote_directory_contract.py",
@@ -977,7 +1402,7 @@
     },
     {
       "path": "scripts/python/validation/confidence_local.py",
-      "sha256": "fb1b6802857691c66d5b1fe403b686812c0267f4789d80a1a285defdfc6dab31"
+      "sha256": "e87ba2a52f0a2c06025981fefc73a9a41ccc7b6ec89a593a66e9a6034232bea0"
     },
     {
       "path": "scripts/python/validation/confidence_loop.py",
@@ -993,7 +1418,7 @@
     },
     {
       "path": "scripts/python/validation/hls_artifacts.py",
-      "sha256": "bb84d114231bffecc57c49f55f9d12c22495c4a5eb6fae6ce4fed97c0c2c7ba2"
+      "sha256": "d5cdf3da26bf5dac2e36e304d79dc5814fccd0a54f6ac5b97c941d1a9d13c608"
     },
     {
       "path": "scripts/python/validation/hls_cfg.py",
@@ -1001,7 +1426,7 @@
     },
     {
       "path": "scripts/python/validation/hls_profile.py",
-      "sha256": "a44ee4f6037291f1034a7103dbd0f542b2d4bf253d21678c5d05152f5d32e168"
+      "sha256": "e7d60894c8bafecac82deb217cdf44d4893e64fc2f08de4117767f0742aa6dfe"
     },
     {
       "path": "scripts/python/validation/hls_reports.py",
@@ -1037,7 +1462,7 @@
     },
     {
       "path": "scripts/python/workflow/hls_workflow.py",
-      "sha256": "466d36d302fb4fb4ff340d7b87a382019e8e52a4de36115726fd67db2a246b2e"
+      "sha256": "2acd6dea0838d2ea455805ea5ba27d572c3f76286a78b43714d1dca09a29711f"
     },
     {
       "path": "scripts/python/workflow/intervention.py",
@@ -1049,7 +1474,7 @@
     },
     {
       "path": "SECURITY.md",
-      "sha256": "1d072be169100056cd06b58c6ef7edfb2fbd5657ec5b25cf9b8d3275247c1782"
+      "sha256": "2d913ca480cdb152c128ae35b644e671329bac2b5cfe05088ab2a29b27695d0f"
     },
     {
       "path": "SKILL.md",
@@ -1057,323 +1482,9 @@
     },
     {
       "path": "VERSION",
-      "sha256": "a0ad50640139a524f86591157145bf1d4674ea9c065bfea21558f0f7b04430c8"
+      "sha256": "aba951626c8690ce493cbc8f018205bb468003f61fbf00fd3d3c71cebabc0177"
     }
   ],
-  "sanitization": {
-    "enabled": true,
-    "scope": "broad",
-    "mode": "auto-redact-dist-copy",
-    "files": [
-      {
-        "path": "references/remote-board-platform-upload.md",
-        "rules": [
-          "local_path"
-        ],
-        "placeholders": [
-          "<REDACTED_LOCAL_PATH>"
-        ],
-        "sha256": "4e38653a5e822447000553a4c2921729d0ba590482923b3e527eeb07241f3fad"
-      },
-      {
-        "path": "SECURITY.md",
-        "rules": [
-          "email"
-        ],
-        "placeholders": [
-          "<REDACTED_EMAIL>"
-        ],
-        "sha256": "1d072be169100056cd06b58c6ef7edfb2fbd5657ec5b25cf9b8d3275247c1782"
-      }
-    ],
-    "receipt_required": true,
-    "required": true
-  },
-  "release_content_policy": {
-    "policy_version": "2026-05-26-v2",
-    "top_level_file_mode": "allow-nonforbidden-files",
-    "allowed_top_level_files": [
-      "README.md",
-      "SKILL.md",
-      "VERSION"
-    ],
-    "allowed_top_level_dirs": [
-      "agents",
-      "assets",
-      "config",
-      "evals",
-      "integration",
-      "references",
-      "runtime",
-      "scripts"
-    ],
-    "forbidden_exact_names": [
-      ".mypy_cache",
-      ".pytest_cache",
-      ".ruff_cache",
-      "__pycache__",
-      "_smoke_runs",
-      "reports",
-      "runs",
-      "test",
-      "tests"
-    ],
-    "forbidden_prefixes": [
-      "smoke"
-    ],
-    "forbidden_suffixes": [
-      ".pyc",
-      ".pyo"
-    ],
-    "included_file_count": 260,
-    "included_top_level_entries": [
-      ".gitignore",
-      "CITATION.cff",
-      "CONTRIBUTING.md",
-      "LICENSE",
-      "README-CN.md",
-      "README.md",
-      "RELEASE_MANIFEST.json",
-      "SECURITY.md",
-      "SKILL.md",
-      "VERSION",
-      "agents",
-      "assets",
-      "checksums.sha256",
-      "evals",
-      "pyproject.toml",
-      "references",
-      "scripts"
-    ],
-    "unexpected_top_level_entries": [],
-    "forbidden_source_paths": [],
-    "forbidden_release_paths": [],
-    "public_skill_required": true,
-    "required_public_files": [
-      "SKILL.md",
-      "VERSION",
-      "LICENSE",
-      "README.md",
-      "README-CN.md",
-      "SECURITY.md",
-      "pyproject.toml",
-      "CONTRIBUTING.md",
-      "CITATION.cff"
-    ],
-    "missing_required_files": [],
-    "public_skill_errors": [],
-    "public_skill_ok": true,
-    "readme_asset_paths": [
-      "assets/readme/design-profile-cn.png",
-      "assets/readme/design-profile.png",
-      "assets/readme/hero-cn.png",
-      "assets/readme/hero.png",
-      "assets/readme/project-facts-cn.png",
-      "assets/readme/project-facts.png",
-      "assets/readme/rule-rendering-cn.png",
-      "assets/readme/rule-rendering.png"
-    ],
-    "readme_product": {
-      "ok": true,
-      "errors": [],
-      "files": {
-        "README.md": {
-          "ok": true,
-          "errors": [],
-          "images": {
-            "assets/readme/hero.png": {
-              "role": "hero",
-              "heading": "",
-              "remote": false
-            },
-            "https://img.shields.io/badge/license-Apache--2.0-1f6feb": {
-              "role": "badge-remote",
-              "heading": "",
-              "remote": true
-            },
-            "https://img.shields.io/badge/python-3.10%2B-2f81f7": {
-              "role": "badge-remote",
-              "heading": "",
-              "remote": true
-            },
-            "https://img.shields.io/badge/version-v0.5.0-7c3aed": {
-              "role": "badge-remote",
-              "heading": "",
-              "remote": true
-            },
-            "https://img.shields.io/badge/agent--skill-16a34a": {
-              "role": "badge-remote",
-              "heading": "",
-              "remote": true
-            },
-            "https://img.shields.io/badge/target-Vitis%20HLS-f59e0b": {
-              "role": "badge-remote",
-              "heading": "",
-              "remote": true
-            },
-            "assets/readme/project-facts.png": {
-              "role": "project-facts",
-              "heading": "01 — From requirement to HLS artifact",
-              "remote": false
-            },
-            "assets/readme/design-profile.png": {
-              "role": "design-profile",
-              "heading": "02 — A stable generation profile",
-              "remote": false
-            },
-            "assets/readme/rule-rendering.png": {
-              "role": "rule-rendering",
-              "heading": "03 — Verification and release boundaries",
-              "remote": false
-            }
-          },
-          "headings": [
-            "Why maintainers use it",
-            "01 — From requirement to HLS artifact",
-            "02 — A stable generation profile",
-            "03 — Verification and release boundaries",
-            "Install a versioned release",
-            "Quick start",
-            "Repository map",
-            "Local mirror workflow",
-            "Scope and remote acceptance",
-            "Authors and citation",
-            "License"
-          ],
-          "hero_images": [
-            "assets/readme/hero.png"
-          ],
-          "badge_images": [
-            "https://img.shields.io/badge/license-Apache--2.0-1f6feb",
-            "https://img.shields.io/badge/python-3.10%2B-2f81f7",
-            "https://img.shields.io/badge/version-v0.5.0-7c3aed",
-            "https://img.shields.io/badge/agent--skill-16a34a",
-            "https://img.shields.io/badge/target-Vitis%20HLS-f59e0b"
-          ],
-          "feature_images": [
-            "assets/readme/project-facts.png",
-            "assets/readme/design-profile.png",
-            "assets/readme/rule-rendering.png"
-          ],
-          "feature_headings": [
-            "01 — From requirement to HLS artifact",
-            "02 — A stable generation profile",
-            "03 — Verification and release boundaries"
-          ],
-          "image_references": [
-            "assets/readme/hero.png",
-            "https://img.shields.io/badge/license-Apache--2.0-1f6feb",
-            "https://img.shields.io/badge/python-3.10%2B-2f81f7",
-            "https://img.shields.io/badge/version-v0.5.0-7c3aed",
-            "https://img.shields.io/badge/agent--skill-16a34a",
-            "https://img.shields.io/badge/target-Vitis%20HLS-f59e0b",
-            "assets/readme/project-facts.png",
-            "assets/readme/design-profile.png",
-            "assets/readme/rule-rendering.png"
-          ]
-        },
-        "README-CN.md": {
-          "ok": true,
-          "errors": [],
-          "images": {
-            "assets/readme/hero-cn.png": {
-              "role": "hero-cn",
-              "heading": "",
-              "remote": false
-            },
-            "https://img.shields.io/badge/license-Apache--2.0-1f6feb": {
-              "role": "badge-remote",
-              "heading": "",
-              "remote": true
-            },
-            "https://img.shields.io/badge/python-3.10%2B-2f81f7": {
-              "role": "badge-remote",
-              "heading": "",
-              "remote": true
-            },
-            "https://img.shields.io/badge/version-v0.5.0-7c3aed": {
-              "role": "badge-remote",
-              "heading": "",
-              "remote": true
-            },
-            "https://img.shields.io/badge/agent--skill-16a34a": {
-              "role": "badge-remote",
-              "heading": "",
-              "remote": true
-            },
-            "https://img.shields.io/badge/target-Vitis%20HLS-f59e0b": {
-              "role": "badge-remote",
-              "heading": "",
-              "remote": true
-            },
-            "assets/readme/project-facts-cn.png": {
-              "role": "project-facts-cn",
-              "heading": "01 — 从需求到 HLS 工件",
-              "remote": false
-            },
-            "assets/readme/design-profile-cn.png": {
-              "role": "design-profile-cn",
-              "heading": "02 — 稳定的生成画像",
-              "remote": false
-            },
-            "assets/readme/rule-rendering-cn.png": {
-              "role": "rule-rendering-cn",
-              "heading": "03 — 验证与发布边界",
-              "remote": false
-            }
-          },
-          "headings": [
-            "为什么维护者会使用它",
-            "01 — 从需求到 HLS 工件",
-            "02 — 稳定的生成画像",
-            "03 — 验证与发布边界",
-            "从版本化发布目录安装",
-            "快速开始",
-            "仓库地图",
-            "本地镜像流程",
-            "范围与远程验收",
-            "作者与引用",
-            "许可证"
-          ],
-          "hero_images": [
-            "assets/readme/hero-cn.png"
-          ],
-          "badge_images": [
-            "https://img.shields.io/badge/license-Apache--2.0-1f6feb",
-            "https://img.shields.io/badge/python-3.10%2B-2f81f7",
-            "https://img.shields.io/badge/version-v0.5.0-7c3aed",
-            "https://img.shields.io/badge/agent--skill-16a34a",
-            "https://img.shields.io/badge/target-Vitis%20HLS-f59e0b"
-          ],
-          "feature_images": [
-            "assets/readme/project-facts-cn.png",
-            "assets/readme/design-profile-cn.png",
-            "assets/readme/rule-rendering-cn.png"
-          ],
-          "feature_headings": [
-            "01 — 从需求到 HLS 工件",
-            "02 — 稳定的生成画像",
-            "03 — 验证与发布边界"
-          ],
-          "image_references": [
-            "assets/readme/hero-cn.png",
-            "https://img.shields.io/badge/license-Apache--2.0-1f6feb",
-            "https://img.shields.io/badge/python-3.10%2B-2f81f7",
-            "https://img.shields.io/badge/version-v0.5.0-7c3aed",
-            "https://img.shields.io/badge/agent--skill-16a34a",
-            "https://img.shields.io/badge/target-Vitis%20HLS-f59e0b",
-            "assets/readme/project-facts-cn.png",
-            "assets/readme/design-profile-cn.png",
-            "assets/readme/rule-rendering-cn.png"
-          ]
-        }
-      },
-      "required_files": [
-        "README.md",
-        "README-CN.md"
-      ]
-    }
-  },
   "other_version_artifacts": [
     {
       "path": "dist/erie-hls-generator-v0.1.1/checksums.sha256",
@@ -15096,6 +15207,10 @@
       "sha256": "1bab6fdada58d9f47d4260291f0b2c8828daa2e53294dc1fabe930b95b374282"
     },
     {
+      "path": "dist/readable-hls-generator-v0.5.0/RELEASE_RECEIPT.json",
+      "sha256": "c6c53af91aa9352acba65b08a378daab72c5a224b2535a01caf49913f1c32a33"
+    },
+    {
       "path": "dist/readable-hls-generator-v0.5.0/scripts/__init__.py",
       "sha256": "64b0b1d1a9cdbe45094924b7a222748097d1a940c2ca89c8e36fc85d3685f6d8"
     },
@@ -15582,6 +15697,10 @@
     {
       "path": "dist/readable-hls-generator-v0.5.0/VERSION",
       "sha256": "a0ad50640139a524f86591157145bf1d4674ea9c065bfea21558f0f7b04430c8"
+    },
+    {
+      "path": "dist/readable-hls-generator-v0.5.0.zip",
+      "sha256": "bcb254e6bac2e33afbb95ed96a35871de1e7e1844111c9710dd76ed76f4c8c89"
     }
   ]
 }
